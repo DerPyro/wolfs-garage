@@ -257,6 +257,7 @@ def _candidate_preflight(old_image, candidate, config):
               "python", "-m", "wolfs_garage", "check-db"], timeout=300)
         if _schema(workdir / "candidate.sqlite3") != candidate_schema:
             raise UpdateError("Automatic update blocked: isolated candidate check changed the database schema.")
+        return candidate_schema
 
 
 def _write_active_sha(state_dir, sha):
@@ -280,7 +281,7 @@ def _write_active_sha(state_dir, sha):
         raise
 
 
-def _deploy_candidate(candidate, old_image, sha, config, compose_config):
+def _deploy_candidate(candidate, old_image, sha, config, compose_config, candidate_schema=None):
     prepare = config["GARAGE_MAINTENANCE_PREPARE"]
     finish = config["GARAGE_MAINTENANCE_FINISH"]
     prepare_attempted = False
@@ -299,8 +300,11 @@ def _deploy_candidate(candidate, old_image, sha, config, compose_config):
             moved = Path(temp) / backup_path.name
             os.link(moved, backup_path, follow_symlinks=False)
         old_schema = _schema(backup_path)
-        if old_schema != 3:
-            raise UpdateError("Automatic update blocked: live schema is not 3.")
+        if candidate_schema is None:
+            candidate_schema = _image_schema(candidate)
+        if (old_schema != candidate_schema or old_schema not in {3, 4}
+                or candidate_schema not in {3, 4}):
+            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3 or 4.")
 
         candidate_start_attempted = True
         _compose(compose_config, candidate, "up", "-d", "--no-deps", "garage_live")
@@ -405,7 +409,7 @@ def update_once(config, env_file):
         _run(["docker", "build", "--label", f"org.opencontainers.image.revision={sha}",
               "-f", str(release / "deploy/Dockerfile.standalone"), "-t", candidate, str(release)], timeout=1800)
         old_image, old_container = _running_image(config, config)
-        _candidate_preflight(old_image, candidate, config)
+        candidate_schema = _candidate_preflight(old_image, candidate, config)
         if github_main_sha() != sha or not checks_succeeded(sha):
             print(f"Main moved from {sha} before deployment; retrying on the next timer tick.")
             return False
@@ -417,7 +421,7 @@ def update_once(config, env_file):
             _write_active_sha(state_dir, sha)
             print(f"Latest tested main is already running: {sha}.")
             return False
-        _deploy_candidate(candidate, old_image, sha, config, config)
+        _deploy_candidate(candidate, old_image, sha, config, config, candidate_schema)
         _write_active_sha(state_dir, sha)
         print(f"Updated Wolfs Garage to tested main {sha}.")
         return True

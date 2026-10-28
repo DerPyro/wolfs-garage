@@ -50,13 +50,12 @@
 .card-readiness.unavailable{color:#f6d1a7;border-color:#987044;background:#453523}
 .card-work{width:29px;padding:0;color:#f0c94b;background:#443b21;border-color:#987c36}
 .card-work svg{width:16px;height:16px;flex:none;stroke-width:1.8}
-.card-inspection{display:inline-flex;align-items:center;justify-content:center;width:29px;height:29px;border:1px solid #596754;border-radius:6px;background:#293128;color:#91a08c;flex:none}
-.card-inspection svg{width:18px;height:13px;stroke-width:1.6}.card-inspection svg .inspection-card-cell{fill:#596754;stroke:none}.card-inspection svg .inspection-card-cell.filled{fill:currentColor}.card-inspection.state-upcoming{color:#c5e568}.card-inspection.state-due{color:#f0c94b;background:#443b21;border-color:#987c36}.card-inspection.state-overdue{color:#f0ad70;background:#443126;border-color:#8d6748}.card-inspection.state-blocking{color:#ffccba;background:#49302a;border-color:#855947}.card-inspection.unavailable{color:#879184}
+.card-inspection-progress{position:absolute;left:0;right:0;bottom:0;height:4px;display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:0;overflow:hidden;border-radius:0 0 12px 12px;background:#252c22;pointer-events:none}.card-inspection-cell{min-width:0;background:#353d32}.card-inspection-progress.unknown{background:#252c22}.card-inspection-progress.unknown .card-inspection-cell{background:#353d32}
 @media(max-width:350px){.card-top{gap:4px}.card-indicators{gap:4px}.car-icon{width:80px}}
 
 .inspection-panel{margin:17px 0 8px;padding:14px 15px;border:1px solid #394534;border-radius:10px;background:#171d16}
 .inspection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.inspection-heading h4{font-size:13px;margin:0}.inspection-scale-label{color:#9daa99;font-size:10px}.inspection-message{margin:7px 0 0;color:#d6e1d2;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
-.inspection-message.state-blocking{color:#ffccba}.inspection-meter-wrap{margin-top:10px}.inspection-meter{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;max-width:500px;height:13px}.inspection-meter-cell{border:1px solid #53604d;border-radius:2px;background:#20271e}.inspection-meter-cell.filled{background:#c5e568;border-color:#8ca94c}.inspection-meter.state-due .inspection-meter-cell.filled{background:#f0c94b;border-color:#987c36}.inspection-meter.state-overdue .inspection-meter-cell.filled{background:#f0ad70;border-color:#8d6748}.inspection-meter.state-blocking .inspection-meter-cell.filled{background:#e98b72;border-color:#855947}.inspection-scale-note,.inspection-asof{font-size:10px;color:#8f9d8b;line-height:1.4;margin:6px 0 0}
+.inspection-message.state-blocking{color:#ffccba}.inspection-meter-wrap{margin-top:10px}.inspection-meter{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:4px;max-width:500px;height:13px}.inspection-meter-cell{border:1px solid #53604d;border-radius:2px;background:#20271e}.inspection-meter.unknown .inspection-meter-cell{background:#20271e;border-color:#53604d}.inspection-scale-note,.inspection-asof{font-size:10px;color:#8f9d8b;line-height:1.4;margin:6px 0 0}
 
 /* Standalone entry forms keep actions outside the compact vehicle cards. */
 .own-toolbar{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 18px}.own-notice{color:#d3e7b1;font-size:13px;line-height:1.5}.own-notice:empty{display:none}
@@ -70,3 +69,28 @@
 .record{flex-wrap:wrap}.record-edit{margin-left:auto;flex:none}.record-edit-readonly{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;border:1px solid #485443;border-radius:9px;background:#171d16}.record-edit-readonly p{margin:0;color:#d4dfcc;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:800px){.logbook-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.logbook-filters>button{align-self:end}.issue-row{grid-template-columns:repeat(2,minmax(0,1fr))}.issue-field-text{grid-column:1/-1}.issue-row .issue-remove{grid-column:1/-1;justify-self:start}}
 @media(max-width:600px){.own-fields{grid-template-columns:1fr}.own-panel{padding:19px}.own-toolbar{gap:7px}.own-toolbar button{flex:1 1 auto}.own-toolbar .condition-save{flex:0 1 auto}.logbook-filters{grid-template-columns:1fr 1fr}.logbook-filters>button{grid-column:1/-1}.logbook-heading{align-items:flex-start}.work-dashboard{padding:17px}.work-items{grid-template-columns:1fr}.issue-row{grid-template-columns:1fr}.issue-field-text,.issue-row .issue-remove{grid-column:1}}
+
+.level-1 .card-inspection-cell.filled,.level-1 .inspection-meter-cell.filled{background:hsl(0 64% 58%);border-color:hsl(0 58% 45%)}
+.level-2 .card-inspection-cell.filled,.level-2 .inspection-meter-cell.filled{background:hsl(5 64% 58%);border-color:hsl(5 58% 45%)}
+.level-3 .card-inspection-cell.filled,.level-3 .inspection-meter-cell.filled{background:hsl(10 64% 58%);border-color:hsl(10 58% 45%)}
+.level-4 .card-inspection-cell.filled,.level-4 .inspection-meter-cell.filled{background:hsl(16 64% 58%);border-color:hsl(16 58% 45%)}
+.level-5 .card-inspection-cell.filled,.level-5 .inspection-meter-cell.filled{background:hsl(21 64% 58%);border-color:hsl(21 58% 45%)}
+.level-6 .card-inspection-cell.filled,.level-6 .inspection-meter-cell.filled{background:hsl(26 64% 58%);border-color:hsl(26 58% 45%)}
+.level-7 .card-inspection-cell.filled,.level-7 .inspection-meter-cell.filled{background:hsl(31 64% 58%);border-color:hsl(31 58% 45%)}
+.level-8 .card-inspection-cell.filled,.level-8 .inspection-meter-cell.filled{background:hsl(37 64% 58%);border-color:hsl(37 58% 45%)}
+.level-9 .card-inspection-cell.filled,.level-9 .inspection-meter-cell.filled{background:hsl(42 64% 58%);border-color:hsl(42 58% 45%)}
+.level-10 .card-inspection-cell.filled,.level-10 .inspection-meter-cell.filled{background:hsl(47 64% 58%);border-color:hsl(47 58% 45%)}
+.level-11 .card-inspection-cell.filled,.level-11 .inspection-meter-cell.filled{background:hsl(52 64% 58%);border-color:hsl(52 58% 45%)}
+.level-12 .card-inspection-cell.filled,.level-12 .inspection-meter-cell.filled{background:hsl(57 64% 58%);border-color:hsl(57 58% 45%)}
+.level-13 .card-inspection-cell.filled,.level-13 .inspection-meter-cell.filled{background:hsl(63 64% 58%);border-color:hsl(63 58% 45%)}
+.level-14 .card-inspection-cell.filled,.level-14 .inspection-meter-cell.filled{background:hsl(68 64% 58%);border-color:hsl(68 58% 45%)}
+.level-15 .card-inspection-cell.filled,.level-15 .inspection-meter-cell.filled{background:hsl(73 64% 58%);border-color:hsl(73 58% 45%)}
+.level-16 .card-inspection-cell.filled,.level-16 .inspection-meter-cell.filled{background:hsl(78 64% 58%);border-color:hsl(78 58% 45%)}
+.level-17 .card-inspection-cell.filled,.level-17 .inspection-meter-cell.filled{background:hsl(83 64% 58%);border-color:hsl(83 58% 45%)}
+.level-18 .card-inspection-cell.filled,.level-18 .inspection-meter-cell.filled{background:hsl(89 64% 58%);border-color:hsl(89 58% 45%)}
+.level-19 .card-inspection-cell.filled,.level-19 .inspection-meter-cell.filled{background:hsl(94 64% 58%);border-color:hsl(94 58% 45%)}
+.level-20 .card-inspection-cell.filled,.level-20 .inspection-meter-cell.filled{background:hsl(99 64% 58%);border-color:hsl(99 58% 45%)}
+.level-21 .card-inspection-cell.filled,.level-21 .inspection-meter-cell.filled{background:hsl(104 64% 58%);border-color:hsl(104 58% 45%)}
+.level-22 .card-inspection-cell.filled,.level-22 .inspection-meter-cell.filled{background:hsl(110 64% 58%);border-color:hsl(110 58% 45%)}
+.level-23 .card-inspection-cell.filled,.level-23 .inspection-meter-cell.filled{background:hsl(115 64% 58%);border-color:hsl(115 58% 45%)}
+.level-24 .card-inspection-cell.filled,.level-24 .inspection-meter-cell.filled{background:hsl(120 64% 58%);border-color:hsl(120 58% 45%)}
