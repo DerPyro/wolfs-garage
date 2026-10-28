@@ -133,6 +133,15 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   const entryInput=id=>nodes['own-fields'].querySelectorAll('input').find(input=>input.id==='entry-'+id);
   nodes['vehicle-edit'].listeners.click();
   assert.equal(entryInput('inspectionDueMonth').value,'2026-08');
+  const inspectionHelp=nodes['own-fields'].querySelectorAll('details');
+  assert.equal(inspectionHelp.length,1,'the HU help is available as a native disclosure');
+  assert.equal(inspectionHelp[0].querySelectorAll('summary')[0].attributes['aria-label'],'Information zum Ablesen des HU-Monats');
+  assert.match(inspectionHelp[0].textContent,/hinteren Kennzeichen.*ganz oben.*zweistellige Zahl in der Mitte.*9 und Mitte 28 bedeutet September 2028.*letzten HU-Bericht/);
+  const huSource=inspectionHelp[0].querySelectorAll('a')[0];
+  assert.equal(huSource.href,'https://www.tuev-nord.de/de/dienstleistungen/pruefung-und-gutachten/hauptuntersuchung/');
+  assert.equal(huSource.target,'_blank');
+  assert.equal(huSource.rel,'noopener noreferrer');
+  assert.equal(nodes['own-fields'].querySelectorAll('label').find(label=>label.textContent==='HU / TÜV gültig bis').attributes.for,entryInput('inspectionDueMonth').id,'the label remains directly associated with the month input');
   entryInput('model').value='Bearbeitet';
   await nodes['own-form'].listeners.submit({preventDefault(){}});
   assert.equal(huWrites[0].body.inspectionDueMonth,'2026-08','unmodified month is preserved on vehicle PUT');

@@ -384,7 +384,16 @@ function entryField(labelText, name, type, value = "", options = null) {
   field.id = `entry-${name}`; label.setAttribute("for", field.id); field.name = name;
   if (options) { for (const [key, text] of options) { const option = el("option", "", text); option.value = key; field.append(option); } }
   else field.type = type;
-  field.value = value === null || value === undefined ? "" : String(value); wrapper.append(label, field); $("own-fields").append(wrapper); return field;
+  field.value = value === null || value === undefined ? "" : String(value);
+  if (name === "inspectionDueMonth") {
+    const labelRow = el("div", "own-field-label-row"), help = el("details", "inspection-help"), summary = el("summary", "", "i");
+    summary.setAttribute("aria-label", "Information zum Ablesen des HU-Monats");
+    const content = el("div", "inspection-help-content");
+    content.append(el("p", "", "Auf dem hinteren Kennzeichen zeigt die Zahl ganz oben den Monat der nächsten HU. Die zweistellige Zahl in der Mitte ist das Jahr. Beispiel: oben 9 und Mitte 28 bedeutet September 2028. Alternativ findest du den Termin im letzten HU-Bericht."));
+    const source = el("a", "", "Hinweise beim TÜV NORD"); source.href = "https://www.tuev-nord.de/de/dienstleistungen/pruefung-und-gutachten/hauptuntersuchung/"; source.target = "_blank"; source.rel = "noopener noreferrer";
+    content.append(source); help.append(summary, content); labelRow.append(label, help); wrapper.append(labelRow, field);
+  } else wrapper.append(label, field);
+  $("own-fields").append(wrapper); return field;
 }
 function readonlyRecordFacts(record) {
   const date = readableDate(record.date) || "Datum nicht verfügbar";
