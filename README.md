@@ -39,6 +39,8 @@ The default port is bound to loopback. There is no built-in login: access beyond
 
 See the [standalone guide](docs/standalone.md) for configuration, backup, isolated restore and development commands.
 
+The source-build Compose setup above remains the supported install path. A pinned-image Compose file and release plan are prepared, but no GHCR image is published yet; see the [container release plan](docs/container-releases.md). The [changelog](CHANGELOG.md) currently contains unreleased entries.
+
 ## Project direction
 
 Wolfs Garage is an independent application usable by other self-hosters. Each installation owns its configuration and vehicle data. Its core has no mandatory cloud API or LubeLogger dependency. The current access model is one trusted owner, with full access for any user admitted by the configured authentication boundary. The interface is currently in German.
