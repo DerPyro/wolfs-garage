@@ -453,7 +453,7 @@ function openEntry(mode) {
     entryField("Fahrzeugtyp", "vehicleType", "", values.vehicleType || "", types);
     entryField("Einheit für den Stand", "odometerUnit", "", values.odometerUnit || "km", [["km","Kilometer"],["mi","Meilen"],["h","Betriebsstunden"]]);
     if (state.inspectionStatus) { const inspection = entryField("HU / TÜV gültig bis", "inspectionDueMonth", "month", values.inspectionDueMonth || ""); inspection.min = "0001-01"; inspection.max = "9998-12"; }
-    $("own-hint").textContent = state.inspectionStatus ? "Der letzte Gültigkeitsmonat steht auf dem Prüfbericht. Die Fahrbereitschaft bleibt eine separate manuelle Angabe." : "Die Fahrbereitschaft bleibt unabhängig von den Stammdaten. Eine Änderung der Einheit rechnet vorhandene Einträge nicht um.";
+    $("own-hint").textContent = state.inspectionStatus ? "Der HU-Monat steuert die automatische INOP-Regel. Deine manuelle Einschätzung bleibt erhalten." : "Die Fahrbereitschaft bleibt unabhängig von den Stammdaten. Eine Änderung der Einheit rechnet vorhandene Einträge nicht um.";
   } else {
     const date = entryField("Datum", "date", "date", localToday()); date.required = true;
     if (mode === "record") {
