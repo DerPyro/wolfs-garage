@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, issueRowCounter: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, issueRowCounter: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -561,12 +561,14 @@ async function initialize() {
     state.recordCorrections = capabilities.features.includes("recordCorrections");
     state.historyBrowsing = capabilities.features.includes("historyBrowsing");
     state.scheduledWork = capabilities.features.includes("scheduledWork");
+    state.dataExport = capabilities.features.includes("dataExport");
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
   state.capabilitiesReady = true;
   $("legacy-manage").hidden = state.standalone; $("legacy-banner").hidden = state.standalone;
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
   $("logbook-toggle").hidden = !state.historyBrowsing;
   $("work-dashboard").hidden = !state.scheduledWork; renderWorkDashboard();
+  $("data-export-wrap").hidden = !state.dataExport;
   $("reminders-panel").hidden = state.standalone; $("detail-content").classList.toggle("standalone-detail", state.standalone);
   await load();
 }

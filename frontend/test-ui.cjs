@@ -16,12 +16,15 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+  nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json';
+  nodes['data-export-wrap'].append(nodes['data-export'], new Element('p'));
+  nodes['data-export-wrap'].children[1].textContent='JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.';
   for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const document = { getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
   await new Promise(resolve => setTimeout(resolve, 25));
   return nodes;
 }
@@ -33,6 +36,20 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
 
   nodes = await run(async () => ({ok: false, status: 502}));
   assert.match(nodes.status.textContent, /konnten nicht geladen/);
+
+  // Standalone export stays a fixed browser download; capability data cannot alter its URL.
+  let exportCalls=0;
+  nodes = await run(async path => { if(path==='/garage-api/export') exportCalls++; return {ok:true,json:async()=>({vehicles:[]})}; }, {standalone:true,dataExport:true});
+  assert.equal(nodes['data-export-wrap'].hidden,false);
+  assert.equal(nodes['data-export'].href,'/garage-api/export');
+  assert.equal(nodes['data-export'].download,'wolfs-garage-export.json');
+  assert.match(nodes['data-export-wrap'].textContent,/JSON-Datei mit Fahrzeugdaten und Verlauf/);
+  assert.match(nodes['data-export-wrap'].textContent,/Zur Wiederherstellung ein Datenbank-Backup verwenden/);
+  assert.equal(exportCalls,0,'normal anchor download avoids loading the complete export in app memory');
+  const exportMarkup=fs.readFileSync(require('node:path').join(__dirname,'index.html'),'utf8');
+  assert.match(exportMarkup,/<a id="data-export"[^>]*href="\/garage-api\/export"[^>]*download="wolfs-garage-export\.json"/);
+  nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:false,dataExport:true});
+  assert.equal(nodes['data-export-wrap'].hidden,true,'legacy mode never shows the standalone export');
 
   const calls = [];
   const status = {readiness:'ready',issues:[{id:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',text:'Reifen wechseln'}],revision:2};

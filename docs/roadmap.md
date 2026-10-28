@@ -14,6 +14,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Bounded completed-record corrections with a reason, revision check, retry handling and before/after history; date, odometer, unit and issue-closure changes remain out of scope.
 - [x] Explicit schema-1/2-to-3 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
 - [x] Consistent SQLite backup and synthetic isolated restore evidence.
+- [x] Portable owner-data JSON export for inspection and transfer; full SQLite backup remains the restore format and JSON import is not supported.
 - [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
 
 [Standalone guide](standalone.md) · [API contract](api.md) · [verification evidence](discovery/standalone-core.md)

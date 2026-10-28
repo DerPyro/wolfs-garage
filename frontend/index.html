@@ -41,7 +41,7 @@
     <section class="garage-section" aria-labelledby="vehicles-heading">
       <div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> DEINE SAMMLUNG</p><h2 id="vehicles-heading">Meine Fahrzeuge <span id="vehicle-count" class="count" hidden></span></h2></div><button id="refresh" class="icon-button" type="button" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren"><svg><use href="#i-refresh"/></svg></button></div>
       <div id="status" class="status" role="status" aria-live="polite">Fahrzeuge werden geladen …</div>
-      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button></div>
+      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button><div id="data-export-wrap" class="data-export" hidden><a id="data-export" class="condition-edit" href="/garage-api/export" download="wolfs-garage-export.json">Daten exportieren</a><p class="form-hint">JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.</p></div></div>
       <p id="own-notice" class="own-notice" role="status" aria-live="polite"></p>
       <div id="vehicles" class="vehicle-grid" aria-label="Fahrzeuge"></div>
       <section id="work-dashboard" class="work-dashboard" aria-labelledby="work-title" hidden>
