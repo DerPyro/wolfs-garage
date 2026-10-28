@@ -16,12 +16,12 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
-  for (const id of ['own-panel', 'history-panel', 'condition-form']) nodes[id].hidden = true;
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const document = { getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
   await new Promise(resolve => setTimeout(resolve, 25));
   return nodes;
 }
@@ -105,7 +105,7 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
   assert.equal(nodes['issue-editor'].querySelectorAll('input')[0].value, 'Reifen wechseln');
   nodes['readiness-input'].value='not_ready';
   nodes['issue-add'].listeners.click();
-  nodes['issue-editor'].querySelectorAll('input')[1].value='Kontrolle';
+  nodes['issue-editor'].querySelectorAll('input').filter(input=>input.type==='text')[1].value='Kontrolle';
   await nodes['condition-form'].listeners.submit({preventDefault(){}});
   assert.deepEqual(putBody,{readiness:'not_ready',issues:[{id:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',text:'Reifen wechseln'},{text:'Kontrolle'}],revision:2});
   assert.equal(nodes['condition-form'].hidden,true);
@@ -302,5 +302,107 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
   assert.match(nodes['logbook-records'].textContent,/Neues Ergebnis/);
   assert.doesNotMatch(nodes['logbook-records'].textContent,/Veraltetes Ergebnis/);
 
-  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Retry-ID, Belegkorrektur, Verlauf und Logbuchpagination bestanden.');
+  // Structured issue metadata is saved explicitly, while readiness remains independent.
+  const originalIssues=[
+    {id:'issue-1',text:'<img src=x onerror=alert(1)>',dueDate:'2026-10-27',severity:'critical',lifecycle:'open'},
+    {id:'issue-2',text:'Beobachten',dueDate:null,severity:null,lifecycle:'observed'}
+  ];
+  let currentIssues=originalIssues; let structuredPayload; let workReads=0; let currentRevision=1;
+  const otherIssue={id:'issue-3',text:'Ein einzelner offener Punkt',dueDate:null,severity:'repair',lifecycle:'open'};
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[{id:20,name:'Bereit trotz kritisch',status:{readiness:'ready',issues:currentIssues,revision:currentRevision}},{id:21,name:'Ein Punkt',status:{readiness:'ready',issues:[otherIssue],revision:1}}]})};
+    if(path==='/garage-api/vehicles/20/summary') return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:currentIssues,revision:currentRevision}},reminders:[],services:[]})};
+    if(path==='/garage-api/vehicles/21/summary') return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[otherIssue],revision:1}},reminders:[],services:[]})};
+    if(path==='/garage-api/work') { workReads++; return {ok:true,json:async()=>({today:'2026-10-28',timeZone:'Europe/Berlin',items:[...currentIssues.map((issue,index)=>({vehicleId:20,id:issue.id,text:issue.text,dueDate:issue.dueDate,severity:issue.severity,lifecycle:issue.lifecycle,dueState:index===0?'overdue':'unscheduled'})),{vehicleId:21,...otherIssue,dueState:'unscheduled'}]})}; }
+    if(path==='/garage-api/vehicles/20/status' && options.method==='PUT') { structuredPayload=JSON.parse(options.body); currentIssues=structuredPayload.issues.map((issue,index)=>({...issue,id:issue.id||`new-${index}`})); currentRevision=2; return {ok:true,json:async()=>({readiness:structuredPayload.readiness,issues:currentIssues,revision:currentRevision})}; }
+    if(path==='/garage-api/vehicles/20/records' && options.method==='POST') { const payload=JSON.parse(options.body); currentIssues=currentIssues.filter(issue=>issue.id!==payload.closeIssueId); currentRevision=3; return {ok:true,json:async()=>({record:{id:99,...payload},status:{readiness:'ready',issues:currentIssues,revision:currentRevision}})}; }
+    if(path==='/garage-api/vehicles/20/history') return {ok:true,json:async()=>({events:[{action:'status.updated',occurredAt:'2026-10-28T12:00:00Z',before:{issues:originalIssues},after:{issues:currentIssues}}]})};
+    throw new Error('Unexpected scheduled work request: '+path);
+  },{standalone:true,scheduledWork:true});
+  assert.equal(nodes['work-dashboard'].hidden,false); assert.equal(workReads,1);
+  assert.match(nodes['work-status'].textContent,/Stand: 28\.10\.2026 \(Europe\/Berlin\)/);
+  assert.match(nodes['condition-work-asof'].textContent,/Fälligkeitsstand: 28\.10\.2026/);
+  assert.match(nodes.vehicles.children[0].attributes['aria-label'],/Kritisch/);
+  assert.doesNotMatch(nodes.vehicles.children[0].attributes['aria-label'],/Nicht fahrbereit/);
+  assert.match(nodes['work-items'].textContent,/<img src=x onerror=alert\(1\)>/);
+  assert.equal(nodes['work-items'].querySelectorAll('img').length,0);
+  assert.match(nodes['condition-issues'].textContent,/Auffälligkeit|Kritisch/);
+  nodes['issue-filter'].value='overdue'; nodes['issue-filter'].listeners.change();
+  assert.match(nodes['condition-issues'].textContent,/<img src=x onerror=alert\(1\)>/);
+  assert.doesNotMatch(nodes['condition-issues'].textContent,/Beobachten/);
+  nodes['issue-filter'].value='observed'; nodes['issue-filter'].listeners.change();
+  assert.match(nodes['condition-issues'].textContent,/Beobachten/);
+  const secondVehicle=nodes.vehicles.children.find(card=>card.attributes['aria-label'].includes('Ein Punkt'));
+  await secondVehicle.listeners.click();
+  assert.equal(nodes['issue-filter'].value,'all'); assert.equal(nodes['issue-filter-wrap'].hidden,true);
+  assert.match(nodes['condition-issues'].textContent,/Ein einzelner offener Punkt/);
+  assert.equal(workReads,2);
+  await nodes.vehicles.children.find(card=>card.attributes['aria-label'].includes('Bereit trotz kritisch')).listeners.click();
+  assert.equal(nodes['issue-filter'].value,'all');
+  nodes['condition-edit'].listeners.click();
+  nodes['issue-add'].listeners.click();
+  const newIssue=nodes['issue-editor'].children[2];
+  assert.equal(newIssue.querySelectorAll('input')[1].value,''); assert.equal(newIssue.querySelectorAll('select')[0].value,''); assert.equal(newIssue.querySelectorAll('select')[1].value,'open');
+  assert.equal(newIssue.querySelectorAll('button')[0].textContent,'Punkt entfernen'); newIssue.querySelectorAll('button')[0].listeners.click();
+  const firstIssue=nodes['issue-editor'].children[0];
+  assert.equal(firstIssue.querySelectorAll('input')[1].value,'2026-10-27');
+  assert.equal(firstIssue.querySelectorAll('select')[0].value,'critical');
+  firstIssue.querySelectorAll('input')[1].value=''; firstIssue.querySelectorAll('select')[0].value=''; firstIssue.querySelectorAll('select')[1].value='observed';
+  await nodes['condition-form'].listeners.submit({preventDefault(){}});
+  assert.equal(structuredPayload.readiness,'ready');
+  assert.deepEqual(structuredPayload.issues[0],{text:'<img src=x onerror=alert(1)>',id:'issue-1',dueDate:null,severity:null,lifecycle:'observed'});
+  assert.equal(structuredPayload.issues[1].dueDate,null); assert.equal(structuredPayload.issues[1].severity,null); assert.equal(structuredPayload.issues[1].lifecycle,'observed');
+  assert.equal(workReads,4);
+  assert.match(nodes.vehicles.children[0].attributes['aria-label'],/Fahrbereit/);
+  assert.doesNotMatch(nodes.vehicles.children[0].attributes['aria-label'],/INOP|Nicht fahrbereit/);
+  await nodes['history-toggle'].listeners.click();
+  assert.match(nodes['history-events'].textContent,/Keine Fälligkeit/);
+  assert.match(nodes['history-events'].textContent,/Schweregrad Nicht eingestuft/);
+  assert.match(nodes['history-events'].textContent,/Status Beobachten/);
+  nodes['record-add'].listeners.click();
+  const entryField=id=>nodes['own-fields'].querySelectorAll('input').concat(nodes['own-fields'].querySelectorAll('select')).find(field=>field.id==='entry-'+id);
+  entryField('description').value='Arbeit erledigt'; entryField('kind').value='repair'; entryField('closeIssueId').value='issue-1';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(workReads,5);
+  assert.doesNotMatch(nodes['work-items'].textContent,/<img src=x onerror=alert\(1\)>/);
+  assert.match(nodes['work-items'].textContent,/Ein einzelner offener Punkt/);
+
+  // Failed and stale projection reads never replace manual issues with a false empty state.
+  let releaseOldWork; let staleWorkStarted; const staleWorkPromise=new Promise(resolve=>{staleWorkStarted=resolve;}); let workCall=0; let failNextWork=false;
+  nodes=await run(async(path)=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[{id:21,name:'Projektion',status:{readiness:'ready',issues:[{id:'w1',text:'Manuell erfasst',dueDate:'2026-10-28',severity:null,lifecycle:'open'}],revision:1}}]})};
+    if(path==='/garage-api/vehicles/21/summary') return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[{id:'w1',text:'Manuell erfasst',dueDate:'2026-10-28',severity:null,lifecycle:'open'}],revision:1}},reminders:[],services:[]})};
+    if(path==='/garage-api/work' && workCall++===0) return new Promise(resolve=>{releaseOldWork=resolve;staleWorkStarted();});
+    if(path==='/garage-api/work' && failNextWork) { failNextWork=false; return {ok:false,status:503}; }
+    if(path==='/garage-api/work') return {ok:true,json:async()=>({today:'2026-10-29',timeZone:'Europe/Berlin',items:[{vehicleId:21,id:'w1',text:'Manuell erfasst',dueDate:'2026-10-28',severity:null,lifecycle:'open',dueState:'overdue'}]})};
+    throw new Error('Unexpected projection race request: '+path);
+  },{standalone:true,scheduledWork:true});
+  await staleWorkPromise;
+  assert.match(nodes['condition-issues'].textContent,/Manuell erfasst/);
+  nodes['issue-filter'].value='overdue'; nodes['issue-filter'].listeners.change();
+  assert.match(nodes['work-status'].textContent,/Fälligkeiten werden geladen/);
+  assert.doesNotMatch(nodes['work-status'].textContent,/Keine offenen Punkte/);
+  assert.match(nodes['condition-issues'].textContent,/Fälligkeitsstatus wird geladen/);
+  nodes.refresh.listeners.click(); await new Promise(resolve=>setTimeout(resolve,30));
+  assert.match(nodes['work-status'].textContent,/Stand: 29\.10\.2026/);
+  assert.match(nodes['work-items'].textContent,/Überfällig/);
+  releaseOldWork({ok:true,json:async()=>({today:'2026-10-28',timeZone:'Europe/Berlin',items:[{vehicleId:21,id:'w1',text:'Manuell erfasst',dueDate:'2026-10-28',severity:null,lifecycle:'open',dueState:'today'}]})});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(nodes['work-status'].textContent,/Stand: 29\.10\.2026/);
+  assert.match(nodes['work-items'].textContent,/Überfällig/);
+  failNextWork=true; nodes.refresh.listeners.click(); await new Promise(resolve=>setTimeout(resolve,30));
+  assert.match(nodes['work-status'].textContent,/Fälligkeiten momentan nicht verfügbar/);
+  nodes['issue-filter'].value='overdue'; nodes['issue-filter'].listeners.change();
+  assert.match(nodes['condition-issues'].textContent,/Manuell erfasst/);
+  assert.match(nodes['condition-issues'].textContent,/Fälligkeitsstatus momentan nicht verfügbar/);
+  assert.doesNotMatch(nodes['work-status'].textContent,/Keine offenen Punkte/);
+  nodes.refresh.listeners.click(); await new Promise(resolve=>setTimeout(resolve,30));
+  assert.match(nodes['work-status'].textContent,/Stand: 29\.10\.2026/);
+
+  const legacyWorkRequests=[];
+  nodes=await run(async path=>{legacyWorkRequests.push(path);return path==='/garage-api/vehicles'?{ok:true,json:async()=>({vehicles:[{id:30,name:'Legacy Fahrzeug',status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}}]})}:{ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}},reminders:[],services:[]})};});
+  assert.equal(nodes['work-dashboard'].hidden,true);
+  assert.equal(legacyWorkRequests.includes('/garage-api/work'),false);
+
+  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Verlauf, Logbuchpagination und geplante offene Arbeiten bestanden.');
 })().catch(err => { console.error(err); process.exitCode = 1; });

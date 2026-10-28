@@ -14,9 +14,10 @@ Available now:
 - Close a selected issue atomically with its work record and inspect the change history.
 - Correct the description, service/repair kind, cost, currency and HTTPS document reference of a completed record, with a reason and before/after history. Record date, odometer reading, unit and issue closure remain fixed.
 - Browse complete service/repair and odometer histories in date-sorted pages with date filters; work records can also be filtered by kind.
+- Set an optional due date, severity and open/observed lifecycle on existing open work; view active work in a Europe/Berlin date-aware dashboard.
 - Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
 
-Recurring maintenance rules, corrections to record dates or odometer readings, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. This is an early alpha, not the completed original feature list.
+Recurring maintenance rules, corrections to record dates or odometer readings, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.
 
 ## Run locally
 
@@ -32,7 +33,7 @@ docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 
 Open **http://localhost:8080**. Initialize a new database once only. The data volume persists across container recreation. Never reinitialize or remove it to repair an existing installation.
 
-**Updating an existing standalone installation:** this release uses schema 2. If your database is still schema 1, follow the [explicit upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database.
+**Updating an existing standalone installation:** this release uses schema 3. If your database is schema 1 or 2, follow the [explicit backed-up upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database. Do not run an older schema-2 image against an upgraded schema-3 database.
 
 The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
 

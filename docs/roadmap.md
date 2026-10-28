@@ -12,7 +12,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Atomic work-record creation and explicit issue closure; readable change history.
 - [x] Revision checks and idempotent reading/record submissions.
 - [x] Bounded completed-record corrections with a reason, revision check, retry handling and before/after history; date, odometer, unit and issue-closure changes remain out of scope.
-- [x] Explicit schema-1-to-2 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
+- [x] Explicit schema-1/2-to-3 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
 - [x] Consistent SQLite backup and synthetic isolated restore evidence.
 - [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
 
@@ -22,7 +22,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 
 - [ ] Implement a safe date/odometer correction workflow with explicit links to measurement history.
 - [x] Browse complete odometer and maintenance history in date-sorted pages, with inclusive date filters, record-kind filtering, safe cursor restart after changes, and correction access on later record pages.
-- [ ] Give open work explicit due dates, severity and lifecycle instead of only short issue text.
+- [x] Give existing open work optional due dates, user-assigned nullable severity and an `open`/`observed` lifecycle; show an active-work dashboard with Europe/Berlin date boundaries.
 - [ ] Connect the maintenance indicator to due work as well as manually open issues, with clear reasons.
 - [ ] Improve empty/error states, mobile forms and accessibility from actual use.
 - [ ] Provide a clear path for optional interface translations.
@@ -44,7 +44,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 
 ## Reliable 1.0 operation
 
-- [ ] Versioned schema upgrades that preserve existing data; schema-1 initialization is not an upgrade mechanism.
+- [x] Explicit schema-1/2-to-3 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates.
 - [ ] Complete export and documented isolated restore for all supported data and files.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
 - [ ] Establish release notes, upgrade instructions and repeatable independent backups.

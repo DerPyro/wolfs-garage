@@ -16,11 +16,14 @@ import re
 import sqlite3
 from urllib.parse import urlsplit
 import uuid
+from zoneinfo import ZoneInfo
 
 
-SCHEMA = 2
+SCHEMA = 3
 UNITS = {"km", "mi", "h"}
 READINESS = {"ready", "not_ready", "unknown"}
+SEVERITIES = {"observation", "repair", "critical"}
+LIFECYCLES = {"open", "observed"}
 
 
 class ValidationError(ValueError):
@@ -159,8 +162,12 @@ def _document(value):
 
 
 class Store:
-    def __init__(self, path):
+    def __init__(self, path, today_provider=None):
         self.path = Path(path)
+        if today_provider is not None and not callable(today_provider):
+            raise TypeError("today_provider must be callable.")
+        self.today_provider = (today_provider if today_provider is not None
+                               else lambda: datetime.now(ZoneInfo("Europe/Berlin")).date())
 
     def initialize(self):
         """Create the current schema once; an existing file is never replaced."""
@@ -173,7 +180,7 @@ class Store:
                 PRAGMA synchronous=FULL;
                 BEGIN IMMEDIATE;
                 CREATE TABLE meta(schema INTEGER NOT NULL);
-                INSERT INTO meta VALUES(2);
+                INSERT INTO meta VALUES(3);
                 CREATE TABLE vehicles(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     make TEXT NOT NULL, model TEXT NOT NULL, name TEXT NOT NULL,
@@ -218,7 +225,7 @@ class Store:
             rows = db.execute("SELECT schema FROM meta").fetchall()
         except sqlite3.Error as exc:
             raise sqlite3.DatabaseError("Unsupported standalone schema.") from exc
-        if len(rows) != 1 or rows[0][0] not in (1, 2):
+        if len(rows) != 1 or rows[0][0] not in (1, 2, 3):
             raise sqlite3.DatabaseError("Unsupported standalone schema.")
         return rows[0][0]
 
@@ -234,7 +241,7 @@ class Store:
                     raise sqlite3.DatabaseError("Backup integrity check failed.")
                 if target.execute("PRAGMA foreign_key_check").fetchall():
                     raise sqlite3.DatabaseError("Backup foreign key check failed.")
-                if Store._schema(target) not in (1, 2):
+                if Store._schema(target) not in (1, 2, 3):
                     raise sqlite3.DatabaseError("Backup schema is unsupported.")
             with open(destination, "rb") as saved:
                 os.fsync(saved.fileno())
@@ -246,7 +253,7 @@ class Store:
             raise
 
     def upgrade(self, backup_destination):
-        """Explicitly upgrade schema 1 after creating and checking a full backup.
+        """Explicitly upgrade schema 1 or 2 after a checked full backup.
 
         The reserved migration lock prevents writers. A separate read connection
         supplies the backup snapshot, avoiding sqlite3.Connection.backup() from
@@ -257,20 +264,22 @@ class Store:
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA busy_timeout=5000")
             schema = self._schema(db)
-            if schema == 2:
+            if schema == 3:
                 return False
             db.execute("BEGIN IMMEDIATE")
             try:
                 # Recheck under the write reservation in case another operator
                 # completed the upgrade between the initial read and lock.
-                if self._schema(db) != 1:
+                schema = self._schema(db)
+                if schema == 3:
                     db.execute("ROLLBACK")
                     return False
                 reader_uri = self.path.resolve().as_uri() + "?mode=ro"
                 with closing(sqlite3.connect(reader_uri, uri=True, timeout=5)) as reader:
                     self._new_backup(reader, backup_destination)
-                db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
-                db.execute("UPDATE meta SET schema=2")
+                if schema == 1:
+                    db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
+                db.execute("UPDATE meta SET schema=3")
                 if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise sqlite3.DatabaseError("Integrity check failed after upgrade.")
                 if db.execute("PRAGMA foreign_key_check").fetchall():
@@ -319,17 +328,28 @@ class Store:
             issues = json.loads(row["issues"])
             if row["readiness"] not in READINESS or type(row["revision"]) is not int or row["revision"] < 0 or not isinstance(issues, list) or len(issues) > 20:
                 raise ValidationError("Invalid stored status.")
-            seen = set()
+            seen, normalized = set(), []
             for item in issues:
-                _fields(item, {"id", "text"}, {"id", "text"})
+                _fields(item, {"id", "text", "dueDate", "severity", "lifecycle"}, {"id", "text"})
                 issue_id = _issue_id(item["id"])
-                _text(item["text"], "issue", required=True)
+                text = _text(item["text"], "issue", required=True)
                 if issue_id in seen:
                     raise ValidationError("Duplicate stored issue.")
                 seen.add(issue_id)
+                due_date = item.get("dueDate")
+                if due_date is not None:
+                    due_date = _day(due_date)
+                severity = item.get("severity")
+                if severity is not None and (not isinstance(severity, str) or severity not in SEVERITIES):
+                    raise ValidationError("Invalid stored issue severity.")
+                lifecycle = item.get("lifecycle", "open")
+                if not isinstance(lifecycle, str) or lifecycle not in LIFECYCLES:
+                    raise ValidationError("Invalid stored issue lifecycle.")
+                normalized.append({"id": issue_id, "text": text, "dueDate": due_date,
+                                   "severity": severity, "lifecycle": lifecycle})
         except (ValueError, TypeError) as exc:
             raise sqlite3.DatabaseError("Invalid stored status.") from exc
-        return {"readiness": row["readiness"], "issues": issues, "revision": row["revision"]}
+        return {"readiness": row["readiness"], "issues": normalized, "revision": row["revision"]}
 
     @staticmethod
     def _vehicle(db, vehicle_id):
@@ -409,6 +429,41 @@ class Store:
         with closing(self._connect()) as db:
             return self._status(db, vehicle_id)
 
+    def list_active_work(self):
+        """Return a read-only projection of explicitly recorded active issues."""
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            today = self.today_provider()
+            if type(today) is not date:
+                raise ValueError("today_provider must return a datetime.date.")
+            today_text = today.isoformat()
+            items = []
+            for row in db.execute("SELECT vehicle_id FROM states ORDER BY vehicle_id"):
+                vehicle_id = row["vehicle_id"]
+                for issue in self._status(db, vehicle_id)["issues"]:
+                    if issue["lifecycle"] not in LIFECYCLES:
+                        continue
+                    due_date = issue["dueDate"]
+                    if due_date is None:
+                        due_state = "unscheduled"
+                    elif due_date < today_text:
+                        due_state = "overdue"
+                    elif due_date == today_text:
+                        due_state = "today"
+                    else:
+                        due_state = "upcoming"
+                    items.append({"vehicleId": vehicle_id, "id": issue["id"], "text": issue["text"],
+                                  "dueDate": due_date, "severity": issue["severity"],
+                                  "lifecycle": issue["lifecycle"], "dueState": due_state})
+            due_state_order = {"overdue": 0, "today": 1, "upcoming": 2, "unscheduled": 3}
+            items.sort(key=lambda item: (
+                0 if item["severity"] == "critical" else 1,
+                due_state_order[item["dueState"]],
+                item["dueDate"] or "9999-12-31",
+                item["vehicleId"], item["id"],
+            ))
+            return {"today": today_text, "timeZone": "Europe/Berlin", "items": items}
+
     def update_status(self, vehicle_id, payload):
         _fields(payload, {"readiness", "issues", "revision"}, {"readiness", "issues", "revision"})
         expected = _revision(payload["revision"])
@@ -418,17 +473,28 @@ class Store:
             before = self._status(db, vehicle_id)
             if before["revision"] != expected:
                 raise Conflict("Status revision changed.")
-            existing = {item["id"] for item in before["issues"]}
+            existing = {item["id"]: item for item in before["issues"]}
             issues, seen = [], set()
             for item in payload["issues"]:
-                _fields(item, {"id", "text"}, {"text"})
+                _fields(item, {"id", "text", "dueDate", "severity", "lifecycle"}, {"text"})
                 issue_id = _issue_id(item["id"]) if "id" in item else uuid.uuid4().hex
                 if "id" in item and issue_id not in existing:
                     raise ValidationError("Unknown issue id.")
                 if issue_id in seen:
                     raise ValidationError("Duplicate issue id.")
                 seen.add(issue_id)
-                issues.append({"id": issue_id, "text": _text(item["text"], "issue", required=True)})
+                old = existing.get(issue_id)
+                due_date = item.get("dueDate", old["dueDate"] if old else None)
+                if due_date is not None:
+                    due_date = _day(due_date)
+                severity = item.get("severity", old["severity"] if old else None)
+                if severity is not None and (not isinstance(severity, str) or severity not in SEVERITIES):
+                    raise ValidationError("Invalid issue severity.")
+                lifecycle = item.get("lifecycle", old["lifecycle"] if old else "open")
+                if not isinstance(lifecycle, str) or lifecycle not in LIFECYCLES:
+                    raise ValidationError("Invalid issue lifecycle.")
+                issues.append({"id": issue_id, "text": _text(item["text"], "issue", required=True),
+                               "dueDate": due_date, "severity": severity, "lifecycle": lifecycle})
             after = {"readiness": payload["readiness"], "issues": issues, "revision": expected + 1}
             db.execute("UPDATE states SET readiness=?,issues=?,revision=? WHERE vehicle_id=?", (after["readiness"], _json(issues), after["revision"], vehicle_id))
             self._audit(db, vehicle_id, "status.updated", before, after)
@@ -715,6 +781,6 @@ class Store:
         """Create a new consistent full-store backup with restrictive permissions."""
         source_uri = self.path.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(source_uri, uri=True, timeout=5)) as source:
-            if self._schema(source) not in (1, 2):
+            if self._schema(source) not in (1, 2, 3):
                 raise sqlite3.DatabaseError("Unsupported standalone schema.")
             self._new_backup(source, destination)

@@ -1,4 +1,4 @@
-// Synthetic real-Chromium workflow. The caller provides an empty schema-2 DB
+// Synthetic real-Chromium workflow. The caller provides an empty schema-3 DB
 // and serves the standalone app on http://127.0.0.1:18983.
 const fs = require('fs');
 const {spawn} = require('child_process');
