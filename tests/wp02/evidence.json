@@ -1,0 +1,287 @@
+{
+  "project": "wolfs-wp02-7ee1239894",
+  "startedAt": "2026-10-27T13:34:28.463879+00:00",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "tests": [
+    {
+      "name": "isolated admin baseline has five-vehicle setup capability",
+      "status": "pass",
+      "detail": {
+        "note": "Auth-disabled isolated upstream baseline; NOT a Cloudflare test"
+      }
+    },
+    {
+      "name": "five synthetic vehicles and configurable powertrain field returned",
+      "status": "pass",
+      "detail": {
+        "vehicleIds": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "name": "hours flag stored per vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "fleet partial HTML contains all five vehicle models",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "modelsFound": 5,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "vehicle detail HTML renders",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 1,
+        "http": 200,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "vehicle detail HTML renders",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "http": 200,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "vehicle detail HTML renders",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 3,
+        "http": 200,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "vehicle detail HTML renders",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 4,
+        "http": 200,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "vehicle detail HTML renders",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 5,
+        "http": 200,
+        "visualBrowserTest": false
+      }
+    },
+    {
+      "name": "native requisition reduces stock and retains explicit total",
+      "status": "pass",
+      "detail": {
+        "quantityRemaining": 1,
+        "stockCostRemaining": 10,
+        "explicitServiceCost": 15.0
+      }
+    },
+    {
+      "name": "yearly cost report groups vehicle services repairs taxes without stock duplication",
+      "status": "pass",
+      "detail": {
+        "2026": "105.00",
+        "2025": "100.00"
+      }
+    },
+    {
+      "name": "native garage bell appears for overdue reminder with nonzero mileage",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "native garage bell absent for overdue reminder when mileage zero",
+      "status": "gap",
+      "detail": {
+        "vehicleId": 4,
+        "pastDueCount": 1,
+        "lastOdometer": 0
+      }
+    },
+    {
+      "name": "selected supplies are not standalone cash spending in cost report",
+      "status": "gap",
+      "detail": {
+        "supplyOnly2026": null,
+        "scope": "cost report; payment ledger not proven"
+      }
+    },
+    {
+      "name": "metric and engine-hours labels are different in rendered report",
+      "status": "pass",
+      "detail": {
+        "metricFooter": [
+          {
+            "year": 2026,
+            "kind": "cost",
+            "text": "0,00 €"
+          },
+          {
+            "year": 2026,
+            "kind": "distance",
+            "text": "400 km"
+          },
+          {
+            "year": 2026,
+            "kind": "costperdistance",
+            "text": "0,00 €/km"
+          }
+        ],
+        "hoursFooter": [
+          {
+            "year": 2026,
+            "kind": "cost",
+            "text": "0,00 €"
+          },
+          {
+            "year": 2026,
+            "kind": "distance",
+            "text": "400 h"
+          },
+          {
+            "year": 2026,
+            "kind": "costperdistance",
+            "text": "0,00 €/h"
+          }
+        ]
+      }
+    },
+    {
+      "name": "switching global display to miles leaves stored odometer numbers unchanged",
+      "status": "gap",
+      "detail": {
+        "readingBefore": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-02-01",
+            "initialOdometer": 100,
+            "odometer": 500,
+            "notes": "WP02-unit-fixture",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ],
+        "readingAfter": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-02-01",
+            "initialOdometer": 100,
+            "odometer": 500,
+            "notes": "WP02-unit-fixture",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ],
+        "milesFooter": [
+          {
+            "year": 2026,
+            "kind": "cost",
+            "text": "0,00 €"
+          },
+          {
+            "year": 2026,
+            "kind": "distance",
+            "text": "400 mi."
+          },
+          {
+            "year": 2026,
+            "kind": "costperdistance",
+            "text": "0,00 €/mi."
+          }
+        ]
+      }
+    },
+    {
+      "name": "tax recurrence check adds cost records without a separate payment confirmation",
+      "status": "gap",
+      "detail": {
+        "before": 1,
+        "afterHtmlWithoutJs": 1,
+        "afterDirectCheck": 3,
+        "jsWasExecuted": false,
+        "directCheckReturn": true
+      }
+    },
+    {
+      "name": "service API returns current corrected record, not previous values",
+      "status": "gap",
+      "detail": {
+        "oldValueIncludedInCurrentApiList": false,
+        "fullAuditElsewhereRuledOut": false
+      }
+    },
+    {
+      "name": "correction updates prior-year cost total without duplicate",
+      "status": "pass",
+      "detail": {
+        "2026": "105.00",
+        "2025": "110.00"
+      }
+    }
+  ],
+  "observations": {
+    "costFooter": [
+      {
+        "year": 2026,
+        "kind": "cost",
+        "text": "105,00 €"
+      },
+      {
+        "year": 2026,
+        "kind": "distance",
+        "text": "---"
+      },
+      {
+        "year": 2026,
+        "kind": "costperdistance",
+        "text": "0,00 €/km"
+      },
+      {
+        "year": 2025,
+        "kind": "cost",
+        "text": "100,00 €"
+      },
+      {
+        "year": 2025,
+        "kind": "distance",
+        "text": "---"
+      },
+      {
+        "year": 2025,
+        "kind": "costperdistance",
+        "text": "0,00 €/km"
+      }
+    ]
+  },
+  "containersStopped": true,
+  "finishedAt": "2026-10-27T13:34:33.130350+00:00",
+  "scriptSha256": "1652567a8f660985f228f6c94bdafbd9dc5ad4fa446327f12ff0bf3c0918a8f3",
+  "helperSha256": "a825b7ec3b83945f92d54cdc559de535d285a3cfc22beb79a9b111ff406643b8",
+  "composeSha256": "dda9cdd1f6d72ccc7b0e1889b20c33109c1289bb4947fa89ec46b28f973e6170",
+  "summary": {
+    "pass": 14,
+    "gap": 5
+  }
+}

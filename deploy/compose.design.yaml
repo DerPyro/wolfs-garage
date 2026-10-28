@@ -1,0 +1,67 @@
+# Wolfs Garage — Phase 0, ausschließlich Architekturvorlage.
+# Absichtlich KEINE ausführbaren services; x-* ist Compose-Extension-Metadaten.
+# Kein docker compose up ausführen. Vor Umsetzung: ADRs, Digests, Secrets,
+# Healthchecks, Ressourcenlimits, Auth, Egress und Restore in einer Sandbox prüfen.
+name: wolfs-garage-design
+services: {}
+
+x-design:
+  status: proposed-not-deployable
+  host: dedicated-proxmox-guest-vm-or-unprivileged-lxc-pending-adr
+  timezone: Europe/Berlin
+  publication:
+    router_port_forwarding: false
+    host_ports: []
+    path: browser -> cloudflare-access -> cloudflared -> authenticated-origin
+  components:
+    lubelogger:
+      phase: '1.0'
+      image: UNRESOLVED_VERSION_AND_DIGEST
+      upstream_image_repository: ghcr.io/hargata/lubelogger
+      networks: [origin, integration]
+      persistent_mounts:
+        - volume: lubelogger-data
+          target: /App/data
+        - volume: lubelogger-keys
+          target: /root/.aspnet/DataProtection-Keys
+      native_authentication: optional-if-access-and-origin-boundary-proven
+      ports: []
+    cloudflared:
+      phase: '1.0-after-explicit-release'
+      image: UNRESOLVED_VERSION_AND_DIGEST
+      networks: [origin, tunnel-egress]
+      secret_contract: scoped-tunnel-credential-file-mapping-pending
+      origin_access_token_validation: required
+      ports: []
+    garage-assistant:
+      phase: '1.1'
+      image: NOT_BUILT_OR_IMPLEMENTED
+      networks: [integration, assistant-storage, assistant-egress]
+      telegram_transport: proposed-long-polling
+      storage: own-domain-and-integration-metadata-only
+      secret_contract: file-based-least-privilege-credentials-pending
+      ports: []
+    garage-database:
+      phase: '1.1'
+      image: UNRESOLVED_ENGINE_VERSION_AND_DIGEST
+      networks: [assistant-storage]
+      ports: []
+    paperless:
+      management: existing-external-service-no-deployment
+      connection: authenticated-internal-api-via-explicit-firewall-rule
+  networks:
+    origin: connector-to-web-origins-only
+    integration: garage-to-lubelogger-only-no-public-routing
+    assistant-storage: internal-database-only
+    tunnel-egress: connector-outbound-cloudflare-and-dns-only
+    assistant-egress: approved-telegram-calendar-and-optional-ai-only
+  enforcement:
+    note: Docker networks alone do not implement destination egress allowlists.
+    required: guest-firewall-and-or-filtering-proxy-with-validated-dns-policy
+    docker_socket_mount: forbidden
+    privileged_containers: forbidden
+  backup:
+    consistency: quiesced-common-recovery-point
+    included: [lubelogger-data, lubelogger-keys, garage-database, config-manifest]
+    secrets: separately-encrypted-recovery-store
+    external_paperless: coordinated-separate-backup

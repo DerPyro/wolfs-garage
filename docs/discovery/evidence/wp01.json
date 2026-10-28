@@ -1,0 +1,712 @@
+{
+  "project": "wolfs-wp01-e1a8b97817",
+  "startedAt": "2026-10-27T07:10:29.502044+00:00",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "tests": [
+    {
+      "name": "pinned image revision and isolated network without host ports",
+      "status": "pass",
+      "detail": {
+        "publishedPorts": [],
+        "internalNetwork": true,
+        "platform": "amd64"
+      }
+    },
+    {
+      "name": "household View can list parent vehicles",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "outsider cannot list or read parent vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "household View native page /Vehicle/Index",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 31340
+      }
+    },
+    {
+      "name": "household View native page /Vehicle/GetServiceRecordsByVehicleId",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 13429
+      }
+    },
+    {
+      "name": "household View native page /Vehicle/GetReminderRecordsByVehicleId",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 11478
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/SaveServiceRecordToVehicleId",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/SaveOdometerRecordToVehicleId",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/SaveVehicle",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/DeleteServiceRecordById",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/DuplicateRecords",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "View normal write rejected /Vehicle/EditMultipleRecords",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "bytes": 43,
+        "success": false
+      }
+    },
+    {
+      "name": "household View GET mutates odometer history",
+      "status": "gap",
+      "detail": {
+        "before": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-10-01",
+            "initialOdometer": 0,
+            "odometer": 10000,
+            "notes": null,
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          },
+          {
+            "vehicleId": 1,
+            "id": 2,
+            "date": "2026-10-20",
+            "initialOdometer": 0,
+            "odometer": 11000,
+            "notes": null,
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ],
+        "after": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-10-01",
+            "initialOdometer": 10000,
+            "odometer": 10000,
+            "notes": "",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          },
+          {
+            "vehicleId": 1,
+            "id": 2,
+            "date": "2026-10-20",
+            "initialOdometer": 10000,
+            "odometer": 11000,
+            "notes": "",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "public Viewer-key GET also persists legacy odometer conversion",
+      "status": "gap",
+      "detail": {
+        "before": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-10-01",
+            "initialOdometer": 0,
+            "odometer": 10000,
+            "notes": null,
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          },
+          {
+            "vehicleId": 1,
+            "id": 2,
+            "date": "2026-10-20",
+            "initialOdometer": 0,
+            "odometer": 11000,
+            "notes": null,
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ],
+        "after": [
+          {
+            "vehicleId": 1,
+            "id": 1,
+            "date": "2026-10-01",
+            "initialOdometer": 10000,
+            "odometer": 10000,
+            "notes": "",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          },
+          {
+            "vehicleId": 1,
+            "id": 2,
+            "date": "2026-10-20",
+            "initialOdometer": 10000,
+            "odometer": 11000,
+            "notes": "",
+            "tags": "",
+            "extraFields": [],
+            "files": [],
+            "equipmentRecordId": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "household View tax check creates recurring cost records",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "beforeCount": 1,
+        "afterCount": 3,
+        "before": [
+          {
+            "vehicleId": 2,
+            "id": 1,
+            "date": "2026-08-23",
+            "description": "WP01-synthetic-recurring-tax",
+            "notes": null,
+            "cost": 10,
+            "tags": "",
+            "extraFields": [],
+            "files": []
+          }
+        ],
+        "after": [
+          {
+            "vehicleId": 2,
+            "id": 1,
+            "date": "2026-08-23",
+            "description": "WP01-synthetic-recurring-tax",
+            "notes": "",
+            "cost": 10,
+            "tags": "",
+            "extraFields": [],
+            "files": []
+          },
+          {
+            "vehicleId": 2,
+            "id": 2,
+            "date": "2026-09-23",
+            "description": "WP01-synthetic-recurring-tax",
+            "notes": "",
+            "cost": 10,
+            "tags": "",
+            "extraFields": [],
+            "files": []
+          },
+          {
+            "vehicleId": 2,
+            "id": 3,
+            "date": "2026-10-23",
+            "description": "WP01-synthetic-recurring-tax",
+            "notes": "",
+            "cost": 10,
+            "tags": "",
+            "extraFields": [],
+            "files": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "household View user can create directly owned vehicle",
+      "status": "gap",
+      "detail": {
+        "newOwnedVehicleId": 3
+      }
+    },
+    {
+      "name": "child writes directly owned vehicle outside parent View restriction",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "native document bytes accessible owner",
+      "status": "pass",
+      "detail": {
+        "role": "owner",
+        "http": 200,
+        "matchesSyntheticBytes": true
+      }
+    },
+    {
+      "name": "native document bytes accessible household-view",
+      "status": "pass",
+      "detail": {
+        "role": "household-view",
+        "http": 200,
+        "matchesSyntheticBytes": true
+      }
+    },
+    {
+      "name": "native document bytes accessible outsider",
+      "status": "gap",
+      "detail": {
+        "role": "outsider",
+        "http": 200,
+        "matchesSyntheticBytes": true
+      }
+    },
+    {
+      "name": "anonymous native document denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "public Viewer key can upload document without Edit permission",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "persistedSyntheticBytes": true
+      }
+    },
+    {
+      "name": "direct-path variations characterized",
+      "status": "gap",
+      "detail": {
+        "cases": 10
+      }
+    },
+    {
+      "name": "known document HEAD characterized without claiming byte read",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "contentLength": "24",
+        "bodyBytes": 0
+      }
+    },
+    {
+      "name": "unrelated authenticated user can upload temp file",
+      "status": "gap",
+      "detail": {
+        "http": 200
+      }
+    },
+    {
+      "name": "household View GET creates temporary file",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "syntheticFileCreated": true
+      }
+    },
+    {
+      "name": "non-root backup operation denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "non-root backup operation denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "View cannot execute root file deletion",
+      "status": "pass",
+      "detail": {
+        "http": 302,
+        "redirectToForbidden": true,
+        "fileUnchanged": true
+      }
+    },
+    {
+      "name": "native form accepts foreign Origin with injected owner cookie and no antiforgery token",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "serverAcceptedForeignOrigin": true,
+        "browserCookieDeliveryTested": false
+      }
+    },
+    {
+      "name": "revoking household denies parent vehicle API",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "revoked household still reads known parent document",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "narrow local API gate allows scoped read",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "narrow gate vehicle list excludes child-owned untracked vehicle",
+      "status": "pass",
+      "detail": {
+        "listedVehicleIds": [
+          1,
+          2
+        ],
+        "untrackedChildId": 3
+      }
+    },
+    {
+      "name": "narrow gate denies missing authentication marker",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "narrow API gate rejects variant, write, file and unsupported-native paths",
+      "status": "pass",
+      "detail": {
+        "blockedCount": 31
+      }
+    },
+    {
+      "name": "rejected gate requests never forwarded and data unchanged",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "direct origin bypass exists in sandbox topology",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "restore keeps document bytes and root login",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restore retains unauthorized authenticated file access",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "restore remains blocked to anonymous file access",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restore retains household View for vehicle read",
+      "status": "pass",
+      "detail": null
+    }
+  ],
+  "observations": {
+    "directFileVariants": [
+      {
+        "target": "/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 200,
+        "matchesDocumentBytes": true,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/Documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 404,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "//documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 404,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/documents//35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 404,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/%64ocuments/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 200,
+        "matchesDocumentBytes": true,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/documents/%2e/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 200,
+        "matchesDocumentBytes": true,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/documents/../documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 200,
+        "matchesDocumentBytes": true,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/documents/%252e%252e/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 404,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/Files/GetStaticFile?fileName=35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 404,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": false
+      },
+      {
+        "target": "/Files/PreviewFile?fileName=synthetic.txt&fileLocation=%2Fdocuments%2F35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 200,
+        "matchesDocumentBytes": false,
+        "previewReferencesDocument": true
+      }
+    ],
+    "fileHead": {
+      "http": 200,
+      "contentLength": "24",
+      "bodyBytes": 0
+    },
+    "gateBlockedRequests": [
+      {
+        "method": "GET",
+        "target": "/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "//documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/documents//35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/%64ocuments/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/documents/%2e/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/documents/../documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/documents/%252e%252e/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Files/GetStaticFile?fileName=35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Files/PreviewFile?fileName=synthetic.txt&fileLocation=%2Fdocuments%2F35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/temp/e8410e31-de38-4dc9-9bbf-e568230c9825.txt",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/temp/403413f0-b7b1-45d5-82ed-1c72419f4262.csv",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Files/UploadCoordinates?coordinates=BLOCKED",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Vehicle/GetOdometerRecordsByVehicleId?vehicleId=1",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/vehicle/odometerrecords?vehicleId=1",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/makebackup?output=download",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/API/vehicles",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "//api/vehicles",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api//vehicles",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/%61pi/vehicles",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/vehicles?apiKey=BLOCKED",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/vehicle/servicerecords?vehicleId=1&vehicleId=3",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/vehicle/servicerecords?vehicleId=3",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/api/vehicle/servicerecords?vehicleId=%31",
+        "http": 403
+      },
+      {
+        "method": "HEAD",
+        "target": "/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      },
+      {
+        "method": "POST",
+        "target": "/Vehicle/SaveVehicle",
+        "http": 403
+      },
+      {
+        "method": "POST",
+        "target": "/api/vehicles/add",
+        "http": 403
+      },
+      {
+        "method": "GET",
+        "target": "/Vehicle/MoveRecord?recordId=1&source=ServiceRecord&destination=RepairRecord",
+        "http": 403
+      },
+      {
+        "method": "POST",
+        "target": "/Files/HandleFileUpload",
+        "http": 403
+      },
+      {
+        "method": "PUT",
+        "target": "/api/vehicle/servicerecords/update",
+        "http": 403
+      },
+      {
+        "method": "OPTIONS",
+        "target": "/documents/35712bb6-31a8-43fc-8542-2e80b3bb3f9a.txt",
+        "http": 403
+      }
+    ],
+    "gateScope": {
+      "kind": "test-only exact API allowlist",
+      "nativeUiSupported": false,
+      "productionAuthImplemented": false,
+      "originExcludedFromUntrustedClients": false,
+      "forwardedRequests": [
+        {
+          "method": "GET",
+          "target": "/api/vehicle/servicerecords?vehicleId=1"
+        },
+        {
+          "method": "GET",
+          "target": "/api/vehicles"
+        }
+      ]
+    }
+  },
+  "containersStopped": true,
+  "finishedAt": "2026-10-27T07:10:35.822413+00:00",
+  "summary": {
+    "pass": 28,
+    "gap": 14
+  },
+  "artifactSha256": {
+    "tests/wp01/run.py": "c214a46f208f6eb2ce50f198b6103e9a053da3f51be2a1492362e2da85f18396",
+    "tests/wp01/helpers.py": "a825b7ec3b83945f92d54cdc559de535d285a3cfc22beb79a9b111ff406643b8",
+    "tests/wp01/route-inventory.json": "c655f4ff85102d584f1cd63cc1374937c0e7156a3784ea23079e509b1c6dc8db",
+    "tests/lubelogger/compose.sandbox.yaml": "dda9cdd1f6d72ccc7b0e1889b20c33109c1289bb4947fa89ec46b28f973e6170",
+    "tests/lubelogger/target.lock.json": "f08b59e6c674a5bb30e1cbfeb8a55183468ab1b9fb5f8918d6ae7743a1564c71"
+  }
+}

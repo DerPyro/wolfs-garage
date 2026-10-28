@@ -1,0 +1,48 @@
+# Lokale Geheimnisse und persönliche Artefakte
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+secrets/
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+backups/
+dumps/
+*.dump
+*.sql
+private-documents/
+.codex-attachments/
+
+# Persistente Anwendungsdaten und lokale SQLite-Nebendateien
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Isolierte Testläufe: lokale Backups, Zugangsdaten und temporäre Ergebnisse
+.sandbox/
+__pycache__/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# SQLite rollback journals and default standalone state
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
+/data/

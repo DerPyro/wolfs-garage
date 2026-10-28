@@ -1,0 +1,16 @@
+{
+  "commandId": "00000000-0000-4000-8000-000000000002",
+  "commandRevision": 2,
+  "status": "uncertain",
+  "updatedAt": "2026-10-26T18:00:00Z",
+  "operations": [
+    {
+      "operationId": "00000000-0000-4000-8000-000000000003",
+      "provider": "lubelogger",
+      "status": "uncertain",
+      "effect": "recordMaintenance",
+      "errorCode": "transport_outcome_unknown"
+    }
+  ],
+  "summary": "Ausgang der synthetischen externen Speicherung unklar; erst abgleichen."
+}

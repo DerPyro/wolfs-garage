@@ -1,0 +1,11 @@
+{
+  "operation": "createProblem",
+  "vehicleId": "00000000-0000-4000-8000-000000000001",
+  "expectedVehicleRevision": 3,
+  "payload": {
+    "observedOn": "2026-10-26",
+    "title": "Synthetische Beobachtung",
+    "description": "Keine reale Diagnose",
+    "severity": "observation"
+  }
+}

@@ -1,0 +1,26 @@
+# Ergänzung zur bestehenden Compose-Datei; nur Entwurf, nicht automatisch live.
+services:
+  garage_gateway:
+    build:
+      context: ${GARAGE_DASHBOARD_SOURCE:?Pfad zum Dashboard-Quellverzeichnis erforderlich}
+      dockerfile: garage_gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      GARAGE_UPSTREAM: http://lubelogger:8080
+      GARAGE_BIND: 0.0.0.0
+      GARAGE_PORT: "8000"
+      GARAGE_FRONTEND: /app/frontend
+    networks: [origin]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  garage_router:
+    image: ${GARAGE_NGINX_IMAGE:?Geprüftes digest-fixiertes nginx-Image erforderlich}
+    restart: unless-stopped
+    networks: [origin]
+    volumes:
+      - ${GARAGE_NGINX_CONFIG:?Pfad zur geprüften Router-Konfiguration erforderlich}:/etc/nginx/nginx.conf:ro
+    depends_on: [garage_gateway, lubelogger]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]

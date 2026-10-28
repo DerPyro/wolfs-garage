@@ -1,0 +1,12 @@
+FROM python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 GARAGE_DB=/var/lib/wolfs-garage/garage.sqlite3 GARAGE_FRONTEND=/app/frontend
+WORKDIR /app
+COPY requirements.lock /app/requirements.lock
+RUN pip install --no-cache-dir -r requirements.lock
+COPY wolfs_garage /app/wolfs_garage
+COPY frontend /app/frontend
+RUN chmod -R a+rX /app && mkdir -p /var/lib/wolfs-garage && chown 65532:65532 /var/lib/wolfs-garage
+USER 65532:65532
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"
+CMD ["gunicorn", "--no-control-socket", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "30", "wolfs_garage.api:create_app()"]

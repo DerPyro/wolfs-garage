@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "taskId": "00000000-0000-4000-8000-000000000004",
+      "vehicleId": "00000000-0000-4000-8000-000000000001",
+      "dueRevision": 1,
+      "description": "Synthetische einmalige Aufgabe",
+      "dueOn": "2026-10-26",
+      "dueKilometers": null,
+      "status": "due_today",
+      "basis": "manual",
+      "readAt": "2026-10-26T18:00:00Z",
+      "stale": false,
+      "requiresReview": false,
+      "duePrecision": "day",
+      "forecast": null
+    }
+  ],
+  "nextCursor": null
+}

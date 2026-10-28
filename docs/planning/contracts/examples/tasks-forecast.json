@@ -1,0 +1,35 @@
+{
+  "items": [
+    {
+      "taskId": "00000000-0000-4000-8000-000000000004",
+      "vehicleId": "00000000-0000-4000-8000-000000000001",
+      "dueRevision": 1,
+      "description": "Synthetische einmalige Aufgabe",
+      "dueOn": null,
+      "dueKilometers": 14000,
+      "status": "due_today",
+      "basis": "manual",
+      "readAt": "2026-10-26T18:00:00Z",
+      "stale": false,
+      "requiresReview": false,
+      "duePrecision": "not_applicable",
+      "forecast": {
+        "status": "available",
+        "estimatedDueOn": "2026-12-15",
+        "basis": "estimate",
+        "measurementRefs": [
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007"
+        ],
+        "rateDistanceKm": 1000,
+        "rateElapsedDays": 30,
+        "algorithmRevision": 1,
+        "projectionRevision": 2,
+        "dataAsOf": "2026-10-26",
+        "calculatedAt": "2026-10-26T18:00:00Z",
+        "limitation": "Synthetische lineare Schätzung; keine tatsächliche Fälligkeitsüberschreitung nachgewiesen."
+      }
+    }
+  ],
+  "nextCursor": null
+}

@@ -1,0 +1,15 @@
+*
+!frontend/
+!frontend/**
+!garage_gateway/
+!garage_gateway/server.py
+!garage_gateway/status_store.py
+!garage_gateway/backup_status.py
+!garage_gateway/seed_status.py
+!garage_gateway/Dockerfile
+!wolfs_garage/
+!wolfs_garage/**
+wolfs_garage/__pycache__/
+!requirements.lock
+!deploy/
+!deploy/Dockerfile.standalone

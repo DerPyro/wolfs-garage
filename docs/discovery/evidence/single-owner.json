@@ -1,0 +1,90 @@
+{
+  "project": "wolfs-single-owner-f1f54a1ef8",
+  "startedAt": "2026-10-27T13:33:38.118516+00:00",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "checks": [
+    {
+      "name": "isolated image and network",
+      "passed": true,
+      "observed": {
+        "internalNetwork": true,
+        "publishedPorts": [],
+        "imageRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf"
+      }
+    },
+    {
+      "name": "native home loads without login redirect when auth is disabled",
+      "passed": true,
+      "observed": {
+        "http": 200
+      }
+    },
+    {
+      "name": "uncredentialed internal caller receives root principal",
+      "passed": true,
+      "observed": {
+        "isRoot": true,
+        "isAdmin": false
+      }
+    },
+    {
+      "name": "internal API responds without a credential",
+      "passed": true,
+      "observed": {
+        "initialVehicleCount": 0
+      }
+    },
+    {
+      "name": "uncredentialed internal caller can create vehicle",
+      "passed": true,
+      "observed": {
+        "syntheticVehicleId": 1
+      }
+    },
+    {
+      "name": "invalid API key does not restrict an auth-disabled origin",
+      "passed": true,
+      "observed": {
+        "http": 200,
+        "visibleSyntheticVehicles": 1
+      }
+    },
+    {
+      "name": "uncredentialed internal caller can upload and read document",
+      "passed": true,
+      "observed": {
+        "uploadHttp": 200,
+        "readHttp": 200,
+        "matchesSyntheticBytes": true
+      }
+    },
+    {
+      "name": "uncredentialed internal caller can request root backup",
+      "passed": true,
+      "observed": {
+        "http": 200,
+        "validSyntheticZip": true
+      }
+    },
+    {
+      "name": "host reaches origin directly in this sandbox topology",
+      "passed": true,
+      "observed": {
+        "cloudflareAccessOrTunnelTested": false,
+        "directHostReachable": true
+      }
+    }
+  ],
+  "containerStopped": true,
+  "finishedAt": "2026-10-27T13:33:40.455952+00:00",
+  "summary": {
+    "pass": 9
+  },
+  "artifactSha256": {
+    "tests/wp02/single_owner.py": "5f0e973056dbd539f171e7867f2d249e08e297f641cc99e1b3ef102067d22341",
+    "tests/wp01/helpers.py": "a825b7ec3b83945f92d54cdc559de535d285a3cfc22beb79a9b111ff406643b8",
+    "tests/lubelogger/compose.sandbox.yaml": "dda9cdd1f6d72ccc7b0e1889b20c33109c1289bb4947fa89ec46b28f973e6170",
+    "tests/lubelogger/target.lock.json": "f08b59e6c674a5bb30e1cbfeb8a55183468ab1b9fb5f8918d6ae7743a1564c71"
+  }
+}

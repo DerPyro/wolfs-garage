@@ -1,0 +1,13 @@
+{
+  "operation": "recordHuCompletion",
+  "vehicleId": "00000000-0000-4000-8000-000000000001",
+  "expectedVehicleRevision": 3,
+  "payload": {
+    "taskId": "00000000-0000-4000-8000-000000000004",
+    "performedOn": "2026-10-10",
+    "duePrecision": "month",
+    "confirmedNextDueMonth": "2028-10",
+    "basis": "confirmed_document",
+    "sourceReferenceId": "00000000-0000-4000-8000-000000000005"
+  }
+}

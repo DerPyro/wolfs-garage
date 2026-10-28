@@ -1,0 +1,7 @@
+# Optionale private Vorbelegung, ergänzend zu den Dashboard-Compose-Dateien.
+services:
+  garage_gateway:
+    environment:
+      GARAGE_VEHICLE_TYPES: /run/config/vehicle-types.json
+    volumes:
+      - ${GARAGE_TYPES_CONFIG_HOST:?Pfad zur privaten Fahrzeugtypdatei erforderlich}:/run/config/vehicle-types.json:ro

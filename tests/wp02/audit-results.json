@@ -1,0 +1,204 @@
+{
+  "scope": "single synthetic root administrator, no Cloudflare/OIDC test",
+  "project": "wolfs-wp02-audit-9ef1decbd9",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "startedAt": "2026-10-27T13:35:07.634082+00:00",
+  "checks": [
+    {
+      "name": "service API exposes business date but no creation/modification timestamp",
+      "status": "pass",
+      "details": {
+        "keys": [
+          "cost",
+          "date",
+          "description",
+          "extraFields",
+          "files",
+          "id",
+          "notes",
+          "odometer",
+          "tags",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "name": "API correction replaces current service description and cost",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "native vehicle history shows corrected current record, not prior description",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "deleted service absent from API current records",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "deleted service absent from native vehicle history",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "local webhook records API add/update/delete actions",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "generic events include actor vehicle action time and short new/current fields",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "generic event fields omit record identity and correction reason",
+      "status": "pass",
+      "details": {
+        "payloadKeys": [
+          "action",
+          "data",
+          "timestamp",
+          "type",
+          "username",
+          "vehicleId"
+        ],
+        "dataKeys": [
+          "cost",
+          "description",
+          "odometer",
+          "user",
+          "vehicleId"
+        ]
+      }
+    },
+    {
+      "name": "local webhook records native add/update/delete actions",
+      "status": "pass",
+      "details": null
+    },
+    {
+      "name": "planner API exposes created and modified dates",
+      "status": "pass",
+      "details": {
+        "dateCreated": "2026-10-27",
+        "dateModified": "2026-10-27"
+      }
+    },
+    {
+      "name": "planner native edit modal shows changed last-modified time",
+      "status": "pass",
+      "details": {
+        "beforeLabels": [
+          "Date Created: 27.10.2026 14:35:10",
+          "Last Modified: 27.10.2026 14:35:10"
+        ],
+        "afterLabels": [
+          "Date Created: 27.10.2026 14:35:10",
+          "Last Modified: 27.10.2026 14:35:12"
+        ]
+      }
+    },
+    {
+      "name": "planner API returns only current stage",
+      "status": "pass",
+      "details": null
+    }
+  ],
+  "webhooks": [
+    {
+      "type": "servicerecord.add.api",
+      "timestamp": "2026-10-27T13:35:10.4908200Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-api-original",
+        "odometer": "1000",
+        "vehicleId": "1",
+        "cost": "12,34"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Added Service Record via API Description: synthetic-audit-api-original"
+    },
+    {
+      "type": "servicerecord.update.api",
+      "timestamp": "2026-10-27T13:35:10.6769296Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-api-corrected",
+        "odometer": "1000",
+        "vehicleId": "1",
+        "cost": "22,34"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Updated Service Record via API Description: synthetic-audit-api-corrected"
+    },
+    {
+      "type": "servicerecord.delete.api",
+      "timestamp": "2026-10-27T13:35:10.7594559Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-api-corrected",
+        "odometer": "1000",
+        "vehicleId": "1",
+        "cost": "22,34"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Deleted Service Record via API Description: synthetic-audit-api-corrected"
+    },
+    {
+      "type": "servicerecord.add",
+      "timestamp": "2026-10-27T13:35:10.7919822Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-ui-original",
+        "odometer": "1100",
+        "vehicleId": "1",
+        "cost": "10,00"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Added Service Record Description: synthetic-audit-ui-original"
+    },
+    {
+      "type": "servicerecord.update",
+      "timestamp": "2026-10-27T13:35:10.8388101Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-ui-corrected",
+        "odometer": "1100",
+        "vehicleId": "1",
+        "cost": "11,00"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Updated Service Record Description: synthetic-audit-ui-corrected"
+    },
+    {
+      "type": "servicerecord.delete",
+      "timestamp": "2026-10-27T13:35:10.8624475Z",
+      "data": {
+        "user": "synthetic-admin",
+        "description": "synthetic-audit-ui-corrected",
+        "odometer": "1100",
+        "vehicleId": "1",
+        "cost": "11,00"
+      },
+      "vehicleId": "1",
+      "username": "synthetic-admin",
+      "action": "synthetic-admin Deleted Service Record Description: synthetic-audit-ui-corrected"
+    }
+  ],
+  "limits": [
+    "single synthetic root user; no Cloudflare or provider account changes",
+    "webhooks only local success delivery tested; outage/restart retention not established",
+    "current API/UI state observed, no forensic recovery or adversarial immutable storage test",
+    "planner intermediate-stage history not exposed by inspected contracts; not a complete frontend screen audit"
+  ],
+  "containersStopped": true,
+  "finishedAt": "2026-10-27T13:35:12.609755+00:00"
+}

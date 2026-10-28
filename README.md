@@ -1,17 +1,47 @@
 # Wolfs Garage
 
-Self-hosted Fahrzeugverwaltung für fünf Fahrzeuge mit Wartungsplanung, technischem Logbuch, Dokumenten, Telegram-Assistent und später KI-Diagnose.
+An open-source, self-hosted vehicle logbook with a focused mobile interface. Track cars and motorcycles, readiness, open work and completed maintenance. Original project code is licensed under [MIT](LICENSE); artwork and dependencies retain their [own notices](THIRD_PARTY_NOTICES.md).
 
-## Projektstatus
-Planungsphase. Siehe [Requirements](docs/requirements.md), [Roadmap](docs/roadmap.md) und [Architektur](docs/architecture.md).
+## Current status
 
-## Prinzipien
-- Web-Dashboard als Hauptoberfläche; Telegram als ergänzende Schnittstelle
-- LubeLogger als bevorzugte Bestandslösung, Integration vor Implementierung prüfen
-- Docker auf Proxmox; externer Zugriff via Cloudflare Tunnel + Access
-- Nur ein autorisierter Telegram-Nutzer
-- Wartungsempfehlungen nur mit überprüfbarer Herstellerquelle; keine erfundenen Intervalle
-- Kritische Aktionen und KI-generierte Änderungen erst nach Bestätigung
+The standalone **0.1 alpha** has its own backend and SQLite database. It runs without LubeLogger. Existing installations using the legacy adapter are a separate deployment; no automatic migration or replacement happens when you run this alpha.
 
-## Start mit Codex
-Lies zuerst AGENTS.md und docs/. Implementiere ausschließlich die jeweils beauftragte Phase.
+Available now:
+
+- Create and edit vehicles, vehicle types, units and identifying details.
+- Maintain readiness and open issues independently. INOP marks an unusable vehicle; a wrench indicates open work, without a counter or green readiness check.
+- Record dated odometer readings and completed service/repair work with costs and an optional HTTPS document reference.
+- Close a selected issue atomically with its work record and inspect the change history.
+- Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
+
+Recurring maintenance rules, record corrections, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. This is an early alpha, not the completed original feature list.
+
+## Run locally
+
+Docker Compose is the recommended starting point. Run from the repository root:
+
+```sh
+git clone https://github.com/DerPyro/wolfs-garage.git
+cd wolfs-garage
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml build
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage init-db
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
+```
+
+Open **http://localhost:8080**. Initialize a new database once only. The data volume persists across container recreation. Never reinitialize or remove it to repair an existing installation.
+
+The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
+
+See the [standalone guide](docs/standalone.md) for configuration, backup, isolated restore and development commands.
+
+## Project direction
+
+Wolfs Garage is an independent application usable by other self-hosters. Each installation owns its configuration and vehicle data. Its core has no mandatory cloud API or LubeLogger dependency. The current access model is one trusted owner, with full access for any user admitted by the configured authentication boundary. The interface is currently in German.
+
+<img src="docs/discovery/evidence/standalone-preview-mobile.png" width="390" alt="Mobile standalone preview using synthetic vehicle data">
+
+- [Requirements](docs/requirements.md), [architecture](docs/architecture.md), [roadmap](docs/roadmap.md)
+- [Backend comparison](docs/planning/lubelogger-vs-own.md) and [decision to build an independent core](docs/adr/0009-backend-ownership-challenge.md)
+- [Open-source preparation](docs/open-source-release.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)
+
+The earlier [LubeLogger discovery](docs/discovery/lubelogger-runtime-verification.md) and [planning index](docs/planning/README.md) remain historical evidence. Historical deployment reports use anonymized placeholders and are not executable deployment instructions.

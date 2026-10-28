@@ -1,0 +1,6 @@
+{
+  "vehicleTypes": [
+    {"make": "Beispielmarke", "model": "Road 1", "type": "Limousine"},
+    {"make": "Beispielmarke", "model": "Trail 1", "type": "Cross-Motorrad"}
+  ]
+}

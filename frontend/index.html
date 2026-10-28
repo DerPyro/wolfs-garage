@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#111510">
+  <title>Wolfs Garage</title>
+  <link rel="stylesheet" href="/garage-assets/styles.css">
+  <script src="/garage-assets/app.js" defer></script>
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-garage" viewBox="0 0 24 24"><path d="m3 10 9-6 9 6v10H3V10Zm4 10v-7h10v7M7 16h10"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24"><path d="m4 15 1.6-5a2 2 0 0 1 1.9-1.4h9a2 2 0 0 1 1.9 1.4l1.6 5M4 15v3m16-3v3M4 15h16M7 18h1m8 0h1M7 12h10"/></symbol>
+    <symbol id="i-sedan" viewBox="0 0 24 24"><path d="M16,6L19,10H21C22.11,10 23,10.89 23,12V15H21A3,3 0 0,1 18,18A3,3 0 0,1 15,15H9A3,3 0 0,1 6,18A3,3 0 0,1 3,15H1V12C1,10.89 1.89,10 3,10L6,6H16M10.5,7.5H6.75L4.86,10H10.5V7.5M12,7.5V10H17.14L15.25,7.5H12M6,13.5A1.5,1.5 0 0,0 4.5,15A1.5,1.5 0 0,0 6,16.5A1.5,1.5 0 0,0 7.5,15A1.5,1.5 0 0,0 6,13.5M18,13.5A1.5,1.5 0 0,0 16.5,15A1.5,1.5 0 0,0 18,16.5A1.5,1.5 0 0,0 19.5,15A1.5,1.5 0 0,0 18,13.5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-hatchback" viewBox="0 0 24 24"><path d="M16,6H6L1,12V15H3A3,3 0 0,0 6,18A3,3 0 0,0 9,15H15A3,3 0 0,0 18,18A3,3 0 0,0 21,15H23V12C23,10.89 22.11,10 21,10H19L16,6M6.5,7.5H10.5V10H4.5L6.5,7.5M12,7.5H15.5L17.46,10H12V7.5M6,13.5A1.5,1.5 0 0,1 7.5,15A1.5,1.5 0 0,1 6,16.5A1.5,1.5 0 0,1 4.5,15A1.5,1.5 0 0,1 6,13.5M18,13.5A1.5,1.5 0 0,1 19.5,15A1.5,1.5 0 0,1 18,16.5A1.5,1.5 0 0,1 16.5,15A1.5,1.5 0 0,1 18,13.5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-highroof" viewBox="0 0 24 24"><path d="M3,7C1.89,7 1,7.89 1,9V17H3A3,3 0 0,0 6,20A3,3 0 0,0 9,17H15A3,3 0 0,0 18,20A3,3 0 0,0 21,17H23V13C23,11.89 22.11,11 21,11L18,7H3M3,8.5H7V11H3V8.5M9,8.5H13V11H9V8.5M15,8.5H17.5L19.46,11H15V8.5M6,15.5A1.5,1.5 0 0,1 7.5,17A1.5,1.5 0 0,1 6,18.5A1.5,1.5 0 0,1 4.5,17A1.5,1.5 0 0,1 6,15.5M18,15.5A1.5,1.5 0 0,1 19.5,17A1.5,1.5 0 0,1 18,18.5A1.5,1.5 0 0,1 16.5,17A1.5,1.5 0 0,1 18,15.5Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-cross" viewBox="0 0 48 48"><path d="M28 10C28.3895 10 28.7436 10.2261 28.9073 10.5795L30.4924 14H35.625C35.9134 14 36.1877 14.1245 36.3776 14.3415L40.7526 19.3415C41.011 19.6368 41.0728 20.0559 40.9106 20.4132C40.7485 20.7705 40.3924 21 40 21H33.7363L35.7062 25.2507C36.2759 25.0874 36.8778 25 37.5 25C41.0899 25 44 27.9101 44 31.5C44 35.0899 41.0899 38 37.5 38C33.9101 38 31 35.0899 31 31.5C31 29.245 32.1483 27.2583 33.892 26.0925L32.3994 22.8718L29.1643 25.7474C29.1134 25.7927 29.0583 25.8324 29 25.866V30C29 31.6569 27.6569 33 26 33H22C21.3866 33 20.8163 32.8159 20.3411 32.5H16.9236C16.4425 35.6151 13.7498 38 10.5 38C6.91015 38 4 35.0899 4 31.5C4 27.9101 6.91015 25 10.5 25C13.7498 25 16.4425 27.3849 16.9236 30.5H19.0415C19.0142 30.3374 19 30.1704 19 30V27C19 26.4344 19.1565 25.9053 19.4287 25.4537L19.0782 24.9617L4.8971 23.4947C4.38738 23.442 4 23.0124 4 22.5V19C4 18.4477 4.44771 18 5 18H15.5995C15.6257 17.9886 15.6524 17.9783 15.6796 17.969L20.0995 16.4743C21.0283 16.1602 22.0022 16 22.9827 16H29V15.5362L27.3613 12H23V10H28ZM31.4193 16L32.8095 19H37.7962L35.1712 16H31.4193ZM21 27C21 26.4477 21.4477 26 22 26H27V30C27 30.5523 26.5523 31 26 31H22C21.4477 31 21 30.5523 21 30V27ZM31.5211 20.9766L28.1198 24H20.8487L17.5953 19.4325L20.7402 18.3689C21.4626 18.1246 22.2201 18 22.9827 18H30.1418L31.5211 20.9766ZM17.5321 22.7911L15.5441 20H6V21.5981L17.5321 22.7911ZM34.7478 27.9394C33.6846 28.7625 33 30.0513 33 31.5C33 33.9853 35.0147 36 37.5 36C39.9853 36 42 33.9853 42 31.5C42 29.0147 39.9853 27 37.5 27C37.1784 27 36.8647 27.0337 36.5622 27.0979L38.4073 31.0795C38.6395 31.5806 38.4216 32.1751 37.9205 32.4073C37.4194 32.6395 36.8249 32.4216 36.5927 31.9205L34.7478 27.9394ZM10.5 36C8.01472 36 6 33.9853 6 31.5C6 29.0147 8.01472 27 10.5 27C12.6416 27 14.4338 28.496 14.8885 30.5H10.5C9.94771 30.5 9.5 30.9477 9.5 31.5C9.5 32.0523 9.94771 32.5 10.5 32.5H14.8885C14.4338 34.504 12.6416 36 10.5 36Z" fill="currentColor" stroke="none" fill-rule="evenodd" clip-rule="evenodd"/></symbol>
+    <symbol id="i-naked" viewBox="0 0 48 48"><path d="M29.4157 10.598C29.2561 10.2347 28.8969 10 28.5 10H23V12H27.8469L29.603 16H27.7316C24.186 16 21.0297 18.0764 19.5815 21.2059L16.5517 18.2806C16.3653 18.1006 16.1163 18 15.8571 18H7C6.44771 18 6 18.4477 6 19V23C6 23.5523 6.44771 24 7 24H16.1707C16.0602 24.3128 16 24.6494 16 25C16 26.6569 17.3431 28 19 28H20.4116L21.8005 30.5H16.9236C16.4425 27.3849 13.7498 25 10.5 25C6.91015 25 4 27.9101 4 31.5C4 35.0899 6.91015 38 10.5 38C13.7498 38 16.4425 35.6151 16.9236 32.5H26.5C26.8011 32.5 27.0862 32.3643 27.2761 32.1306L33.3843 24.6129L34.0022 26.0204C32.1968 27.1752 31 29.1979 31 31.5C31 35.0899 33.9101 38 37.5 38C41.0899 38 44 35.0899 44 31.5C44 27.9101 41.0899 25 37.5 25C36.9238 25 36.3651 25.075 35.8332 25.2157L34.0953 21.2572L40.2135 22.1985L38.7849 13.6267L31.9067 16.2721L29.4157 10.598ZM22.6995 28L24.0884 30.5H26.024L31.3053 24H28V25C28 26.6569 26.6569 28 25 28H22.6995ZM25 26C25.5523 26 26 25.5523 26 25V24H19C18.4477 24 18 24.4477 18 25C18 25.5523 18.4477 26 19 26H25ZM27.7316 18C24.9932 18 22.5536 19.5934 21.4182 22H32.2371L30.4811 18H27.7316ZM32.7116 18.1054L33.1426 19.0871L37.7865 19.8015L37.2151 16.3733L32.7116 18.1054ZM10.5 27C12.6416 27 14.4338 28.496 14.8885 30.5H10.5C9.94772 30.5 9.5 30.9477 9.5 31.5C9.5 32.0523 9.94772 32.5 10.5 32.5H14.8885C14.4338 34.504 12.6416 36 10.5 36C8.01472 36 6 33.9853 6 31.5C6 29.0147 8.01472 27 10.5 27ZM33 31.5C33 30.0186 33.7159 28.7043 34.8205 27.8844L36.5843 31.902C36.8064 32.4077 37.3963 32.6377 37.902 32.4156C38.4077 32.1936 38.6376 31.6037 38.4156 31.098L36.6516 27.0799C36.9263 27.0274 37.21 27 37.5 27C39.9853 27 42 29.0147 42 31.5C42 33.9853 39.9853 36 37.5 36C35.0147 36 33 33.9853 33 31.5ZM15.4532 20L17.5246 22H8V20H15.4532Z" fill="currentColor" stroke="none" fill-rule="evenodd" clip-rule="evenodd"/></symbol>
+    <symbol id="i-bike" viewBox="0 0 48 48"><path d="M29.4157 10.598C29.2561 10.2347 28.8969 10 28.5 10H23V12H27.8469L29.603 16H27.7316C24.186 16 21.0297 18.0764 19.5815 21.2059L16.5517 18.2806C16.3653 18.1006 16.1163 18 15.8571 18H7C6.44771 18 6 18.4477 6 19V23C6 23.5523 6.44771 24 7 24H16.1707C16.0602 24.3128 16 24.6494 16 25C16 26.6569 17.3431 28 19 28H20.4116L21.8005 30.5H16.9236C16.4425 27.3849 13.7498 25 10.5 25C6.91015 25 4 27.9101 4 31.5C4 35.0899 6.91015 38 10.5 38C13.7498 38 16.4425 35.6151 16.9236 32.5H26.5C26.8011 32.5 27.0862 32.3643 27.2761 32.1306L33.3843 24.6129L34.0022 26.0204C32.1968 27.1752 31 29.1979 31 31.5C31 35.0899 33.9101 38 37.5 38C41.0899 38 44 35.0899 44 31.5C44 27.9101 41.0899 25 37.5 25C36.9238 25 36.3651 25.075 35.8332 25.2157L34.0953 21.2572L40.2135 22.1985L38.7849 13.6267L31.9067 16.2721L29.4157 10.598ZM22.6995 28L24.0884 30.5H26.024L31.3053 24H28V25C28 26.6569 26.6569 28 25 28H22.6995ZM25 26C25.5523 26 26 25.5523 26 25V24H19C18.4477 24 18 24.4477 18 25C18 25.5523 18.4477 26 19 26H25ZM27.7316 18C24.9932 18 22.5536 19.5934 21.4182 22H32.2371L30.4811 18H27.7316ZM32.7116 18.1054L33.1426 19.0871L37.7865 19.8015L37.2151 16.3733L32.7116 18.1054ZM10.5 27C12.6416 27 14.4338 28.496 14.8885 30.5H10.5C9.94772 30.5 9.5 30.9477 9.5 31.5C9.5 32.0523 9.94772 32.5 10.5 32.5H14.8885C14.4338 34.504 12.6416 36 10.5 36C8.01472 36 6 33.9853 6 31.5C6 29.0147 8.01472 27 10.5 27ZM33 31.5C33 30.0186 33.7159 28.7043 34.8205 27.8844L36.5843 31.902C36.8064 32.4077 37.3963 32.6377 37.902 32.4156C38.4077 32.1936 38.6376 31.6037 38.4156 31.098L36.6516 27.0799C36.9263 27.0274 37.21 27 37.5 27C39.9853 27 42 29.0147 42 31.5C42 33.9853 39.9853 36 37.5 36C35.0147 36 33 33.9853 33 31.5ZM15.4532 20L17.5246 22H8V20H15.4532Z" fill="currentColor" stroke="none" fill-rule="evenodd" clip-rule="evenodd"/></symbol>
+    <symbol id="i-vehicle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="m12 4 1 5m7 3-5 1m-3 7-1-5m-7-3 5-1"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.5 6.3a5 5 0 0 0-6.3 6.3L4 16.8a2.3 2.3 0 0 0 3.2 3.2l4.2-4.2a5 5 0 0 0 6.3-6.3l-2.8 2.8-3.2-3.2 2.8-2.8Z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M5 5h14v15H5zM5 9h14M8 3v4m8-4v4"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M13 5h6v6m0-6-9 9M18 14v5H5V6h5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 8a8 8 0 0 0-14-2L3 8m0-5v5h5m-3 8a8 8 0 0 0 14 2l2-2m0 5v-5h-5"/></symbol>
+  </svg>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Wolfs Garage Startseite"><span class="brand-mark"><svg><use href="#i-garage"/></svg></span><span><strong>WOLFS</strong><small>GARAGE</small></span></a>
+      <span class="topbar-label">DEINE FAHRZEUGE. DEIN ÜBERBLICK.</span>
+      <a id="legacy-manage" class="manage-link" href="/Home" hidden>Verwalten <svg><use href="#i-external"/></svg></a>
+    </div>
+  </header>
+  <main class="page">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy"><p class="eyebrow"><span class="eyebrow-line"></span> WILLKOMMEN IN DEINER GARAGE</p><h1 id="page-title">Alles im <em>Blick.</em></h1><p class="intro-description">Deine Fahrzeuge, anstehende Aufgaben und die letzten Arbeiten – übersichtlich an einem Ort.</p></div>
+      <div class="intro-art" aria-hidden="true"><span class="art-ring ring-one"></span><span class="art-ring ring-two"></span><span class="art-dial"></span><span class="art-center"><svg><use href="#i-car"/></svg></span><span class="art-index">WOLFS<br><strong>GARAGE</strong></span></div>
+    </section>
+    <section class="garage-section" aria-labelledby="vehicles-heading">
+      <div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> DEINE SAMMLUNG</p><h2 id="vehicles-heading">Meine Fahrzeuge <span id="vehicle-count" class="count" hidden></span></h2></div><button id="refresh" class="icon-button" type="button" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren"><svg><use href="#i-refresh"/></svg></button></div>
+      <div id="status" class="status" role="status" aria-live="polite">Fahrzeuge werden geladen …</div>
+      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button></div>
+      <p id="own-notice" class="own-notice" role="status" aria-live="polite"></p>
+      <div id="vehicles" class="vehicle-grid" aria-label="Fahrzeuge"></div>
+    </section>
+    <section id="own-panel" class="own-panel" aria-labelledby="own-title" hidden>
+      <h2 id="own-title" tabindex="-1"></h2>
+      <form id="own-form" class="own-form"><div id="own-fields" class="own-fields"></div><p id="own-hint" class="form-hint"></p><p id="own-message" class="condition-message" role="status" aria-live="polite"></p><div class="condition-actions"><button id="own-save" class="condition-save" type="submit">Speichern</button><button id="own-cancel" class="condition-cancel" type="button">Abbrechen</button></div></form>
+    </section>
+    <section id="detail" class="detail-section" aria-labelledby="detail-heading" hidden>
+      <div class="section-heading detail-title"><div><p class="eyebrow"><span class="eyebrow-line"></span> IM DETAIL</p><h2 id="detail-heading">Fahrzeugübersicht</h2></div><span class="detail-meta" id="detail-meta"></span></div>
+      <div id="detail-status" class="status" role="status" aria-live="polite"></div>
+      <div id="own-detail-actions" class="own-toolbar" hidden><button id="vehicle-edit" class="condition-edit" type="button">Fahrzeug bearbeiten</button><button id="odometer-add" class="condition-edit" type="button">Stand erfassen</button><button id="record-add" class="condition-edit" type="button">Arbeit dokumentieren</button><button id="history-toggle" class="condition-edit" type="button" aria-controls="history-panel" aria-expanded="false">Verlauf anzeigen</button></div>
+      <article id="condition-panel" class="condition-panel" aria-labelledby="condition-title">
+        <div class="condition-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> AKTUELLER ZUSTAND</p><h3 id="condition-title">Fahrbereitschaft &amp; offene Punkte</h3></div><button id="condition-edit" class="condition-edit" type="button" aria-controls="condition-form" aria-expanded="false">Bearbeiten</button></div>
+        <div id="condition-view"><div id="condition-readiness"></div><div id="condition-issues" class="condition-issues"></div></div>
+        <form id="condition-form" class="condition-form" hidden>
+          <label for="readiness-input">Fahrbereitschaft</label>
+          <select id="readiness-input" name="readiness"><option value="unknown">Nicht erfasst</option><option value="ready">Fahrbereit</option><option value="not_ready">Nicht fahrbereit</option></select>
+          <p class="form-hint">Die Fahrbereitschaft und offene Punkte kannst du unabhängig voneinander festhalten.</p>
+          <div class="editor-heading"><span>Offene Punkte</span><button id="issue-add" type="button" class="issue-add">+ Punkt hinzufügen</button></div>
+          <div id="issue-editor" class="issue-editor"></div>
+          <p id="condition-message" class="condition-message" role="status" aria-live="polite"></p>
+          <div class="condition-actions"><button type="submit" id="condition-save" class="condition-save">Änderungen speichern</button><button type="button" id="condition-cancel" class="condition-cancel">Abbrechen</button></div>
+        </form>
+      </article>
+      <div id="detail-content" class="detail-grid" hidden>
+        <article id="reminders-panel" class="panel"><div class="panel-heading"><div><span class="panel-icon"><svg><use href="#i-calendar"/></svg></span><h3>Was ansteht</h3></div><span class="panel-kicker">ERINNERUNGEN</span></div><div id="reminders"></div></article>
+        <article class="panel"><div class="panel-heading"><div><span class="panel-icon"><svg><use href="#i-tool"/></svg></span><h3>Zuletzt gemacht</h3></div><span class="panel-kicker">WARTUNG</span></div><div id="services"></div></article>
+      </div>
+      <article id="history-panel" class="panel history-panel" aria-labelledby="history-title" hidden><h3 id="history-title">Änderungsverlauf</h3><p id="history-message" class="status" role="status" aria-live="polite"></p><div id="history-events"></div></article>
+    </section>
+    <aside id="legacy-banner" class="manage-banner" hidden><div class="manage-banner-icon"><svg><use href="#i-tool"/></svg></div><div><h2>Etwas eintragen?</h2><p>Fahrzeuge und Einträge verwaltest du derzeit in LubeLogger.</p></div><a href="/Home">Zur Verwaltung <svg><use href="#i-arrow"/></svg></a></aside>
+  </main>
+  <footer><span>WOLFS GARAGE</span><span>MIT LIEBE ZUM FAHRZEUG.</span></footer>
+</body>
+</html>
