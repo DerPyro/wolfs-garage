@@ -1,6 +1,6 @@
 # Container release plan
 
-This is release preparation only. No release tag or GHCR image is published by this change. Source builds remain the supported default described in the [standalone guide](standalone.md). In particular, `ghcr.io/derpyro/wolfs-garage:0.1.0a5` below is an example for a possible first release, not a published image or promise that the tag can be pulled.
+This is release preparation only. No release tag or GHCR image is published by this change. Source builds remain the supported default described in the [standalone guide](standalone.md). In particular, `ghcr.io/derpyro/wolfs-garage:0.1.0a6` below is an example for a possible first release, not a published image or promise that the tag can be pulled.
 
 ## Release image configuration
 
@@ -9,7 +9,7 @@ This is release preparation only. No release tag or GHCR image is published by t
 After a first image has actually been published, a fresh installation could use commands like these. They intentionally do not work until that image exists and is accessible:
 
 ```sh
-export GARAGE_IMAGE=ghcr.io/derpyro/wolfs-garage:0.1.0a5
+export GARAGE_IMAGE=ghcr.io/derpyro/wolfs-garage:0.1.0a6
 
 docker compose --env-file .env.example -f deploy/compose.release.yaml pull
 docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage init-db
@@ -20,12 +20,12 @@ The version above is a placeholder example only. Before a real release, replace 
 
 ## Existing standalone installation
 
-The source-build Compose target remains available. To switch image sources while preserving an installation, use both Compose files with the same project name so `garage_data` remains the same volume. Before updating, make an independent backup and rehearse a restore against an isolated copy. If the database is schema 1 or 2, perform the explicit checked-backup schema-3 upgrade before normal operation. With a future published image selected in `GARAGE_IMAGE`, the upgrade command would use the release image while the existing project volume is mounted:
+The source-build Compose target remains available. To switch image sources while preserving an installation, use both Compose files with the same project name so `garage_data` remains the same volume. Before updating, make an independent backup and rehearse a restore against an isolated copy. If the database is schema 1, 2 or 3, perform the explicit checked-backup schema-4 upgrade before normal operation. With a future published image selected in `GARAGE_IMAGE`, the upgrade command would use the release image while the existing project volume is mounted:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.release.yaml stop garage
 docker compose --env-file .env.example -f deploy/compose.release.yaml pull
-docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema3-upgrade-UNIQUE.sqlite3
+docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema4-upgrade-UNIQUE.sqlite3
 ```
 
 Copy the checked pre-upgrade backup to independent protected storage before restarting the service. Only after that copy has been verified should you restart the service:
@@ -36,7 +36,7 @@ docker compose --env-file .env.example -f deploy/compose.release.yaml up -d
 
 If the installation uses a custom Compose project name, pass that same `-p` value to every command so the existing `garage_data` volume remains selected. Never rerun `init-db` for an existing volume.
 
-An upgrade changes the database in place only after writing and checking the designated pre-upgrade backup. Schema-2 binaries reject schema 3: do not start an older image against the upgraded database. A rollback needs a separate restored copy of the pre-upgrade database with a compatible image; keep the upgraded database untouched until recovery is understood. These instructions do not authorize production cutover or LubeLogger migration.
+An upgrade changes the database in place only after writing and checking the designated pre-upgrade backup. Schema-3 binaries reject schema 4: do not start an older image against the upgraded database. A rollback needs a separate restored copy of the pre-upgrade database with a compatible image; keep the upgraded database untouched until recovery is understood. These instructions do not import LubeLogger data or change proxy/access configuration.
 
 ## Prepared publishing workflow
 
@@ -44,7 +44,7 @@ The prepared `.github/workflows/release.yml` implements this policy:
 
 - Only a GitHub Release event with action `published` and a non-draft release can publish; the publication job waits for checks.
 - A manual `workflow_dispatch` validates the checked-out repository and source, runs the checks, and builds both target architectures without pushing. It has no registry-publish permission.
-- The release tag must exactly match the strict app version as `v<application-version>`; for example, version `0.1.0a5` requires `v0.1.0a5`. The checked-out HEAD must equal the tag commit, and that commit must be an ancestor of `origin/main`.
+- The release tag must exactly match the strict app version as `v<application-version>`; for example, version `0.1.0a6` requires `v0.1.0a6`. The checked-out HEAD must equal the tag commit, and that commit must be an ancestor of `origin/main`.
 - Tests and image build use the same exact source commit SHA; the workflow passes the validated full SHA to the reusable checks workflow. A release build targets both `linux/amd64` and `linux/arm64`.
 - Publish the exact version tag only; do not publish or update a floating `latest` tag. Never move or reuse a released tag. Record the release source commit and resulting manifest digest in the release notes; a digest is the immutable image reference.
 - The image name is `ghcr.io/derpyro/wolfs-garage`. GHCR package visibility is a separate setting and must be deliberately made public before anonymous pulls are documented.

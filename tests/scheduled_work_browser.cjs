@@ -1,4 +1,4 @@
-// Synthetic real-Chromium workflow. The caller serves a fresh schema-3 DB at
+// Synthetic real-Chromium workflow. The caller serves a fresh schema-4 DB at
 // http://127.0.0.1:18985; this script creates its own vehicle and work items.
 const fs = require('fs');
 const {spawn} = require('child_process');

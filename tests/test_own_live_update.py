@@ -186,25 +186,35 @@ class LiveUpdaterTests(unittest.TestCase):
         self.assertNotIn("GARAGE_TOKEN", kwargs.get("env") or {})
         self.assertIs(kwargs["stdin"], updater.subprocess.DEVNULL)
 
-    def test_schema_mismatch_fails_preflight_before_any_live_deployment(self):
+    def test_candidate_preflight_accepts_only_matching_schema3_or_schema4(self):
         state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
         state.mkdir(mode=0o700)
 
-        def make_backup(image, volume, workdir, filename):
-            path = Path(workdir) / filename
-            with closing(sqlite3.connect(path)) as database:
-                with database:
-                    database.execute("CREATE TABLE meta (schema INTEGER NOT NULL)")
-                    database.execute("INSERT INTO meta VALUES (3)")
+        def preflight(original_schema, candidate_schema):
+            def make_backup(image, volume, workdir, filename):
+                path = Path(workdir) / filename
+                with closing(sqlite3.connect(path)) as database:
+                    with database:
+                        database.execute("CREATE TABLE meta (schema INTEGER NOT NULL)")
+                        database.execute("INSERT INTO meta VALUES (?)", (original_schema,))
 
-        with mock.patch.object(updater, "_backup_from_volume", side_effect=make_backup), \
-             mock.patch.object(updater, "_image_schema", return_value=4), \
-             mock.patch.object(updater, "_run") as run, \
-             mock.patch.object(updater, "_deploy_candidate") as deploy:
-            with self.assertRaisesRegex(updater.UpdateError, "schemas must match schema 3"):
-                updater._candidate_preflight("old:sha", "new:sha", self.config)
-        self.assertEqual(run.call_count, 2, "only isolated candidate upgrade/check commands run")
-        deploy.assert_not_called()
+            with mock.patch.object(updater, "_backup_from_volume", side_effect=make_backup), \
+                 mock.patch.object(updater, "_image_schema", return_value=candidate_schema), \
+                 mock.patch.object(updater, "_run") as run:
+                if original_schema == candidate_schema and original_schema in {3, 4}:
+                    updater._candidate_preflight("old:sha", "new:sha", self.config)
+                    self.assertEqual(run.call_count, 2, "same-schema candidate check remains isolated")
+                else:
+                    with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3 or 4"):
+                        updater._candidate_preflight("old:sha", "new:sha", self.config)
+                    run.assert_not_called()
+
+        for schema in (3, 4):
+            with self.subTest(live=schema, candidate=schema):
+                preflight(schema, schema)
+        for live, candidate in ((3, 4), (4, 3), (2, 2)):
+            with self.subTest(live=live, candidate=candidate):
+                preflight(live, candidate)
 
     def test_failed_prepare_hook_does_not_stop_or_restart_live_service(self):
         with mock.patch.object(updater, "_safe_hook", side_effect=[updater.UpdateError("prepare failed"), None]) as hook, \

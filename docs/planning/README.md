@@ -22,6 +22,7 @@ Drei unabhängige Bereiche bearbeiten Domäne/Fälligkeiten, Infrastruktur/Secur
 | Native und ergänzende Webabläufe | [Produktabläufe](product-flows.md) |
 | Bot-Dialoge und spätere KI-Grenzen | [Assistent/KI](assistant-ai-spec.md) |
 | Bereitstellung, Backup, Restore, Upgrade und Störungen | [Betriebs-Runbooks](operations-runbooks.md) |
+| Betreiberregel und Abnahme für den HU-Fälligkeitsmonat | [Inspection status](inspection-status.md) |
 | Ein Cloudflare-Login und späterer Einrichtungsablauf | [Access-Rolloutvorbereitung](cloudflare-access-rollout.md) |
 | Reproduzierbarer Bereitstellungsentwurf für den gewählten Host | [Compose-Vorlage](production-compose.md) |
 | Konkrete Angriffe, Abgrenzungen und Nachweise | [Threatmodell](security-threat-model.md) |

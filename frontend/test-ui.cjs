@@ -8,6 +8,7 @@ class Element {
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
+  removeAttribute(name) { delete this.attributes[name]; }
   append(...children) { for (const child of children) child.parent = this; this.children.push(...children); }
   prepend(...children) { for (const child of children) child.parent = this; this.children.unshift(...children); }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
@@ -16,17 +17,28 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, inspectionStatus = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-heading','inspection-message','inspection-meter-wrap','inspection-meter','inspection-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
   nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json';
   nodes['data-export-wrap'].append(nodes['data-export'], new Element('p'));
   nodes['data-export-wrap'].children[1].textContent='JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.';
-  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard']) nodes[id].hidden = true;
+  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel','inspection-meter-wrap']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
-  const document = { getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
+  const documentListeners = {};
+  let inspectionInterval;
+  const document = { visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  Object.defineProperty(nodes,'__visibilityChanged',{value:async visibilityState=>{document.visibilityState=visibilityState;return documentListeners.visibilitychange&&documentListeners.visibilitychange();}});
+  Object.defineProperty(nodes,'__inspectionTick',{value:async()=>inspectionInterval&&inspectionInterval.callback()});
+  Object.defineProperty(nodes,'__inspectionInterval',{value:()=>inspectionInterval&&inspectionInterval.delay});
   await new Promise(resolve => setTimeout(resolve, 25));
   return nodes;
+}
+function huProjection({asOf='2026-10-28',dueMonth=null,state='unknown',monthsUntilDue=null,batteryLevel=null,blocksReadiness=false,validUntil=null,blockingFrom=null}={}) {
+  return {asOf,timeZone:'Europe/Berlin',dueMonth,validUntil,blockingFrom,state,monthsUntilDue,blocksReadiness,batteryLevel,scaleMonths:12};
+}
+function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProjection(),readiness='ready',effectiveReadiness=readiness,revision=1}={}) {
+  return {id,name,make:'Test',model:'Fahrzeug',vehicleType:'Limousine',odometerUnit:'km',revision,inspectionDueMonth:dueMonth,inspection,effectiveReadiness,status:{readiness,issues:[],revision:1}};
 }
 (async () => {
   let nodes = await run(async () => ({ok: true, json: async () => ({vehicles: []})}));
@@ -36,6 +48,153 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
 
   nodes = await run(async () => ({ok: false, status: 502}));
   assert.match(nodes.status.textContent, /konnten nicht geladen/);
+
+  // HU month projection is explicitly capability-gated and server-dated; the UI only renders its values.
+  const huCases = [
+    {name:'Vorschau',dueMonth:'2026-12',inspection:huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'}),expected:/Dezember 2026, noch 2 Monate/},
+    {name:'Im Fälligkeitsmonat',dueMonth:'2026-10',inspection:huProjection({dueMonth:'2026-10',state:'due',monthsUntilDue:0,batteryLevel:0,validUntil:'2026-10-31',blockingFrom:'2026-12-01'}),expected:/diesen Monat fällig/},
+    {name:'Erster überfälliger Monat',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-09-15',dueMonth:'2026-08',state:'overdue',monthsUntilDue:-1,batteryLevel:0,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),expected:/überfällig; automatisch INOP ab 01\.10\.2026/},
+    {name:'Ab dem zweiten überfälligen Monat blockiert',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),effectiveReadiness:'not_ready',expected:/automatisch INOP ab 01\.10\.2026/},
+    {name:'HU nicht erfasst',dueMonth:null,inspection:huProjection(),expected:/HU \/ TÜV nicht erfasst/}
+  ];
+  for (const testCase of huCases) {
+    const vehicle=huVehicle({...testCase,effectiveReadiness:testCase.effectiveReadiness||'ready'});
+    nodes = await run(async path => ({ok:true,json:async()=>path.endsWith('/summary')?{vehicle,reminders:[],services:[]}:{vehicles:[vehicle]}}),{standalone:true,inspectionStatus:true});
+    assert.equal(nodes['inspection-panel'].hidden,false,testCase.name);
+    assert.match(nodes['inspection-message'].textContent,testCase.expected,testCase.name);
+    assert.match(nodes['inspection-asof'].textContent,/Europe\/Berlin/,testCase.name);
+    assert.match(nodes.vehicles.children[0].attributes['aria-label'],/HU \/ TÜV/,testCase.name);
+    assert.equal(nodes['condition-readiness'].textContent,testCase.effectiveReadiness==='not_ready'?'Nicht fahrbereit':'Fahrbereit',testCase.name);
+    const cardIndicators=nodes.vehicles.children[0].children[0].children.find(child=>child.className==='card-indicators');
+    const cardBattery=cardIndicators.children.find(child=>child.className.startsWith('card-inspection'));
+    assert.ok(cardBattery,testCase.name);
+    assert.match(cardBattery.attributes.title,/HU \/ TÜV/,testCase.name);
+    if (testCase.inspection.state==='unknown') {
+      assert.equal(nodes['inspection-meter-wrap'].hidden,true);
+      assert.doesNotMatch(nodes['inspection-message'].textContent,/überfällig/);
+      assert.doesNotMatch(nodes.vehicles.children[0].attributes['aria-label'],/INOP/);
+    } else {
+      assert.equal(nodes['inspection-meter-wrap'].hidden,false);
+      assert.equal(nodes['inspection-meter'].children.length,12);
+      assert.match(nodes['inspection-meter'].attributes['aria-label'],/von 12 Monaten/);
+      assert.equal(nodes['inspection-meter'].children.filter(cell=>cell.className.includes('filled')).length,testCase.inspection.batteryLevel);
+      assert.equal(cardBattery.querySelectorAll('rect').filter(cell=>cell.attributes.class==='inspection-card-cell filled').length,testCase.inspection.batteryLevel);
+    }
+    if (testCase.inspection.state==='blocking') {
+      assert.match(nodes.vehicles.children[0].textContent,/INOP/);
+      assert.match(nodes['condition-readiness'].textContent,/Nicht fahrbereit/);
+      nodes['condition-edit'].listeners.click();
+      assert.equal(nodes['readiness-input'].value,'ready','the editor shows manual readiness even while derived readiness is blocked');
+    }
+  }
+  assert.equal(nodes['inspection-panel'].hidden,false);
+  const hostileProjection=huVehicle({name:'<img src=x onerror=alert(1)>',dueMonth:'<script>x</script>',inspection:huProjection({dueMonth:'<script>x</script>',state:'upcoming',monthsUntilDue:1,batteryLevel:1,validUntil:'2026-11-30',blockingFrom:'2027-01-01'})});
+  nodes=await run(async path=>({ok:true,json:async()=>path.endsWith('/summary')?{vehicle:hostileProjection,reminders:[],services:[]}:{vehicles:[hostileProjection]}}),{standalone:true,inspectionStatus:true});
+  assert.equal(nodes.vehicles.children[0].querySelectorAll('img').length,0);
+  assert.equal(nodes.vehicles.children[0].querySelectorAll('script').length,0);
+  assert.match(nodes['inspection-message'].textContent,/HU-Status momentan nicht verfügbar/);
+  const legacyHuNodes=await run(async path=>({ok:true,json:async()=>path.endsWith('/summary')?{vehicle:{status:{readiness:'ready',issues:[],revision:1}},reminders:[],services:[]}:{vehicles:[{id:1,name:'Legacy',status:{readiness:'ready',issues:[],revision:1}}]}}),{standalone:true});
+  assert.equal(legacyHuNodes['inspection-panel'].hidden,true);
+  legacyHuNodes['vehicle-edit'].listeners.click();
+  assert.equal(legacyHuNodes['own-fields'].querySelectorAll('input').some(input=>input.id==='entry-inspectionDueMonth'),false);
+
+  // The optional month is submitted on vehicle create/update, and an explicit clear never changes manual readiness.
+  const huWrites=[];
+  let editableVehicle=huVehicle({dueMonth:'2026-08',inspection:huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),readiness:'not_ready',effectiveReadiness:'not_ready'});
+  let nextVehicleId=2;
+  const editableVehicles=[editableVehicle];
+  nodes=await run(async (path,options={})=>{
+    if(options.method){
+      const body=JSON.parse(options.body); huWrites.push({path,method:options.method,body});
+      if(options.method==='PUT'){
+        editableVehicle={...editableVehicle,...body,revision:editableVehicle.revision+1};
+        if(body.inspectionDueMonth===null){editableVehicle.inspection=huProjection();editableVehicle.effectiveReadiness=editableVehicle.status.readiness;}
+        editableVehicles[0]=editableVehicle;
+        return {ok:true,json:async()=>editableVehicle};
+      }
+      if(path==='/garage-api/vehicles'){
+        const created=huVehicle({id:nextVehicleId++,name:body.make+' '+body.model,dueMonth:body.inspectionDueMonth,inspection:body.inspectionDueMonth?huProjection({dueMonth:body.inspectionDueMonth,state:'upcoming',monthsUntilDue:4,batteryLevel:4,validUntil:'2027-02-28',blockingFrom:'2027-04-01'}):huProjection(),readiness:'unknown',effectiveReadiness:'unknown'});
+        Object.assign(created,body,{revision:1}); editableVehicles.push(created); return {ok:true,json:async()=>created};
+      }
+    }
+    if(path.endsWith('/summary')){const id=Number(path.split('/')[3]);const vehicle=editableVehicles.find(item=>item.id===id);return {ok:true,json:async()=>({vehicle,reminders:[],services:[]})};}
+    return {ok:true,json:async()=>({vehicles:editableVehicles})};
+  },{standalone:true,inspectionStatus:true});
+  const entryInput=id=>nodes['own-fields'].querySelectorAll('input').find(input=>input.id==='entry-'+id);
+  nodes['vehicle-edit'].listeners.click();
+  assert.equal(entryInput('inspectionDueMonth').value,'2026-08');
+  entryInput('model').value='Bearbeitet';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(huWrites[0].body.inspectionDueMonth,'2026-08','unmodified month is preserved on vehicle PUT');
+  assert.equal(huWrites[0].body.revision,1);
+  nodes['vehicle-edit'].listeners.click();
+  entryInput('inspectionDueMonth').value='';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(huWrites[1].body.inspectionDueMonth,null,'blank month explicitly clears the date');
+  assert.equal(editableVehicle.status.readiness,'not_ready','vehicle edits retain manual readiness');
+  assert.equal(nodes['condition-readiness'].textContent,'Nicht fahrbereit');
+  assert.match(nodes['inspection-message'].textContent,/nicht erfasst/);
+  nodes['vehicle-add'].listeners.click();
+  const createdInput=id=>nodes['own-fields'].querySelectorAll('input').find(input=>input.id==='entry-'+id);
+  createdInput('make').value='Neu'; createdInput('model').value='Fahrzeug';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(huWrites[2].body.inspectionDueMonth,null,'blank month is sent explicitly for vehicle create too');
+  assert.equal(editableVehicles[1].status.readiness,'unknown');
+
+  // A status save is followed by the existing summary read so the server remains authoritative for effective readiness.
+  let summaryReads=0;
+  const manualStatus={readiness:'ready',issues:[],revision:1};
+  const beforeInspection=huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'});
+  const afterInspection=huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'});
+  const changingVehicle={...huVehicle({dueMonth:'2026-12',inspection:beforeInspection}),status:manualStatus};
+  nodes=await run(async(path,options={})=>{
+    if(options.method==='PUT') return {ok:true,json:async()=>manualStatus};
+    if(path.endsWith('/summary')) { summaryReads++; return {ok:true,json:async()=>({vehicle:{...changingVehicle,inspection:summaryReads===1?beforeInspection:afterInspection,inspectionDueMonth:summaryReads===1?'2026-12':'2026-08',effectiveReadiness:summaryReads===1?'ready':'not_ready'},reminders:[],services:[]})}; }
+    return {ok:true,json:async()=>({vehicles:[changingVehicle]})};
+  },{standalone:true,inspectionStatus:true});
+  assert.equal(summaryReads,1);
+  nodes['condition-edit'].listeners.click();
+  nodes['readiness-input'].value='ready';
+  await nodes['condition-form'].listeners.submit({preventDefault(){}});
+  assert.equal(summaryReads,2,'status write forces a fresh vehicle summary');
+  assert.equal(nodes['condition-readiness'].textContent,'Nicht fahrbereit','new server projection can override manual ready');
+  assert.equal(changingVehicle.status.readiness,'ready');
+  assert.equal(nodes['inspection-asof'].textContent,'Stand: 01.10.2026 (Europe/Berlin).');
+
+  // On tab return, refresh the server month only when no entry form is being edited.
+  const visibilityVehicle=huVehicle({dueMonth:'2026-12',inspection:beforeInspection});
+  let vehicleReads=0;
+  nodes=await run(async path=>{
+    if(path==='/garage-api/vehicles'){vehicleReads++;return {ok:true,json:async()=>({vehicles:[visibilityVehicle]})};}
+    if(path.endsWith('/history'))return {ok:true,json:async()=>({events:[]})};
+    if(path.endsWith('/records/page'))return {ok:true,json:async()=>({records:[],nextCursor:null})};
+    return {ok:true,json:async()=>({vehicle:visibilityVehicle,reminders:[],services:[]})};
+  },{standalone:true,inspectionStatus:true,historyBrowsing:true});
+  assert.equal(nodes.__inspectionInterval(),60000,'inspection refresh runs once per minute');
+  await nodes['history-toggle'].listeners.click(); await nodes['logbook-toggle'].listeners.click();
+  assert.equal(nodes['history-panel'].hidden,false); assert.equal(nodes['logbook-panel'].hidden,false);
+  nodes['vehicle-edit'].listeners.click();
+  const readsBeforeForm=vehicleReads;
+  await nodes.__visibilityChanged('hidden'); await nodes.__visibilityChanged('visible');
+  assert.equal(vehicleReads,readsBeforeForm,'visible refresh does not discard an active edit form');
+  assert.equal(nodes['own-panel'].hidden,false);
+  nodes['own-cancel'].listeners.click();
+  visibilityVehicle.inspection=huProjection({asOf:'2026-10-29',dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'});
+  await nodes.__visibilityChanged('hidden'); await nodes.__visibilityChanged('visible');
+  assert.equal(vehicleReads,readsBeforeForm+1);
+  assert.match(nodes['inspection-asof'].textContent,/29\.10\.2026/);
+  visibilityVehicle.inspection=huProjection({asOf:'2026-10-30',dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'});
+  await nodes.__inspectionTick();
+  assert.equal(vehicleReads,readsBeforeForm+2);
+  assert.match(nodes['inspection-asof'].textContent,/30\.10\.2026/);
+  assert.equal(nodes['history-panel'].hidden,false,'periodic projection refresh preserves history visibility');
+  assert.equal(nodes['logbook-panel'].hidden,false,'periodic projection refresh preserves logbook visibility');
+  assert.equal(nodes.vehicles.children[0].attributes['aria-pressed'],'true','periodic projection refresh preserves selection');
+  nodes['vehicle-edit'].listeners.click();
+  const readsBeforePeriodicForm=vehicleReads;
+  await nodes.__inspectionTick();
+  assert.equal(vehicleReads,readsBeforePeriodicForm,'timer leaves the month input untouched while an edit form is open');
+  assert.equal(nodes['own-panel'].hidden,false);
 
   // Standalone export stays a fixed browser download; capability data cannot alter its URL.
   let exportCalls=0;

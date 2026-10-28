@@ -52,23 +52,23 @@ The application also supports a portable owner-data JSON export for inspection o
 
 ## Explicit schema upgrade (standalone only)
 
-Fresh initialization creates schema version 3. Current application reads accept schema 3; the backup command can read supported schema-1, schema-2 and schema-3 databases. Existing schema-1 and schema-2 standalone databases are upgraded only by an explicit command. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
+Fresh initialization creates schema version 4. The current application accepts schema 4; the backup command can read schemas 1–4. Existing schema-1, schema-2 and schema-3 standalone databases are upgraded only by an explicit command after an isolated restore rehearsal and an independent backup. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
 
 Before upgrading, stop the Compose service and build the new application image. Run the upgrade once with a new, unused backup filename inside the persistent volume:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml stop garage
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml build garage
-docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema3-upgrade-UNIQUE.sqlite3
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema4-upgrade-UNIQUE.sqlite3
 ```
 
-Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. Schema 1 also gains the record `revision` column; schema 2 only advances the version after the checked backup. Existing issue JSON is preserved byte-for-byte and normalized on read. Copy that backup to independent protected storage before restarting the service:
+Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. Schema 1 also gains the record `revision` column; schemas 2 and 3 keep their existing record fields. All three older schemas gain the nullable inspection due-month column. Existing status JSON, command responses, readings, records and history are preserved. Copy the checked backup to independent protected storage before restarting the service:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 ```
 
-If the command reports that the database is already schema 3, it is a no-op and does not write a backup. Keep the schema-1 or schema-2 backup until the upgraded application data has been checked. Do not start an older schema-2 application image against the upgraded schema-3 file: older binaries reject newer schemas and may not understand the data contract. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No production or LubeLogger migration is implied by these instructions.
+If the command reports that the database is already schema 4, it is a no-op and does not write a backup. Keep the schema-1, schema-2 or schema-3 backup until the upgraded application data has been checked. Do not start an older schema-3 application image against the upgraded schema-4 file: older binaries reject newer schemas and may not understand the data contract. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure.
 
 ## Backup and isolated restore
 
@@ -78,9 +78,9 @@ Create a consistent SQLite backup at a new, unused destination path inside the p
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml exec garage python -m wolfs_garage backup /var/lib/wolfs-garage/backup-UNIQUE.sqlite3
 ```
 
-Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1, 2 or 3 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup.
+Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1–4 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup.
 
-For a restore rehearsal, use a separate Compose project and a new destination volume. Copy the backup into that isolated volume as `garage.sqlite3`, then start the isolated app against it and verify the records. Keep the original project and volume untouched throughout. The restore procedure must never point at the original volume or overwrite its database. Keep any restored instance private and shut it down after the rehearsal. Schema upgrades use the explicit command above; do not restore a backup over a running or production database.
+For a restore rehearsal, use a separate Compose project and a new destination volume. Copy the backup into that isolated volume as `garage.sqlite3`, then start the isolated app against it and verify the records. Keep the original project and volume untouched throughout. The restore procedure must never point at the original volume or overwrite its database. Keep any restored instance private and shut it down after the rehearsal. Schema upgrades use the explicit command above; do not restore a backup over a running database.
 
 ## Develop and run the focused tests
 
@@ -102,7 +102,7 @@ GARAGE_PUBLIC_ORIGIN=http://localhost:8000 GARAGE_DB=data/garage.sqlite3 \
 
 Open <http://localhost:8000> for this development server. The configured origin and request host must match, while Gunicorn listens only on loopback.
 
-The app expects the database to have been initialized explicitly or explicitly upgraded. The factory is `wolfs_garage.api:create_app()`. `/garage-api/capabilities` advertises supported features; the [API contract](api.md) describes routes and inputs; [scheduled work](planning/scheduled-work.md) documents the open-work fields and dashboard. The UI and API currently cover only the standalone alpha features listed above.
+The app expects the database to have been initialized explicitly or explicitly upgraded. The factory is `wolfs_garage.api:create_app()`. `/garage-api/capabilities` advertises supported features; the [API contract](api.md) describes routes and inputs; [scheduled work](planning/scheduled-work.md) documents the open-work fields and dashboard; [inspection status](planning/inspection-status.md) documents the due-month policy and derived readiness. The UI and API currently cover only the standalone alpha features listed above.
 
 ## Licensing
 

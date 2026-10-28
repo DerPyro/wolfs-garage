@@ -140,7 +140,7 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "inspectionStatus"])
 
     @app.get("/garage-api/export")
     def export_data():
