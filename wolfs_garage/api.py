@@ -119,7 +119,7 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "history"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history"])
 
     @app.get("/garage-api/vehicles")
     def vehicles():
@@ -160,6 +160,14 @@ def create_app(config=None):
     @app.get("/garage-api/vehicles/<int:vehicle_id>/records")
     def records(vehicle_id):
         return jsonify(records=store.get_summary(vehicle_id)["services"])
+
+    @app.get("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>")
+    def record(vehicle_id, record_id):
+        return jsonify(store.get_record(vehicle_id, record_id))
+
+    @app.put("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>")
+    def correct_record(vehicle_id, record_id):
+        return jsonify(store.correct_record(vehicle_id, record_id, payload()))
 
     @app.post("/garage-api/vehicles/<int:vehicle_id>/records")
     def add_record(vehicle_id):

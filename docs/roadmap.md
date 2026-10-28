@@ -11,6 +11,8 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Dated odometer readings and service/repair records with explicit currency and optional HTTPS document references.
 - [x] Atomic work-record creation and explicit issue closure; readable change history.
 - [x] Revision checks and idempotent reading/record submissions.
+- [x] Bounded completed-record corrections with a reason, revision check, retry handling and before/after history; date, odometer, unit and issue-closure changes remain out of scope.
+- [x] Explicit schema-1-to-2 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
 - [x] Consistent SQLite backup and synthetic isolated restore evidence.
 - [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
 
@@ -18,7 +20,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 
 ## Next: complete the daily maintenance workflow
 
-- [ ] Correct completed records while retaining earlier values and correction history.
+- [ ] Implement a safe date/odometer correction workflow with explicit links to measurement history.
 - [ ] Browse complete odometer and maintenance history with filtering and pagination.
 - [ ] Give open work explicit due dates, severity and lifecycle instead of only short issue text.
 - [ ] Connect the maintenance indicator to due work as well as manually open issues, with clear reasons.

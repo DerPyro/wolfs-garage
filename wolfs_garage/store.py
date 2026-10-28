@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 import uuid
 
 
-SCHEMA = 1
+SCHEMA = 2
 UNITS = {"km", "mi", "h"}
 READINESS = {"ready", "not_ready", "unknown"}
 
@@ -129,7 +129,7 @@ class Store:
         self.path = Path(path)
 
     def initialize(self):
-        """Create schema 1 once; an existing file or symlink is never replaced."""
+        """Create the current schema once; an existing file is never replaced."""
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
         os.close(fd)
@@ -139,7 +139,7 @@ class Store:
                 PRAGMA synchronous=FULL;
                 BEGIN IMMEDIATE;
                 CREATE TABLE meta(schema INTEGER NOT NULL);
-                INSERT INTO meta VALUES(1);
+                INSERT INTO meta VALUES(2);
                 CREATE TABLE vehicles(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     make TEXT NOT NULL, model TEXT NOT NULL, name TEXT NOT NULL,
@@ -157,7 +157,8 @@ class Store:
                     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
                     description TEXT NOT NULL, kind TEXT NOT NULL, day TEXT NOT NULL,
                     odometer TEXT, unit TEXT NOT NULL, cost TEXT, currency TEXT,
-                    document_url TEXT, closed_issue_id TEXT);
+                    document_url TEXT, closed_issue_id TEXT,
+                    revision INTEGER NOT NULL DEFAULT 1);
                 CREATE TABLE commands(
                     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
                     action TEXT NOT NULL, command_id TEXT NOT NULL,
@@ -176,6 +177,76 @@ class Store:
                 CREATE INDEX records_vehicle_date ON records(vehicle_id,day,id);
                 COMMIT;
             """)
+
+    @staticmethod
+    def _schema(db):
+        try:
+            rows = db.execute("SELECT schema FROM meta").fetchall()
+        except sqlite3.Error as exc:
+            raise sqlite3.DatabaseError("Unsupported standalone schema.") from exc
+        if len(rows) != 1 or rows[0][0] not in (1, 2):
+            raise sqlite3.DatabaseError("Unsupported standalone schema.")
+        return rows[0][0]
+
+    @staticmethod
+    def _new_backup(source, destination):
+        destination = Path(destination)
+        fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(fd)
+        try:
+            with closing(sqlite3.connect(destination)) as target:
+                source.backup(target)
+                if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise sqlite3.DatabaseError("Backup integrity check failed.")
+                if target.execute("PRAGMA foreign_key_check").fetchall():
+                    raise sqlite3.DatabaseError("Backup foreign key check failed.")
+                if Store._schema(target) not in (1, 2):
+                    raise sqlite3.DatabaseError("Backup schema is unsupported.")
+            with open(destination, "rb") as saved:
+                os.fsync(saved.fileno())
+        except BaseException:
+            try:
+                destination.unlink()
+            except OSError:
+                pass
+            raise
+
+    def upgrade(self, backup_destination):
+        """Explicitly upgrade schema 1 after creating and checking a full backup.
+
+        The reserved migration lock prevents writers. A separate read connection
+        supplies the backup snapshot, avoiding sqlite3.Connection.backup() from
+        a connection holding its own write transaction.
+        """
+        source_uri = self.path.resolve().as_uri() + "?mode=rw"
+        with closing(sqlite3.connect(source_uri, uri=True, timeout=5, isolation_level=None)) as db:
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA busy_timeout=5000")
+            schema = self._schema(db)
+            if schema == 2:
+                return False
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                # Recheck under the write reservation in case another operator
+                # completed the upgrade between the initial read and lock.
+                if self._schema(db) != 1:
+                    db.execute("ROLLBACK")
+                    return False
+                reader_uri = self.path.resolve().as_uri() + "?mode=ro"
+                with closing(sqlite3.connect(reader_uri, uri=True, timeout=5)) as reader:
+                    self._new_backup(reader, backup_destination)
+                db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
+                db.execute("UPDATE meta SET schema=2")
+                if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise sqlite3.DatabaseError("Integrity check failed after upgrade.")
+                if db.execute("PRAGMA foreign_key_check").fetchall():
+                    raise sqlite3.DatabaseError("Foreign key check failed after upgrade.")
+                db.execute("COMMIT")
+                return True
+            except BaseException:
+                if db.in_transaction:
+                    db.execute("ROLLBACK")
+                raise
 
     def _connect(self):
         uri = self.path.resolve().as_uri() + "?mode=rw"
@@ -373,7 +444,75 @@ class Store:
     def _record(row):
         return {"id": row["id"], "description": row["description"], "kind": row["kind"], "date": row["day"],
                 "odometer": _number(row["odometer"]), "odometerUnit": row["unit"], "cost": row["cost"],
-                "currency": row["currency"], "documentUrl": row["document_url"], "closedIssueId": row["closed_issue_id"]}
+                "currency": row["currency"], "documentUrl": row["document_url"], "closedIssueId": row["closed_issue_id"],
+                "revision": row["revision"]}
+
+    def get_record(self, vehicle_id, record_id):
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            self._vehicle(db, vehicle_id)
+            row = db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?", (vehicle_id, record_id)).fetchone()
+            if row is None:
+                raise NotFound("Record not found.")
+            return self._record(row)
+
+    @staticmethod
+    def _correction_values(payload):
+        allowed = {"revision", "commandId", "description", "kind", "cost", "currency", "documentUrl", "correctionReason"}
+        _fields(payload, allowed, allowed)
+        values = {"revision": _revision(payload["revision"]), "commandId": _command(payload["commandId"]),
+                  "description": _text(payload["description"], "description", required=True),
+                  "kind": payload["kind"], "cost": None, "currency": None,
+                  "documentUrl": _document(payload["documentUrl"]) if payload["documentUrl"] is not None else None,
+                  "correctionReason": _text(payload["correctionReason"], "correctionReason", 1600, required=True, multiline=True)}
+        if not isinstance(values["kind"], str) or values["kind"] not in {"service", "repair"}:
+            raise ValidationError("Invalid record kind.")
+        if payload["cost"] is None and payload["currency"] is None:
+            pass
+        elif isinstance(payload["cost"], str) and isinstance(payload["currency"], str):
+            try:
+                amount = Decimal(payload["cost"])
+            except InvalidOperation as exc:
+                raise ValidationError("Invalid cost.") from exc
+            if not amount.is_finite() or amount < 0 or amount > 1_000_000_000 or amount.as_tuple().exponent < -2:
+                raise ValidationError("Cost must be nonnegative with at most two decimal places.")
+            if len(payload["currency"]) != 3 or not all("A" <= c <= "Z" for c in payload["currency"]):
+                raise ValidationError("Cost requires an uppercase three-letter currency.")
+            values["cost"] = format(amount.quantize(Decimal("0.01")), "f")
+            values["currency"] = payload["currency"]
+        else:
+            raise ValidationError("Cost and currency must both be null or valid values.")
+        return values
+
+    def correct_record(self, vehicle_id, record_id, payload):
+        allowed = {"revision", "commandId", "description", "kind", "cost", "currency", "documentUrl", "correctionReason"}
+        _fields(payload, allowed, allowed)
+        command_id = _command(payload["commandId"])
+        with self._transaction() as db:
+            # Vehicle/record scoping is checked before command lookup so foreign
+            # IDs cannot reveal or replay another vehicle's stored response.
+            self._vehicle(db, vehicle_id)
+            old_row = db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?", (vehicle_id, record_id)).fetchone()
+            if old_row is None:
+                raise NotFound("Record not found.")
+            action = f"record.correct:{record_id}"
+            digest, replay = self._replay(db, vehicle_id, action, command_id, payload)
+            if replay is not None:
+                return replay
+            values = self._correction_values(payload)
+            old = self._record(old_row)
+            after_fields = {key: values[key] for key in ("description", "kind", "cost", "currency", "documentUrl")}
+            if old["revision"] != values["revision"]:
+                raise Conflict("Record revision changed.")
+            if all(old[key] == after_fields[key] for key in after_fields):
+                raise ValidationError("Correction must change at least one editable field.")
+            db.execute("UPDATE records SET description=?,kind=?,cost=?,currency=?,document_url=?,revision=revision+1 WHERE vehicle_id=? AND id=?",
+                       (after_fields["description"], after_fields["kind"], after_fields["cost"], after_fields["currency"], after_fields["documentUrl"], vehicle_id, record_id))
+            updated = self._record(db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone())
+            self._audit(db, vehicle_id, "record.corrected", {"record": old}, {"record": updated, "correctionReason": values["correctionReason"]})
+            response = {"record": updated}
+            self._remember(db, vehicle_id, action, values["commandId"], digest, response)
+            return response
 
     def add_record(self, vehicle_id, payload):
         _fields(payload, {"description", "kind", "date", "odometer", "cost", "currency", "documentUrl", "closeIssueId", "statusRevision", "commandId"}, {"description", "kind", "date", "commandId"})
@@ -446,13 +585,8 @@ class Store:
 
     def backup(self, destination):
         """Create a new consistent full-store backup with restrictive permissions."""
-        destination = Path(destination)
-        with closing(self._connect()) as source:
-            fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
-            os.close(fd)
-            with closing(sqlite3.connect(destination)) as target:
-                source.backup(target)
-                if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)] or target.execute("PRAGMA foreign_key_check").fetchall():
-                    raise sqlite3.DatabaseError("Backup integrity check failed.")
-            with open(destination, "rb") as saved:
-                os.fsync(saved.fileno())
+        source_uri = self.path.resolve().as_uri() + "?mode=ro"
+        with closing(sqlite3.connect(source_uri, uri=True, timeout=5)) as source:
+            if self._schema(source) not in (1, 2):
+                raise sqlite3.DatabaseError("Unsupported standalone schema.")
+            self._new_backup(source, destination)

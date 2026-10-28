@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, editingRevision: null, saving: false, standalone: false, capabilitiesReady: false, entry: null };
+const state = { vehicles: [], selected: null, generation: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, capabilitiesReady: false, entry: null };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -116,6 +116,7 @@ function renderRecords(target, items, kind) {
     row.append(left);
     if (kind === "reminders" && display(item.status)) { const label = el("span", "record-value", display(item.status)); if (item.status === "Überfällig") label.classList.add("overdue"); row.append(label); }
     if (kind === "services" && item.cost !== null && item.cost !== undefined && item.cost !== "") { const value = cost(item.cost, item.currency); if (value) row.append(el("span", "record-value", value)); }
+    if (kind === "services" && state.recordCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-edit", "Beleg korrigieren"); edit.type = "button"; edit.id = `record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id)); row.append(edit); }
     container.append(row);
   }
 }
@@ -153,9 +154,45 @@ function entryField(labelText, name, type, value = "", options = null) {
   else field.type = type;
   field.value = value === null || value === undefined ? "" : String(value); wrapper.append(label, field); $("own-fields").append(wrapper); return field;
 }
+function readonlyRecordFacts(record) {
+  const date = readableDate(record.date) || "Datum nicht verfügbar";
+  const reading = record.odometer === null || record.odometer === undefined || record.odometer === "" ? "Stand nicht erfasst" : `${number(record.odometer)} ${display(record.odometerUnit) || "Einheit unbekannt"}`;
+  $("record-edit-readonly-date").textContent = `Datum: ${date}`;
+  $("record-edit-readonly-odometer").textContent = `Stand: ${reading}`;
+  $("record-edit-readonly-closed-issue").textContent = record.closedIssueId === null || record.closedIssueId === undefined || record.closedIssueId === "" ? "Kein Punkt wurde mit diesem Beleg abgeschlossen." : "Punktabschluss bei der Erfassung bleibt unverändert.";
+}
+async function openRecordCorrection(recordId) {
+  if (!state.standalone || !state.recordCorrections || state.saving || state.entry && state.entry.busy) return;
+  const vehicle = selectedVehicle(); if (!vehicle || recordId === null || recordId === undefined) return;
+  if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { $("own-notice").textContent = "Zum Korrigieren benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
+  if (state.entry) closeEntry();
+  closeConditionEditor(); $("own-notice").textContent = ""; $("own-fields").replaceChildren(); $("own-message").textContent = "Beleg wird geladen …";
+  $("own-title").textContent = "Belegkorrektur"; $("own-hint").textContent = "Datum und Kilometerstand bleiben unverändert. Eine Korrektur von Datum oder Stand ist in dieser Version noch nicht verfügbar.";
+  $("record-edit-readonly").hidden = false; $("record-edit-readonly-date").textContent = "Datum wird geladen …"; $("record-edit-readonly-odometer").textContent = "Stand wird geladen …";
+  $("record-edit-readonly-closed-issue").textContent = "Abgeschlossener Punkt wird geladen …"; $("own-save").disabled = true; $("own-cancel").disabled = true;
+  $("own-panel").hidden = false;
+  const entry = {mode:"record-edit", vehicleId:String(vehicle.id), recordId:String(recordId), opener:`record-edit-${String(recordId)}`, busy:true, commandId:globalThis.crypto.randomUUID()}; state.entry = entry;
+  try {
+    const record = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}`);
+    if (state.entry !== entry || state.selected !== entry.vehicleId) return;
+    if (!record || String(record.id) !== entry.recordId || !Number.isInteger(record.revision)) throw new Error("Belegdaten konnten nicht gelesen werden.");
+    entry.revision = record.revision; entry.record = record; entry.busy = false;
+    readonlyRecordFacts(record);
+    const description = entryField("Beschreibung", "description", "text", record.description); description.required = true; description.maxLength = 160;
+    entryField("Art der Arbeit", "kind", "", record.kind, [["service","Wartung"],["repair","Reparatur"]]);
+    const amount = entryField("Kosten (optional)", "cost", "text", record.cost); amount.inputMode = "decimal"; amount.placeholder = "z. B. 49,90"; amount.maxLength = 20;
+    const currency = entryField("Währung bei Kostenangabe", "currency", "text", record.currency); currency.maxLength = 3; currency.placeholder = "z. B. EUR"; currency.autocapitalize = "characters";
+    const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url", record.documentUrl); link.maxLength = 2000; link.placeholder = "https://…";
+    const reason = entryField("Grund der Korrektur", "correctionReason", "text"); reason.required = true; reason.maxLength = 1600; reason.setAttribute("aria-describedby", "own-hint");
+    $("own-message").textContent = ""; $("own-title").focus(); description.focus();
+  } catch (error) {
+    if (state.entry === entry) { entry.busy = false; $("own-save").disabled = true; $("own-cancel").disabled = false; $("own-message").textContent = error.status === 404 ? "Dieser Beleg gehört nicht zu diesem Fahrzeug oder ist nicht mehr verfügbar." : error.status === 503 ? "Der Belegspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : error.message || "Der Beleg konnte nicht geladen werden. Bitte versuche es erneut."; }
+  }
+  if (state.entry === entry && !entry.busy) { $("own-save").disabled = !entry.record; $("own-cancel").disabled = false; }
+}
 function closeEntry(restoreFocus = false) {
   if (state.entry && state.entry.busy) return;
-  const opener = state.entry && state.entry.opener; state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = "";
+  const opener = state.entry && state.entry.opener; state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true;
   if (restoreFocus && opener) $(opener).focus();
 }
 function openEntry(mode) {
@@ -165,6 +202,7 @@ function openEntry(mode) {
   const openers = {"vehicle-new":"vehicle-add", "vehicle-edit":"vehicle-edit", odometer:"odometer-add", record:"record-add"};
   $("own-notice").textContent = "";
   state.entry = {mode, vehicleId:vehicle && String(vehicle.id), revision:vehicle && vehicle.revision, statusRevision:vehicle && vehicle.status && vehicle.status.revision, opener:openers[mode], busy:false};
+  $("record-edit-readonly").hidden = true;
   if (mode === "odometer" || mode === "record") {
     if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { state.entry = null; $("own-notice").textContent = "Zum Erfassen benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
     state.entry.commandId = globalThis.crypto.randomUUID();
@@ -203,7 +241,19 @@ function openEntry(mode) {
 async function saveEntry(event) {
   event.preventDefault(); const entry = state.entry; if (!entry || entry.busy) return;
   const field = name => $(`entry-${name}`).value.trim(); let payload; let path; let method = "POST";
-  if (entry.mode.startsWith("vehicle-")) {
+  if (entry.mode === "record-edit") {
+    const description = field("description"), kind = field("kind"), rawCost = field("cost"), rawCurrency = field("currency"), documentUrl = field("documentUrl"), correctionReason = field("correctionReason");
+    if (!description || description.length > 160 || !["service","repair"].includes(kind) || !correctionReason || correctionReason.length > 1600 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(correctionReason)) { $("own-message").textContent = "Bitte prüfe Beschreibung, Arbeitsart und Korrekturgrund (maximal 1.600 Zeichen)."; return; }
+    let costValue = null, currencyValue = null;
+    if (rawCost || rawCurrency) {
+      if (!/^\d+(?:[.,]\d{1,2})?$/.test(rawCost) || !/^[A-Za-z]{3}$/.test(rawCurrency)) { $("own-message").textContent = "Bitte gib Kosten mit höchstens zwei Nachkommastellen und eine dreistellige Währung an, z. B. 49,90 EUR. Zum Entfernen beide Felder leeren."; return; }
+      costValue = rawCost.replace(",", "."); currencyValue = rawCurrency.toUpperCase();
+    }
+    let documentValue = null;
+    if (documentUrl) { try { const url = new URL(documentUrl); if (url.protocol !== "https:" || url.username || url.password) throw new Error(); documentValue = url.href; } catch (_) { $("own-message").textContent = "Der Beleglink muss eine HTTPS-Adresse ohne eingebettete Zugangsdaten sein."; return; } }
+    payload = {revision:entry.revision, commandId:entry.commandId, description, kind, cost:costValue, currency:currencyValue, documentUrl:documentValue, correctionReason};
+    path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}`; method = "PUT";
+  } else if (entry.mode.startsWith("vehicle-")) {
     payload = {make:field("make"), model:field("model"), licensePlate:field("licensePlate"), vehicleType:field("vehicleType"), odometerUnit:field("odometerUnit")};
     if (field("year")) payload.year = Number(field("year"));
     else if (entry.mode === "vehicle-edit") payload.year = null;
@@ -227,13 +277,15 @@ async function saveEntry(event) {
   try {
     const response = await fetch(path, {method, credentials:"same-origin", headers:{"Content-Type":"application/json", "X-Garage-Request":"1"}, body:JSON.stringify(payload)});
     if (!response.ok) {
-      if (response.status === 409) throw new Error("Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
+      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
       let message = "Die Angaben konnten nicht gespeichert werden. Bitte prüfe deine Eingaben.";
       try { const detail = await response.json(); if (typeof detail.error === "string") message = detail.error; } catch (_) { /* retain the useful fallback */ }
       throw new Error(message);
     }
     const result = await response.json(); const id = entry.mode === "vehicle-new" ? (result.vehicle || result).id : entry.vehicleId;
-    entry.busy = false; closeEntry(); await load(id); $("own-notice").textContent = "Gespeichert.";
+    entry.busy = false; closeEntry(); await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : "Gespeichert.";
+    if (entry.mode === "record-edit") await showHistory(true);
+    if (entry.mode === "record-edit") { const button = document.getElementById(`record-edit-${entry.recordId}`); if (button) button.focus(); }
   } catch (error) {
     if (error instanceof TypeError && entry.mode === "vehicle-new") { entry.uncertain = true; $("own-cancel").textContent = "Schließen und prüfen"; }
     $("own-message").textContent = error instanceof TypeError ? "Die Antwort konnte nicht empfangen werden. Prüfe den Verlauf, bevor du eine neue Erfassung startest. Bei Stand und Arbeit kannst du dieselben Angaben mit Speichern erneut senden." : error.message;
@@ -250,22 +302,27 @@ function historyFacts(value) {
   if (value.readiness && readinessLabels[value.readiness]) facts.push(readinessLabels[value.readiness]);
   if (Array.isArray(value.issues)) facts.push(value.issues.length ? `Offen: ${value.issues.map(item => display(item.text)).join("; ")}` : "Keine offenen Punkte");
   if (value.description) facts.push(display(value.description));
+  if (value.kind) facts.push(value.kind === "repair" ? "Reparatur" : value.kind === "service" ? "Wartung" : display(value.kind));
   if (value.date) facts.push(readableDate(value.date));
   if (value.odometer !== null && value.odometer !== undefined) facts.push(distance(value.odometer, value.odometerUnit || value.unit));
   if (value.cost !== null && value.cost !== undefined && value.cost !== "") facts.push(cost(value.cost, value.currency));
+  else if (Object.hasOwn(value, "cost")) facts.push("Kosten entfernt");
+  if (Object.hasOwn(value, "documentUrl")) facts.push(value.documentUrl ? `Beleglink: ${display(value.documentUrl)}` : "Beleglink entfernt");
+  if (Object.hasOwn(value, "closedIssueId")) facts.push(value.closedIssueId ? "Offener Punkt bei der Erfassung abgeschlossen" : "Kein Punktabschluss zugeordnet");
+  if (value.correctionReason) facts.push(`Korrekturgrund: ${display(value.correctionReason)}`);
   if (value.note) facts.push(display(value.note));
   if (value.record) facts.push(...historyFacts(value.record));
   if (value.status) facts.push(...historyFacts(value.status));
   return facts.filter(Boolean);
 }
-async function showHistory() {
+async function showHistory(force = false) {
   if (!state.standalone || !state.selected) return;
-  if (!$("history-panel").hidden) { $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); return; }
+  if (!$("history-panel").hidden && !force) { $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); return; }
   const id = state.selected; $("history-panel").hidden = false; $("history-toggle").setAttribute("aria-expanded", "true"); $("history-events").replaceChildren(); $("history-message").textContent = "Verlauf wird geladen …";
   try {
     const result = await getJson(`/garage-api/vehicles/${id}/history`); if (state.selected !== id) return;
     if (!Array.isArray(result.events)) throw new Error("invalid history");
-    const actions = {"vehicle.created":"Fahrzeug angelegt", "vehicle.updated":"Stammdaten geändert", "status.updated":"Zustand aktualisiert", "odometer.created":"Stand erfasst", "issue.completed":"Offenen Punkt abgeschlossen", "record.created":"Arbeit dokumentiert"};
+    const actions = {"vehicle.created":"Fahrzeug angelegt", "vehicle.updated":"Stammdaten geändert", "status.updated":"Zustand aktualisiert", "odometer.created":"Stand erfasst", "issue.completed":"Offenen Punkt abgeschlossen", "record.created":"Arbeit dokumentiert", "record.corrected":"Beleg korrigiert"};
     for (const item of result.events.slice().reverse()) {
       const row = el("div", "history-event"); row.append(el("h4", "", actions[item.action] || "Änderung gespeichert"));
       const instant = new Date(item.occurredAt); if (!Number.isNaN(instant.getTime())) row.append(el("p", "record-sub", new Intl.DateTimeFormat("de-DE", {dateStyle:"medium", timeStyle:"short"}).format(instant)));
@@ -282,6 +339,7 @@ async function initialize() {
     const required = ["vehicles", "status", "odometer", "records", "history"];
     if (capabilities.backend !== "standalone" || !Array.isArray(capabilities.features) || !required.every(feature => capabilities.features.includes(feature))) throw new Error("invalid capabilities");
     state.standalone = true;
+    state.recordCorrections = capabilities.features.includes("recordCorrections");
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
   state.capabilitiesReady = true;
   $("legacy-manage").hidden = state.standalone; $("legacy-banner").hidden = state.standalone;
