@@ -95,7 +95,7 @@ class LiveUpdaterTests(unittest.TestCase):
 
     def test_active_commit_is_skipped_without_cloning_or_deployment(self):
         state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
-        state.mkdir()
+        state.mkdir(mode=0o700)
         (state / "active-main-sha").write_text(SHA + "\n", encoding="ascii")
         with mock.patch.object(updater, "github_main_sha", return_value=SHA), \
              mock.patch.object(updater, "checks_succeeded") as checks, \
@@ -112,7 +112,7 @@ class LiveUpdaterTests(unittest.TestCase):
 
     def test_active_marker_with_running_image_drift_passes_ci_gate_and_repairs(self):
         state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
-        state.mkdir()
+        state.mkdir(mode=0o700)
         (state / "active-main-sha").write_text(SHA + "\n", encoding="ascii")
         calls = []
 
@@ -188,7 +188,7 @@ class LiveUpdaterTests(unittest.TestCase):
 
     def test_schema_mismatch_fails_preflight_before_any_live_deployment(self):
         state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
-        state.mkdir()
+        state.mkdir(mode=0o700)
 
         def make_backup(image, volume, workdir, filename):
             path = Path(workdir) / filename
