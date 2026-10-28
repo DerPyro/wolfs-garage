@@ -8,9 +8,11 @@ from contextlib import closing, contextmanager
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
+import base64
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 from urllib.parse import urlsplit
 import uuid
@@ -69,6 +71,38 @@ def _day(value):
     if parsed.isoformat() != value:
         raise ValidationError("Date must be YYYY-MM-DD.")
     return value
+
+
+def _page_filters(from_date, to_date, limit, kind=None):
+    if from_date is not None:
+        from_date = _day(from_date)
+    if to_date is not None:
+        to_date = _day(to_date)
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise ValidationError("from must be on or before to.")
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValidationError("limit must be between 1 and 100.")
+    if kind is not None and (not isinstance(kind, str) or kind not in {"service", "repair"}):
+        raise ValidationError("Invalid record kind.")
+    return from_date, to_date, limit, kind
+
+
+def _encode_page_cursor(payload):
+    raw = _json(payload).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _decode_page_cursor(value):
+    if not isinstance(value, str) or not value or len(value) > 2048 or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValidationError("Invalid cursor.")
+    try:
+        raw = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+        payload = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValidationError("Invalid cursor.") from exc
+    if not isinstance(payload, dict):
+        raise ValidationError("Invalid cursor.")
+    return payload
 
 
 def _distance(value):
@@ -439,6 +473,100 @@ class Store:
             self._vehicle(db, vehicle_id)
             return [{"id": r["id"], "date": r["day"], "odometer": _number(r["value"]), "unit": r["unit"], "note": r["note"]}
                     for r in db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC", (vehicle_id,))]
+
+    @staticmethod
+    def _page_cursor(cursor, *, vehicle_id, resource, from_date, to_date, kind, limit, sequence):
+        if cursor is None:
+            return None
+        data = _decode_page_cursor(cursor)
+        keys = {"v", "vehicle", "resource", "from", "to", "kind", "limit", "day", "id", "sequence"}
+        if set(data) != keys:
+            raise ValidationError("Invalid cursor.")
+        if (type(data["v"]) is not int or data["v"] != 1
+                or type(data["vehicle"]) is not int or not 1 <= data["vehicle"] <= 9223372036854775807
+                or not isinstance(data["resource"], str)
+                or type(data["limit"]) is not int or not isinstance(data["day"], str)
+                or type(data["id"]) is not int or not 1 <= data["id"] <= 9223372036854775807
+                or type(data["sequence"]) is not int or not 0 <= data["sequence"] <= 9223372036854775807):
+            raise ValidationError("Invalid cursor.")
+        try:
+            _day(data["day"])
+            if data["from"] is not None:
+                _day(data["from"])
+            if data["to"] is not None:
+                _day(data["to"])
+        except ValidationError as exc:
+            raise ValidationError("Invalid cursor.") from exc
+        if data["kind"] is not None and (not isinstance(data["kind"], str)
+                                         or data["kind"] not in {"service", "repair"}):
+            raise ValidationError("Invalid cursor.")
+        expected = {"vehicle": vehicle_id, "resource": resource, "from": from_date,
+                    "to": to_date, "kind": kind, "limit": limit}
+        if any(data[key] != value for key, value in expected.items()):
+            raise ValidationError("Cursor does not match this query.")
+        if data["sequence"] != sequence:
+            raise Conflict("Vehicle history changed during pagination.")
+        return data
+
+    @staticmethod
+    def _page_query(db, vehicle_id, resource, from_date, to_date, limit, cursor, kind=None):
+        if type(vehicle_id) is not int or not 1 <= vehicle_id <= 9223372036854775807:
+            raise NotFound("Vehicle not found.")
+        from_date, to_date, limit, kind = _page_filters(from_date, to_date, limit, kind)
+        db.execute("BEGIN")
+        Store._vehicle(db, vehicle_id)
+        sequence = db.execute("SELECT COALESCE(MAX(sequence),0) FROM history WHERE vehicle_id=?", (vehicle_id,)).fetchone()[0]
+        previous = Store._page_cursor(cursor, vehicle_id=vehicle_id, resource=resource,
+                                      from_date=from_date, to_date=to_date, kind=kind,
+                                      limit=limit, sequence=sequence)
+        clauses, params = ["vehicle_id=?"], [vehicle_id]
+        if from_date is not None:
+            clauses.append("day>=?")
+            params.append(from_date)
+        if to_date is not None:
+            clauses.append("day<=?")
+            params.append(to_date)
+        if kind is not None:
+            clauses.append("kind=?")
+            params.append(kind)
+        if previous is not None:
+            clauses.append("(day<? OR (day=? AND id<?))")
+            params.extend((previous["day"], previous["day"], previous["id"]))
+        return clauses, params, previous, sequence, from_date, to_date, kind, limit
+
+    def page_records(self, vehicle_id, *, from_date=None, to_date=None, limit=25, cursor=None, kind=None):
+        with closing(self._connect()) as db:
+            clauses, params, _previous, sequence, from_date, to_date, kind, limit = self._page_query(
+                db, vehicle_id, "records", from_date, to_date, limit, cursor, kind)
+            rows = db.execute("SELECT * FROM records WHERE " + " AND ".join(clauses)
+                              + " ORDER BY day DESC,id DESC LIMIT ?", (*params, limit + 1)).fetchall()
+            has_more = len(rows) > limit
+            rows = rows[:limit]
+            next_cursor = None
+            if has_more:
+                last = rows[-1]
+                next_cursor = _encode_page_cursor({"v": 1, "vehicle": vehicle_id, "resource": "records",
+                    "from": from_date, "to": to_date, "kind": kind, "limit": limit,
+                    "day": last["day"], "id": last["id"], "sequence": sequence})
+            return {"records": [self._record(row) for row in rows], "nextCursor": next_cursor}
+
+    def page_odometer(self, vehicle_id, *, from_date=None, to_date=None, limit=25, cursor=None):
+        with closing(self._connect()) as db:
+            clauses, params, _previous, sequence, from_date, to_date, _kind, limit = self._page_query(
+                db, vehicle_id, "odometer", from_date, to_date, limit, cursor)
+            rows = db.execute("SELECT * FROM odometer_readings WHERE " + " AND ".join(clauses)
+                              + " ORDER BY day DESC,id DESC LIMIT ?", (*params, limit + 1)).fetchall()
+            has_more = len(rows) > limit
+            rows = rows[:limit]
+            next_cursor = None
+            if has_more:
+                last = rows[-1]
+                next_cursor = _encode_page_cursor({"v": 1, "vehicle": vehicle_id, "resource": "odometer",
+                    "from": from_date, "to": to_date, "kind": None, "limit": limit,
+                    "day": last["day"], "id": last["id"], "sequence": sequence})
+            return {"readings": [{"id": row["id"], "date": row["day"], "odometer": _number(row["value"]),
+                                  "unit": row["unit"], "note": row["note"]} for row in rows],
+                    "nextCursor": next_cursor}
 
     @staticmethod
     def _record(row):

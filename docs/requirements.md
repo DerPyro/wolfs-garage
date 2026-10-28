@@ -70,7 +70,7 @@ Status: Produktanforderungen mit entschiedener eigenständiger Entwicklung unter
 - REQ-052: Andere Betreiber können die Anwendung mit generischer Konfiguration und eigener Datenhaltung selbst installieren. Persönliche Fahrzeugdaten, Hostkonfiguration und Geheimnisse gehören nicht in die öffentliche Quelle oder Beispieldaten.
 - REQ-053: Der Kern funktioniert ohne verpflichtende Cloud-APIs. Cloudflare Access bleibt der gewünschte Eingang der Referenzinstallation; andere Betreiber können einen passenden authentifizierenden Reverse-Proxy einsetzen. Ein eigenes Mehrrollen- oder Mandantensystem wird dadurch nicht beauftragt.
 
-Der erste eigenständige Entwicklungsstand umfasst Fahrzeuge, unabhängige Fahrbereitschaft/offene Punkte, Kilometer, Service-/Reparaturbelege, Verlauf und Backup. Wiederkehrende Regeln, Belegkorrekturen, Anhänge, Teile, Telegram, Kalender und KI bleiben weitere Arbeitspakete; die bestehenden Anforderungen werden dadurch nicht gestrichen.
+Der erste eigenständige Entwicklungsstand umfasst Fahrzeuge, unabhängige Fahrbereitschaft/offene Punkte, Kilometer, Service-/Reparaturbelege, Verlauf und Backup. Die abgeschlossenen Vorgänge und Kilometerstände lassen sich inzwischen vollständig, gefiltert und seitenweise browsen. Bereits implementiert sind begrenzte Belegkorrekturen an Beschreibung, Art, Kosten, Währung und Dokumentreferenz mit Begründung und Vorher-/Nachher-Verlauf. Korrekturen von Belegdatum und Kilometerstand bleiben weitere Arbeitspakete; ebenso Anhänge, Teile, Telegram, Kalender und KI. Die bestehenden Anforderungen werden dadurch nicht gestrichen.
 
 ## Klarstellung zum Betriebsmodell vom 2026-10-27
 

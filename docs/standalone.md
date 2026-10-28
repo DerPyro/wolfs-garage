@@ -42,6 +42,8 @@ Document references are stored as URLs only; the app does not fetch or upload do
 
 Completed records support a bounded correction: description, service/repair kind, cost, currency and the optional HTTPS reference can be replaced with a required reason. Each correction keeps the previous values in history. Date, odometer value and unit, and issue closure are fixed in this correction flow; correcting those facts remains open work. Vehicle creation has no retry `commandId`: if a create request times out with an unknown result, inspect the vehicle list before submitting it again to avoid duplicates.
 
+Vehicle detail provides separate paginated views for completed records and odometer readings. Both support inclusive date filters; records can also be filtered by service or repair. Pages sort by date and stable ID descending. A continuation cursor is bound to its vehicle, resource, filters, limit and audit sequence. If that vehicle changes during paging, restart from the first page. These read routes do not alter application history or require a schema upgrade. The original unpaged API routes remain available for existing callers. See the [history browsing contract](planning/history-browsing.md).
+
 ## Explicit schema upgrade (standalone only)
 
 Fresh initialization creates schema version 2. Normal application reads accept schema 2; the backup command can read supported schema-1 and schema-2 databases. Existing schema-1 standalone databases are upgraded only by an explicit command. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.

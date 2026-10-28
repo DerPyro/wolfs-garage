@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, capabilitiesReady: false, entry: null };
+const state = { vehicles: [], selected: null, generation: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, capabilitiesReady: false, entry: null, logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -116,14 +116,14 @@ function renderRecords(target, items, kind) {
     row.append(left);
     if (kind === "reminders" && display(item.status)) { const label = el("span", "record-value", display(item.status)); if (item.status === "Überfällig") label.classList.add("overdue"); row.append(label); }
     if (kind === "services" && item.cost !== null && item.cost !== undefined && item.cost !== "") { const value = cost(item.cost, item.currency); if (value) row.append(el("span", "record-value", value)); }
-    if (kind === "services" && state.recordCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-edit", "Beleg korrigieren"); edit.type = "button"; edit.id = `record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id)); row.append(edit); }
+    if (kind === "services" && state.recordCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-edit"); edit.type = "button"; edit.textContent = "Beleg korrigieren"; edit.id = `record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id, edit.id)); row.append(edit); }
     container.append(row);
   }
 }
 async function selectVehicle(id) {
   if (state.entry && state.entry.busy) return;
   if (state.entry) closeEntry();
-  $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false");
+  $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); closeLogbook(false);
   state.selected = id; renderCards(); const vehicle = state.vehicles.find((v) => String(v.id) === id); if (!vehicle) return;
   closeConditionEditor(); renderCondition(vehicle.status);
   $("detail").hidden = false; $("detail-heading").textContent = vehicleName(vehicle); $("detail-meta").textContent = vehicleSubtitle(vehicle); $("detail-content").hidden = true; setStatus("detail-status", "Fahrzeugdaten werden geladen …");
@@ -161,7 +161,7 @@ function readonlyRecordFacts(record) {
   $("record-edit-readonly-odometer").textContent = `Stand: ${reading}`;
   $("record-edit-readonly-closed-issue").textContent = record.closedIssueId === null || record.closedIssueId === undefined || record.closedIssueId === "" ? "Kein Punkt wurde mit diesem Beleg abgeschlossen." : "Punktabschluss bei der Erfassung bleibt unverändert.";
 }
-async function openRecordCorrection(recordId) {
+async function openRecordCorrection(recordId, openerId = `record-edit-${String(recordId)}`) {
   if (!state.standalone || !state.recordCorrections || state.saving || state.entry && state.entry.busy) return;
   const vehicle = selectedVehicle(); if (!vehicle || recordId === null || recordId === undefined) return;
   if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { $("own-notice").textContent = "Zum Korrigieren benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
@@ -171,7 +171,7 @@ async function openRecordCorrection(recordId) {
   $("record-edit-readonly").hidden = false; $("record-edit-readonly-date").textContent = "Datum wird geladen …"; $("record-edit-readonly-odometer").textContent = "Stand wird geladen …";
   $("record-edit-readonly-closed-issue").textContent = "Abgeschlossener Punkt wird geladen …"; $("own-save").disabled = true; $("own-cancel").disabled = true;
   $("own-panel").hidden = false;
-  const entry = {mode:"record-edit", vehicleId:String(vehicle.id), recordId:String(recordId), opener:`record-edit-${String(recordId)}`, busy:true, commandId:globalThis.crypto.randomUUID()}; state.entry = entry;
+  const entry = {mode:"record-edit", vehicleId:String(vehicle.id), recordId:String(recordId), opener:openerId, fromLogbook:openerId.startsWith("log-record-edit-"), busy:true, commandId:globalThis.crypto.randomUUID()}; state.entry = entry;
   try {
     const record = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}`);
     if (state.entry !== entry || state.selected !== entry.vehicleId) return;
@@ -192,8 +192,8 @@ async function openRecordCorrection(recordId) {
 }
 function closeEntry(restoreFocus = false) {
   if (state.entry && state.entry.busy) return;
-  const opener = state.entry && state.entry.opener; state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true;
-  if (restoreFocus && opener) $(opener).focus();
+  const entry = state.entry; const opener = entry && $(entry.opener); state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true;
+  if (restoreFocus) { if (opener) opener.focus(); else if (entry && entry.fromLogbook) $("logbook-title").focus(); else $("record-add").focus(); }
 }
 function openEntry(mode) {
   if (!state.standalone || state.saving || state.entry && state.entry.busy) return;
@@ -283,9 +283,11 @@ async function saveEntry(event) {
       throw new Error(message);
     }
     const result = await response.json(); const id = entry.mode === "vehicle-new" ? (result.vehicle || result).id : entry.vehicleId;
-    entry.busy = false; closeEntry(); await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : "Gespeichert.";
+    entry.busy = false; closeEntry(); if (entry.mode === "record-edit" && entry.fromLogbook) { state.logbook.filter = readLogbookFilter(); state.logbook.records = []; state.logbook.cursor = null; }
+    await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : "Gespeichert.";
     if (entry.mode === "record-edit") await showHistory(true);
-    if (entry.mode === "record-edit") { const button = document.getElementById(`record-edit-${entry.recordId}`); if (button) button.focus(); }
+    if (entry.mode === "record-edit" && entry.fromLogbook) { await openLogbook(true); const button = document.getElementById(`log-record-edit-${entry.recordId}`); if (button) button.focus(); else $("logbook-title").focus(); }
+    else if (entry.mode === "record-edit") { const button = document.getElementById(entry.opener); if (button) button.focus(); }
   } catch (error) {
     if (error instanceof TypeError && entry.mode === "vehicle-new") { entry.uncertain = true; $("own-cancel").textContent = "Schließen und prüfen"; }
     $("own-message").textContent = error instanceof TypeError ? "Die Antwort konnte nicht empfangen werden. Prüfe den Verlauf, bevor du eine neue Erfassung startest. Bei Stand und Arbeit kannst du dieselben Angaben mit Speichern erneut senden." : error.message;
@@ -333,6 +335,98 @@ async function showHistory(force = false) {
     $("history-message").textContent = result.events.length ? "" : "Noch keine Änderungen erfasst.";
   } catch (_) { if (state.selected === id) $("history-message").textContent = "Der Verlauf konnte nicht geladen werden. Bitte versuche es erneut."; }
 }
+function readLogbookFilter() {
+  return {type:$("logbook-type").value === "odometer" ? "odometer" : "records", from:$("logbook-from").value, to:$("logbook-to").value, kind:$("logbook-kind").value};
+}
+function closeLogbook(reset = true) {
+  state.logbook.open = false; state.logbook.busy = false; state.logbook.needsReload = false; state.logbook.generation++;
+  $("logbook-panel").hidden = true; $("logbook-toggle").setAttribute("aria-expanded", "false");
+  if (reset) { state.logbook.cursor = null; state.logbook.records = []; }
+}
+function logbookDistance(value, unit) {
+  const n = number(value); if (n === "") return "";
+  const u = display(unit); return u ? `${n} ${u}` : `Stand ${n} (Einheit unbekannt)`;
+}
+function renderLogbookRows(type, rows) {
+  const container = $("logbook-records"); container.replaceChildren();
+  for (const item of rows) {
+    const row = el("div", "logbook-row"); const main = el("div", "logbook-row-main");
+    if (type === "odometer") {
+      const value = item.odometer === null || item.odometer === undefined || item.odometer === "" ? "Kilometerstand nicht erfasst" : logbookDistance(item.odometer, item.unit);
+      main.append(el("div", "logbook-row-title", value || "Kilometerstand nicht erfasst"));
+      main.append(el("p", "logbook-row-meta", readableDate(item.date) || "Datum nicht verfügbar"));
+      if (display(item.note)) main.append(el("p", "logbook-row-note", display(item.note)));
+      row.append(main);
+    } else {
+      const title = display(item.description) || "Arbeit ohne Beschreibung";
+      main.append(el("div", "logbook-row-title", title));
+      const facts = [readableDate(item.date), logbookDistance(item.odometer, item.odometerUnit), cost(item.cost, item.currency)].filter(Boolean);
+      main.append(el("p", "logbook-row-meta", facts.join(" · ") || "Keine weiteren Angaben"));
+      if (item.documentUrl) { try { const url = new URL(item.documentUrl); if (url.protocol === "https:" && !url.username && !url.password) { const link = el("a", "record-document", "Beleg öffnen"); link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer"; main.append(link); } } catch (_) { /* Invalid document URLs remain hidden. */ } }
+      if (state.recordCorrections && item.id !== null && item.id !== undefined) {
+        const edit = el("button", "condition-edit record-edit", "Beleg korrigieren"); edit.type = "button"; edit.id = `log-record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id, edit.id)); row.append(main, edit);
+      } else row.append(main);
+    }
+    const kind = type === "records" ? item.kind === "repair" ? "Reparatur" : item.kind === "service" ? "Wartung" : display(item.kind) : "Kilometerstand";
+    if (kind) row.append(el("span", "logbook-kind", kind));
+    container.append(row);
+  }
+}
+async function loadLogbookPage(append, generation) {
+  const logbook = state.logbook; if (logbook.busy || !logbook.open || logbook.needsReload) return;
+  const vehicleId = state.selected; const selectionGeneration = state.generation; const filter = logbook.filter;
+  if (!vehicleId || !filter) return;
+  logbook.busy = true; $("logbook-apply").disabled = true; $("logbook-more").disabled = true;
+  if (!append) { $("logbook-records").replaceChildren(); setStatus("logbook-message", "Logbuch wird geladen …"); }
+  else setStatus("logbook-message", "Weitere Einträge werden geladen …");
+  const params = ["limit=25"];
+  if (filter.from) params.push(`from=${encodeURIComponent(filter.from)}`);
+  if (filter.to) params.push(`to=${encodeURIComponent(filter.to)}`);
+  if (filter.type === "records" && filter.kind) params.push(`kind=${encodeURIComponent(filter.kind)}`);
+  if (append && logbook.cursor) params.push(`cursor=${encodeURIComponent(logbook.cursor)}`);
+  const path = `/garage-api/vehicles/${encodeURIComponent(vehicleId)}/${filter.type}/page?${params.join("&")}`;
+  try {
+    const result = await getJson(path);
+    if (!logbook.open || generation !== logbook.generation || state.selected !== vehicleId || state.generation !== selectionGeneration) return;
+    const rows = filter.type === "records" ? result.records : result.readings;
+    if (!Array.isArray(rows) || !(result.nextCursor === null || typeof result.nextCursor === "string")) throw new Error("invalid page");
+    logbook.records = append ? logbook.records.concat(rows) : rows.slice(); logbook.cursor = result.nextCursor;
+    renderLogbookRows(filter.type, logbook.records);
+    setStatus("logbook-message", logbook.records.length ? "" : filter.type === "records" ? "Keine erledigten Arbeiten für diese Filter." : "Keine Kilometerstände für diese Filter.");
+    $("logbook-more").hidden = !logbook.cursor; $("logbook-more").disabled = !logbook.cursor;
+  } catch (error) {
+    if (!logbook.open || generation !== logbook.generation || state.selected !== vehicleId || state.generation !== selectionGeneration) return;
+    if (append && error.status === 409) {
+      logbook.cursor = null; logbook.needsReload = true; $("logbook-more").hidden = true;
+      setStatus("logbook-message", "Das Fahrzeug wurde seit der letzten Seite geändert. Lade den Verlauf neu, um fortzufahren.", true); $("logbook-reload").hidden = false;
+    } else {
+      setStatus("logbook-message", append ? "Weitere Einträge konnten nicht geladen werden. Du kannst es erneut versuchen." : "Das Logbuch konnte nicht geladen werden. Filter erneut anwenden, um es erneut zu versuchen.", true);
+      $("logbook-more").hidden = !logbook.cursor;
+    }
+  } finally {
+    if (generation === logbook.generation) { logbook.busy = false; $("logbook-apply").disabled = false; $("logbook-more").disabled = !logbook.cursor || logbook.needsReload; }
+  }
+}
+async function openLogbook(force = false) {
+  if (!state.standalone || !state.historyBrowsing || !state.selected) return;
+  if (state.logbook.open && !force) { closeLogbook(); return; }
+  state.logbook.open = true; state.logbook.busy = false; state.logbook.needsReload = false;
+  const generation = ++state.logbook.generation;
+  $("logbook-panel").hidden = false; $("logbook-toggle").setAttribute("aria-expanded", "true");
+  if (!state.logbook.filter || force) state.logbook.filter = readLogbookFilter();
+  $("logbook-type").value = state.logbook.filter.type; $("logbook-from").value = state.logbook.filter.from; $("logbook-to").value = state.logbook.filter.to; $("logbook-kind").value = state.logbook.filter.kind || "";
+  $("logbook-kind-field").hidden = state.logbook.filter.type !== "records";
+  state.logbook.cursor = null; state.logbook.records = []; $("logbook-more").hidden = true; $("logbook-reload").hidden = true;
+  await loadLogbookPage(false, generation);
+}
+async function applyLogbookFilters(event) {
+  event.preventDefault(); if (!state.logbook.open || state.logbook.busy) return;
+  const filter = readLogbookFilter();
+  if (filter.from && filter.to && filter.from > filter.to) { setStatus("logbook-message", "Das Von-Datum muss vor dem Bis-Datum liegen.", true); $("logbook-from").focus(); return; }
+  state.logbook.filter = filter; state.logbook.cursor = null; state.logbook.records = []; state.logbook.needsReload = false;
+  $("logbook-more").hidden = true; $("logbook-reload").hidden = true;
+  const generation = ++state.logbook.generation; await loadLogbookPage(false, generation);
+}
 async function initialize() {
   try {
     const capabilities = await getJson("/garage-api/capabilities");
@@ -340,10 +434,12 @@ async function initialize() {
     if (capabilities.backend !== "standalone" || !Array.isArray(capabilities.features) || !required.every(feature => capabilities.features.includes(feature))) throw new Error("invalid capabilities");
     state.standalone = true;
     state.recordCorrections = capabilities.features.includes("recordCorrections");
+    state.historyBrowsing = capabilities.features.includes("historyBrowsing");
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
   state.capabilitiesReady = true;
   $("legacy-manage").hidden = state.standalone; $("legacy-banner").hidden = state.standalone;
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
+  $("logbook-toggle").hidden = !state.historyBrowsing;
   $("reminders-panel").hidden = state.standalone; $("detail-content").classList.toggle("standalone-detail", state.standalone);
   await load();
 }
@@ -352,6 +448,12 @@ $("vehicle-edit").addEventListener("click", () => openEntry("vehicle-edit"));
 $("odometer-add").addEventListener("click", () => openEntry("odometer"));
 $("record-add").addEventListener("click", () => openEntry("record"));
 $("history-toggle").addEventListener("click", showHistory);
+$("logbook-toggle").addEventListener("click", () => openLogbook());
+$("logbook-close").addEventListener("click", () => closeLogbook());
+$("logbook-filters").addEventListener("submit", applyLogbookFilters);
+$("logbook-type").addEventListener("change", () => { $("logbook-kind-field").hidden = $("logbook-type").value !== "records"; });
+$("logbook-more").addEventListener("click", () => loadLogbookPage(true, state.logbook.generation));
+$("logbook-reload").addEventListener("click", () => openLogbook(true));
 $("own-cancel").addEventListener("click", () => closeEntry(true));
 $("own-form").addEventListener("submit", saveEntry);
 initialize();

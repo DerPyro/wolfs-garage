@@ -16,12 +16,12 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
   for (const id of ['own-panel', 'history-panel', 'condition-form']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const document = { getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
   await new Promise(resolve => setTimeout(resolve, 25));
   return nodes;
 }
@@ -227,5 +227,80 @@ async function run(fetchMock, {standalone = false, recordCorrections = false} = 
   assert.match(nodes['history-events'].textContent,/49,9 EUR|49,90 EUR/);
   assert.match(nodes.services.textContent,/Ölwechsel und Filter/);
 
-  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Retry-ID, Belegkorrektur und Verlauf bestanden.');
+  // The optional full logbook keeps filters across pages and leaves the separate audit panel intact.
+  const pageCalls=[]; let moreFailures=0; let reloads=0;
+  nodes=await run(async path=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[{id:3,name:'Logbuch-Test',status:{readiness:'ready',issues:[],revision:0}}]})};
+    if(path==='/garage-api/vehicles/3/summary') return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[],revision:0}},reminders:[],services:[{id:4,date:'2026-10-20',description:'Kurzbeleg',kind:'service'}]})};
+    if(/^\/garage-api\/vehicles\/3\/records\/[46]$/.test(path)) { const id=Number(path.split('/').pop()); return {ok:true,json:async()=>({id,description:'Ölwechsel',kind:'service',date:'2026-10-20',odometer:12000,odometerUnit:'km',revision:1})}; }
+    if(path.includes('/records/page?')) {
+      pageCalls.push(path);
+      if(path.includes('cursor=c1') && moreFailures++===0) return {ok:false,status:502};
+      if(path.includes('cursor=c1')) return {ok:true,json:async()=>({records:[{id:5,date:'2026-09-10',description:'<img src=x onerror=alert(1)>',kind:'repair',odometer:0,odometerUnit:'km',cost:null,currency:null,note:'Record 5'}],nextCursor:'c2'})};
+      if(path.includes('cursor=c2')) return {ok:false,status:409};
+      return path.includes('kind=repair') ? {ok:true,json:async()=>({records:[{id:6,date:'2026-10-15',description:'Bremsen',kind:'repair'}],nextCursor:null})} : {ok:true,json:async()=>({records:[{id:4,date:'2026-10-20',description:'Ölwechsel',kind:'service',odometer:12000,odometerUnit:'km',cost:'20.00',currency:'EUR'}],nextCursor:'c1'})};
+    }
+    if(path.includes('/odometer/page?')) { pageCalls.push(path); return {ok:true,json:async()=>({readings:[{id:8,date:'2026-10-01',odometer:15000,unit:'km',note:'Record 4'}],nextCursor:null})}; }
+    throw new Error('Unexpected logbook request: '+path);
+  },{standalone:true,recordCorrections:true,historyBrowsing:true});
+  assert.equal(nodes['logbook-toggle'].hidden,false);
+  nodes['logbook-toggle'].listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(nodes['logbook-panel'].hidden,false);
+  assert.match(pageCalls[0],/\/records\/page\?limit=25/);
+  assert.equal(nodes['logbook-records'].querySelectorAll('button').find(button=>button.id==='log-record-edit-4').tagName,'button');
+  assert.ok(nodes.services.querySelectorAll('button').find(button=>button.id==='record-edit-4'));
+  nodes['logbook-more'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(nodes['logbook-records'].children.length,1);
+  assert.match(nodes['logbook-message'].textContent,/konnten nicht geladen werden/);
+  assert.equal(nodes['logbook-more'].hidden,false);
+  nodes['logbook-more'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(nodes['logbook-records'].children.length,2);
+  assert.match(nodes['logbook-records'].textContent,/<img src=x onerror=alert\(1\)>/);
+  assert.equal(nodes['logbook-records'].querySelectorAll('img').length,0);
+  assert.match(pageCalls[2],/cursor=c1/);
+  nodes['logbook-more'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(nodes['logbook-message'].textContent,/seit der letzten Seite geändert/);
+  assert.equal(nodes['logbook-more'].hidden,true); assert.equal(nodes['logbook-reload'].hidden,false);
+  assert.equal(nodes['logbook-records'].children.length,2);
+  nodes['logbook-reload'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(nodes['logbook-records'].children.length,1);
+  nodes['logbook-type'].value='records'; nodes['logbook-kind'].value='repair'; nodes['logbook-from'].value='2026-01-01'; nodes['logbook-to'].value='2026-12-31';
+  await nodes['logbook-filters'].listeners.submit({preventDefault(){}});
+  assert.match(pageCalls.at(-1),/\/records\/page\?limit=25&from=2026-01-01&to=2026-12-31&kind=repair/);
+  const oldLogEdit=nodes['logbook-records'].querySelectorAll('button').find(button=>button.id==='log-record-edit-4');
+  assert.equal(oldLogEdit,undefined);
+  const correctionFromLog=nodes['logbook-records'].querySelectorAll('button').find(button=>button.id==='log-record-edit-6');
+  await correctionFromLog.listeners.click();
+  assert.equal(nodes['own-panel'].hidden,false);
+  nodes['own-cancel'].listeners.click();
+  assert.equal(nodes['own-panel'].hidden,true);
+  nodes['logbook-type'].value='odometer'; nodes['logbook-type'].listeners.change();
+  assert.equal(nodes['logbook-kind-field'].hidden,true);
+  nodes['logbook-from'].value='2026-01-01'; nodes['logbook-to'].value='2026-12-31';
+  await nodes['logbook-filters'].listeners.submit({preventDefault(){}});
+  assert.match(pageCalls.at(-1),/\/odometer\/page\?limit=25&from=2026-01-01&to=2026-12-31/);
+  assert.match(nodes['logbook-records'].textContent,/Record 4/);
+  nodes['logbook-close'].listeners.click(); assert.equal(nodes['logbook-panel'].hidden,true);
+  nodes=await run(async path=>path==='/garage-api/vehicles' ? {ok:true,json:async()=>({vehicles:[{id:1,name:'Legacy',status:{readiness:'unknown',issues:[],revision:0}}]})} : {ok:true,json:async()=>path.endsWith('/summary')?{vehicle:{status:{readiness:'unknown',issues:[],revision:0}},reminders:[],services:[]}:{vehicles:[]}});
+  assert.equal(nodes['logbook-toggle'].hidden,true);
+
+  // A response from a closed logbook cannot overwrite a newer reopen request.
+  let releaseStale; let startedStale; const staleStarted=new Promise(resolve=>{startedStale=resolve;}); let racePage=0;
+  nodes=await run(async path=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[{id:1,name:'Race-Test',status:{readiness:'ready',issues:[],revision:0}}]})};
+    if(path.endsWith('/summary')) return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[],revision:0}},reminders:[],services:[]})};
+    if(path.includes('/records/page?') && racePage++===0) return new Promise(resolve=>{releaseStale=resolve; startedStale();});
+    if(path.includes('/records/page?')) return {ok:true,json:async()=>({records:[{id:2,date:'2026-10-27',description:'Neues Ergebnis',kind:'service'}],nextCursor:null})};
+    throw new Error('Unexpected race request: '+path);
+  },{standalone:true,historyBrowsing:true});
+  nodes['logbook-toggle'].listeners.click(); await staleStarted;
+  nodes['logbook-close'].listeners.click(); nodes['logbook-toggle'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(nodes['logbook-records'].textContent,/Neues Ergebnis/);
+  releaseStale({ok:true,json:async()=>({records:[{id:1,date:'2026-10-26',description:'Veraltetes Ergebnis',kind:'repair'}],nextCursor:null})});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(nodes['logbook-records'].textContent,/Neues Ergebnis/);
+  assert.doesNotMatch(nodes['logbook-records'].textContent,/Veraltetes Ergebnis/);
+
+  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Retry-ID, Belegkorrektur, Verlauf und Logbuchpagination bestanden.');
 })().catch(err => { console.error(err); process.exitCode = 1; });
