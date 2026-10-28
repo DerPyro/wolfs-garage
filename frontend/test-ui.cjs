@@ -16,12 +16,12 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel'].map(id => [id, new Element()]));
   for (const id of ['own-panel', 'history-panel', 'condition-form']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const document = { getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history']})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console});
   await new Promise(resolve => setTimeout(resolve, 25));
   return nodes;
 }
@@ -168,7 +168,64 @@ async function run(fetchMock, {standalone = false} = {}) {
   const completion=ownWrites[4].body; assert.equal(completion.statusRevision,1); assert.equal(completion.cost,'49.90'); assert.equal(completion.currency,'EUR'); assert.equal(completion.closeIssueId,'cccccccccccccccccccccccccccccccc');
   assert.equal(indicators(nodes.vehicles.children[0]).children[0].textContent,'INOP'); assert.equal(indicators(nodes.vehicles.children[0]).children.length,1);
   assert.match(nodes.services.textContent,/Prüfung abgeschlossen/); assert.match(nodes.services.textContent,/Beleg öffnen/);
+  assert.equal(nodes.services.querySelectorAll('button').some(button=>button.className==='condition-edit record-edit'),false);
   await nodes['history-toggle'].listeners.click();
   assert.equal(nodes['history-panel'].hidden,false); assert.match(nodes['history-events'].textContent,/Zustand aktualisiert/); assert.match(nodes['history-events'].textContent,/Nicht fahrbereit/); assert.match(nodes['history-events'].textContent,/Prüfung durchführen/);
-  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Retry-ID, expliziter Abschluss und Verlauf bestanden.');
+  // Record correction loads the canonical record first, sends only mutable fields and records removals in history.
+  const correctionCalls=[];
+  const closedIssueId='cccccccccccccccccccccccccccccccc';
+  const originalRecord={id:77,description:'Ölwechsel',kind:'service',date:'2026-10-20',odometer:12000,odometerUnit:'km',cost:'49.90',currency:'EUR',documentUrl:'https://example.invalid/rechnung',closedIssueId,revision:4};
+  let correctedRecord;
+  nodes=await run(async (path,options={})=>{
+    correctionCalls.push({path,options});
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[{id:1,name:'Testfahrzeug',status:{readiness:'ready',issues:[],revision:2}}]})};
+    if(path==='/garage-api/vehicles/1/summary') return {ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[],revision:2}},reminders:[],services:[correctedRecord||originalRecord]})};
+    if(path==='/garage-api/vehicles/1/records/77' && !options.method) return {ok:true,json:async()=>originalRecord};
+    if(path==='/garage-api/vehicles/1/records/77' && options.method==='PUT') {
+      correctedRecord={...originalRecord,...JSON.parse(options.body),revision:5}; return {ok:true,json:async()=>({record:correctedRecord})};
+    }
+    if(path==='/garage-api/vehicles/1/history') return {ok:true,json:async()=>({events:[{action:'record.corrected',occurredAt:'2026-10-28T12:00:00Z',before:{record:originalRecord},after:{record:correctedRecord,correctionReason:'Rechnung war doppelt'}}]})};
+    throw new Error('Unexpected mock request: '+path);
+  },{standalone:true,recordCorrections:true});
+  const correctionButton=nodes.services.querySelectorAll('button').find(button=>button.id==='record-edit-77');
+  assert.ok(correctionButton,'recordCorrections capability exposes the per-record editor');
+  await correctionButton.listeners.click();
+  assert.deepEqual(correctionCalls.filter(call=>!call.options.method).map(call=>call.path).filter(path=>path.endsWith('/records/77')),['/garage-api/vehicles/1/records/77']);
+  assert.equal(nodes['record-edit-readonly'].hidden,false);
+  assert.match(nodes['record-edit-readonly-date'].textContent,/20\.10\.2026/);
+  assert.match(nodes['record-edit-readonly-odometer'].textContent,/12\.000 km/);
+  assert.match(nodes['record-edit-readonly-closed-issue'].textContent,/Punktabschluss.*unverändert/);
+  assert.doesNotMatch(nodes['record-edit-readonly-closed-issue'].textContent,/cccccccc/);
+  const correctionInput=name=>nodes['own-fields'].querySelectorAll('input').concat(nodes['own-fields'].querySelectorAll('select')).find(field=>field.id==='entry-'+name);
+  assert.equal(correctionInput('description').value,'Ölwechsel');
+  assert.equal(correctionInput('kind').value,'service');
+  correctionInput('description').value='Ölwechsel und Filter';
+  correctionInput('kind').value='repair';
+  correctionInput('cost').value='';
+  correctionInput('currency').value='';
+  correctionInput('documentUrl').value='';
+  correctionInput('correctionReason').value='Rechnung war doppelt';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  const correctionWrite=correctionCalls.find(call=>call.options.method==='PUT');
+  assert.equal(correctionWrite.path,'/garage-api/vehicles/1/records/77');
+  assert.equal(correctionWrite.options.headers['X-Garage-Request'],'1');
+  const correctionPayload=JSON.parse(correctionWrite.options.body);
+  assert.deepEqual(Object.keys(correctionPayload).sort(),['commandId','correctionReason','cost','currency','description','documentUrl','kind','revision'].sort());
+  assert.equal(correctionPayload.revision,4);
+  assert.match(correctionPayload.commandId,/^[0-9a-f-]{36}$/);
+  assert.equal(correctionPayload.cost,null); assert.equal(correctionPayload.currency,null); assert.equal(correctionPayload.documentUrl,null);
+  assert.equal(correctionPayload.description,'Ölwechsel und Filter'); assert.equal(correctionPayload.kind,'repair');
+  assert.equal(correctionPayload.correctionReason,'Rechnung war doppelt');
+  assert.equal(nodes['record-edit-readonly'].hidden,true);
+  assert.equal(nodes['history-panel'].hidden,false);
+  assert.match(nodes['history-events'].textContent,/Beleg korrigiert/);
+  assert.match(nodes['history-events'].textContent,/Kosten entfernt/);
+  assert.match(nodes['history-events'].textContent,/Beleglink entfernt/);
+  assert.match(nodes['history-events'].textContent,/Rechnung war doppelt/);
+  assert.match(nodes['history-events'].textContent,/Offener Punkt bei der Erfassung abgeschlossen/);
+  assert.doesNotMatch(nodes['history-events'].textContent,/cccccccccccccccccccccccccccccccc/);
+  assert.match(nodes['history-events'].textContent,/49,9 EUR|49,90 EUR/);
+  assert.match(nodes.services.textContent,/Ölwechsel und Filter/);
+
+  console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Retry-ID, Belegkorrektur und Verlauf bestanden.');
 })().catch(err => { console.error(err); process.exitCode = 1; });
