@@ -44,6 +44,11 @@
       <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button></div>
       <p id="own-notice" class="own-notice" role="status" aria-live="polite"></p>
       <div id="vehicles" class="vehicle-grid" aria-label="Fahrzeuge"></div>
+      <section id="work-dashboard" class="work-dashboard" aria-labelledby="work-title" hidden>
+        <div class="work-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> OFFENE ARBEITEN</p><h2 id="work-title">Fälligkeiten</h2></div></div>
+        <p id="work-status" class="status" role="status" aria-live="polite"></p>
+        <div id="work-items" class="work-items"></div>
+      </section>
     </section>
     <section id="own-panel" class="own-panel" aria-labelledby="own-title" hidden>
       <h2 id="own-title" tabindex="-1"></h2>
@@ -55,7 +60,7 @@
       <div id="own-detail-actions" class="own-toolbar" hidden><button id="vehicle-edit" class="condition-edit" type="button">Fahrzeug bearbeiten</button><button id="odometer-add" class="condition-edit" type="button">Stand erfassen</button><button id="record-add" class="condition-edit" type="button">Arbeit dokumentieren</button><button id="history-toggle" class="condition-edit" type="button" aria-controls="history-panel" aria-expanded="false">Verlauf anzeigen</button><button id="logbook-toggle" class="condition-edit" type="button" aria-controls="logbook-panel" aria-expanded="false" hidden>Logbuch anzeigen</button></div>
       <article id="condition-panel" class="condition-panel" aria-labelledby="condition-title">
         <div class="condition-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> AKTUELLER ZUSTAND</p><h3 id="condition-title">Fahrbereitschaft &amp; offene Punkte</h3></div><button id="condition-edit" class="condition-edit" type="button" aria-controls="condition-form" aria-expanded="false">Bearbeiten</button></div>
-        <div id="condition-view"><div id="condition-readiness"></div><div id="condition-issues" class="condition-issues"></div></div>
+        <div id="condition-view"><div id="condition-readiness"></div><p id="condition-work-asof" class="condition-work-asof" role="status" aria-live="polite" hidden></p><div id="issue-filter-wrap" class="issue-filter-wrap" hidden><label for="issue-filter">Punkte filtern</label><select id="issue-filter"><option value="all">Alle</option><option value="overdue">Überfällig</option><option value="today">Heute</option><option value="critical">Kritisch</option><option value="observed">Beobachtet</option></select></div><div id="condition-issues" class="condition-issues"></div></div>
         <form id="condition-form" class="condition-form" hidden>
           <label for="readiness-input">Fahrbereitschaft</label>
           <select id="readiness-input" name="readiness"><option value="unknown">Nicht erfasst</option><option value="ready">Fahrbereit</option><option value="not_ready">Nicht fahrbereit</option></select>

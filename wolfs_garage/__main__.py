@@ -29,10 +29,10 @@ def main():
                 parser.error("upgrade-db requires a new backup destination filename")
             print("Explicit schema upgrade requested. Stop the application first and test recovery on a separate database copy.")
             if store.upgrade(args.destination):
-                print("Schema 1 upgraded to schema 2 after a checked backup was created.")
+                print("Database upgraded to schema 3 after a checked backup was created.")
                 print("Keep the backup until the upgraded database has been verified.")
             else:
-                print("Database is already schema 2; no upgrade or backup file was written.")
+                print("Database is already schema 3; no upgrade or backup file was written.")
         else:
             vehicles = store.list_vehicles()
             print(f"Garage database readable; vehicles: {len(vehicles)}.")

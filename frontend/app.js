@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, capabilitiesReady: false, entry: null, logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, issueRowCounter: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -34,17 +34,39 @@ function cost(value, currency) { const n = number(value); if (!n) return ""; con
 function setStatus(id, message, error = false) { const node = $(id); node.textContent = message; node.classList.toggle("error", error); }
 async function getJson(url) { const response = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; } return response.json(); }
 const readinessLabels = { ready: "Fahrbereit", not_ready: "Nicht fahrbereit", unknown: "Status nicht erfasst" };
+const severityLabels = {observation:"Auffälligkeit", repair:"Reparaturbedürftig", critical:"Kritisch"};
+const lifecycleLabels = {open:"Offen", observed:"Beobachten"};
+const dueStateLabels = {overdue:"Überfällig", today:"Heute fällig", upcoming:"Noch nicht fällig", unscheduled:"Ohne Fälligkeitsdatum"};
+function validIsoDate(value) { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value; }
+function validWorkItem(item) { return item && (typeof item.vehicleId === "number" || typeof item.vehicleId === "string") && item.id !== null && item.id !== undefined && typeof item.text === "string" && (item.dueDate === null || validIsoDate(item.dueDate)) && (item.severity === null || Object.hasOwn(severityLabels, item.severity)) && Object.hasOwn(lifecycleLabels, item.lifecycle) && Object.hasOwn(dueStateLabels, item.dueState); }
 function validCondition(condition) { return condition && Object.hasOwn(readinessLabels, condition.readiness) && Array.isArray(condition.issues) && Number.isInteger(condition.revision) && condition.revision >= 0; }
 function conditionBadge(condition) { const known = validCondition(condition); const badge = el("span", `readiness-badge ${known ? condition.readiness : "unavailable"}`, known ? readinessLabels[condition.readiness] : "Status nicht verfügbar"); const dot = el("span", "readiness-dot"); dot.setAttribute("aria-hidden", "true"); badge.prepend(dot); return badge; }
 function conditionIssueText(condition) { return validCondition(condition) ? condition.issues.filter(item => item && display(item.text)).map(item => display(item.text)) : []; }
+function conditionIssueItems(condition) { return validCondition(condition) ? condition.issues.filter(item => item && display(item.text)) : []; }
+function normalizedIssueField(issue, key) { if (key === "lifecycle") return issue.lifecycle || "open"; return issue[key] || null; }
+function workItemMatchesIssue(item, vehicleId, issue) {
+  if (!item || String(item.vehicleId) !== String(vehicleId) || String(item.id) !== String(issue.id) || display(item.text) !== display(issue.text)) return false;
+  return ["dueDate", "severity", "lifecycle"].every(key => normalizedIssueField(item, key) === normalizedIssueField(issue, key));
+}
+function currentWorkProjection(vehicleId, issue) {
+  if (!state.scheduledWork || state.work.status !== "ready" || !Array.isArray(state.work.items)) return null;
+  const projection = state.work.items.find(item => String(item.vehicleId) === String(vehicleId) && String(item.id) === String(issue.id));
+  return projection && workItemMatchesIssue(projection, vehicleId, issue) ? projection : null;
+}
+function issueSeverityText(issue) { return issue.severity ? severityLabels[issue.severity] || display(issue.severity) : "Nicht eingestuft"; }
+function issueLifecycleText(issue) { return lifecycleLabels[issue.lifecycle || "open"] || display(issue.lifecycle); }
+function issueReason(issue, vehicleId) {
+  const projection = currentWorkProjection(vehicleId, issue);
+  return [issue.severity === "critical" ? "Kritisch" : "", projection && dueStateLabels[projection.dueState] || "", issue.dueDate ? `fällig ${readableDate(issue.dueDate)}` : ""].filter(Boolean).join(", ");
+}
 // These indicators share the existing header row; the detailed state remains in the accessible card name and detail panel.
-function cardIndicators(condition, issues) {
+function cardIndicators(condition, issues, vehicleId) {
   const group = el("span", "card-indicators"); group.setAttribute("aria-hidden", "true");
   const readiness = validCondition(condition) ? condition.readiness : "unavailable";
   const symbols = {not_ready: "INOP", unknown: "?", unavailable: "!"};
   const label = validCondition(condition) ? readinessLabels[readiness] : "Status nicht verfügbar";
   if (symbols[readiness]) { const indicator = el("span", `card-readiness ${readiness}`, symbols[readiness]); indicator.setAttribute("title", label); group.append(indicator); }
-  if (validCondition(condition) && issues.length) { const warning = el("span", "card-work"); warning.setAttribute("title", "Wartung ausstehend"); warning.append(icon("tool")); group.append(warning); }
+  if (validCondition(condition) && issues.length) { const warning = el("span", "card-work"); const reasons = issues.slice(0, 2).map(issue => `${display(issue.text)}${issueReason(issue, vehicleId) ? ` (${issueReason(issue, vehicleId)})` : ""}`); warning.setAttribute("title", state.scheduledWork && reasons.length ? `Offene Arbeit: ${reasons.join("; ")}` : "Wartung ausstehend"); warning.append(icon("tool")); group.append(warning); }
   return group;
 }
 
@@ -52,8 +74,8 @@ function renderCards() {
   const container = $("vehicles"); container.replaceChildren();
   for (const vehicle of state.vehicles) {
     const id = String(vehicle.id); const button = el("button", "vehicle-card"); button.type = "button"; button.setAttribute("aria-pressed", String(state.selected === id));
-    const type = display(vehicle.vehicleType); const condition = vehicle.status; const issues = conditionIssueText(condition); const accessible = [vehicleName(vehicle), type && `Fahrzeugtyp ${type}`, display(vehicle.licensePlate) && `Kennzeichen ${display(vehicle.licensePlate)}`, display(vehicle.year), validCondition(condition) ? readinessLabels[condition.readiness] : "Status nicht verfügbar", ...issues.map(value => `Offen: ${value}`)].filter(Boolean).join(", "); button.setAttribute("aria-label", accessible);
-    const top = el("div", "card-top"); const badge = el("span", "car-icon"); badge.append(icon(vehicleIcon(vehicle.vehicleType))); const arrow = el("span", "card-arrow"); arrow.append(icon("arrow")); top.append(badge, cardIndicators(condition, issues));
+    const type = display(vehicle.vehicleType); const condition = vehicle.status; const issues = conditionIssueItems(condition); const accessible = [vehicleName(vehicle), type && `Fahrzeugtyp ${type}`, display(vehicle.licensePlate) && `Kennzeichen ${display(vehicle.licensePlate)}`, display(vehicle.year), validCondition(condition) ? readinessLabels[condition.readiness] : "Status nicht verfügbar", ...issues.map(item => `Offen: ${display(item.text)}${state.scheduledWork && issueReason(item, id) ? `, ${issueReason(item, id)}` : ""}`)].filter(Boolean).join(", "); button.setAttribute("aria-label", accessible);
+    const top = el("div", "card-top"); const badge = el("span", "car-icon"); badge.append(icon(vehicleIcon(vehicle.vehicleType))); const arrow = el("span", "card-arrow"); arrow.append(icon("arrow")); top.append(badge, cardIndicators(condition, issues, id));
     const make = manufacturerMark(vehicle.make); top.append(arrow);
     const name = el("h3", "", vehicleName(vehicle)); const meta = el("div", "vehicle-meta");
     const plate = display(vehicle.licensePlate); if (plate) { const label = el("span", "license-plate", plate); label.setAttribute("role", "img"); label.setAttribute("aria-label", `Kennzeichen ${plate}`); meta.append(label); }
@@ -65,19 +87,68 @@ function renderCards() {
   }
 }
 function closeConditionEditor(restoreFocus = false) { $("condition-form").hidden = true; $("condition-view").hidden = false; $("condition-edit").setAttribute("aria-expanded", "false"); $("condition-message").textContent = ""; state.editingRevision = null; if (restoreFocus) $("condition-edit").focus(); }
+function conditionIssueRow(issue, vehicleId) {
+  const row = el("div", "condition-issue-row"); row.append(el("p", "condition-issue-text", display(issue.text)));
+  const projection = currentWorkProjection(vehicleId, issue);
+  const facts = [`Schweregrad: ${issueSeverityText(issue)}`, `Status: ${issueLifecycleText(issue)}`];
+  if (issue.dueDate) facts.push(`Fällig am ${readableDate(issue.dueDate)}`);
+  if (projection && dueStateLabels[projection.dueState]) facts.push(dueStateLabels[projection.dueState]);
+  row.append(el("p", "condition-issue-meta", facts.join(" · "))); return row;
+}
 function renderCondition(condition) {
   $("condition-readiness").replaceChildren(conditionBadge(condition));
-  const issues = conditionIssueText(condition); const list = $("condition-issues"); list.replaceChildren();
-  if (validCondition(condition)) { if (!issues.length) list.append(el("p", "condition-empty", "Keine offenen Punkte hinterlegt.")); else { const heading=el("p", "condition-issues-title", "Offene Punkte"); const ul=el("ul", "condition-issue-list"); for (const item of issues) ul.append(el("li", "", item)); list.append(heading, ul); } }
-  else list.append(el("p", "condition-empty", "Der aktuelle Zustand ist momentan nicht verfügbar."));
+  $("condition-work-asof").hidden = !state.scheduledWork;
+  if (state.scheduledWork) $("condition-work-asof").textContent = state.work.status === "ready" ? `Fälligkeitsstand: ${readableDate(state.work.today)} (${display(state.work.timeZone)}).` : state.work.status === "error" ? "Fälligkeitsstatus momentan nicht verfügbar." : "Fälligkeitsstatus wird geladen …";
+  const issues = conditionIssueItems(condition); const list = $("condition-issues"); list.replaceChildren();
+  $("issue-filter-wrap").hidden = !state.scheduledWork || (issues.length < 2 && state.issueFilter === "all");
+  if (validCondition(condition)) {
+    if (!issues.length) list.append(el("p", "condition-empty", "Keine offenen Punkte hinterlegt."));
+    else if (state.scheduledWork) {
+      const needsProjection = state.issueFilter === "overdue" || state.issueFilter === "today";
+      const projectionIncomplete = needsProjection && (state.work.status !== "ready" || issues.some(issue => !currentWorkProjection(state.selected, issue)));
+      if (projectionIncomplete) { list.append(el("p", "condition-empty", state.work.status === "loading" ? "Fälligkeitsstatus wird geladen …" : "Fälligkeitsstatus momentan nicht verfügbar.")); for (const issue of issues) list.append(conditionIssueRow(issue, state.selected)); }
+      else {
+      const visible = issues.filter(issue => issueMatchesFilter(issue, state.selected));
+      if (state.work.status === "ready" && Array.isArray(state.work.items)) {
+        const rank = new Map(state.work.items.filter(item => String(item.vehicleId) === String(state.selected)).map((item, index) => [String(item.id), index]));
+        visible.sort((left, right) => (rank.get(String(left.id)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(String(right.id)) ?? Number.MAX_SAFE_INTEGER));
+      }
+      if (!visible.length) list.append(el("p", "condition-empty", "Keine offenen Punkte für diesen Filter."));
+      else for (const issue of visible) list.append(conditionIssueRow(issue, state.selected));
+      }
+    } else {
+      const heading=el("p", "condition-issues-title", "Offene Punkte"); const ul=el("ul", "condition-issue-list"); for (const item of issues) ul.append(el("li", "", display(item.text))); list.append(heading, ul);
+    }
+  } else list.append(el("p", "condition-empty", "Der aktuelle Zustand ist momentan nicht verfügbar."));
   $("condition-edit").disabled = !validCondition(condition) || state.saving;
 }
+function issueMatchesFilter(issue, vehicleId) {
+  switch (state.issueFilter) {
+    case "overdue": return currentWorkProjection(vehicleId, issue)?.dueState === "overdue";
+    case "today": return currentWorkProjection(vehicleId, issue)?.dueState === "today";
+    case "critical": return issue.severity === "critical";
+    case "observed": return (issue.lifecycle || "open") === "observed";
+    default: return true;
+  }
+}
 function appendIssueEditor(issue = {}) {
-  const editor = $("issue-editor"); if (editor.querySelectorAll("input").length >= 20) return;
-  const row = el("div", "issue-row"); const input = el("input", "issue-input"); input.type = "text"; input.maxLength = 160; input.required = true; input.placeholder = "Was ist noch zu tun?"; input.value = display(issue.text); input._issueId = issue.id;
-  input.setAttribute("aria-label", "Beschreibung des offenen Punkts");
-  const remove = el("button", "issue-remove", "Entfernen"); remove.type = "button"; remove.setAttribute("aria-label", "Diesen offenen Punkt entfernen"); remove.addEventListener("click", () => { row.remove(); $("issue-add").disabled = editor.querySelectorAll("input").length >= 20; });
-  row.append(input, remove); editor.append(row); $("issue-add").disabled = editor.querySelectorAll("input").length >= 20;
+  const editor = $("issue-editor"); if (editor.children.length >= 20) return;
+  const row = el("div", "issue-row"); const rowId = ++state.issueRowCounter;
+  const field = (labelText, name, type, value, options = null) => {
+    const wrapper = el("div", `own-field issue-field issue-field-${name}`); const label = el("label", "", labelText); const control = el(options ? "select" : "input");
+    control.id = `issue-${rowId}-${name}`; label.setAttribute("for", control.id);
+    if (options) for (const [optionValue, optionText] of options) { const option = el("option", "", optionText); option.value = optionValue; control.append(option); }
+    else control.type = type;
+    control.value = value === null || value === undefined ? "" : String(value); wrapper.append(label, control); row.append(wrapper); return control;
+  };
+  const input = field("Beschreibung", "text", "text", issue.text); input.className = "issue-input"; input.maxLength = 160; input.required = true; input.placeholder = "Was ist noch zu tun?"; input._issueId = issue.id; input.setAttribute("aria-label", "Beschreibung des offenen Punkts");
+  if (state.scheduledWork) {
+    field("Fällig am (optional)", "due-date", "date", issue.dueDate);
+    field("Schweregrad", "severity", "", issue.severity || "", [["", "Nicht eingestuft"], ["observation", "Auffälligkeit"], ["repair", "Reparaturbedürftig"], ["critical", "Kritisch"]]);
+    field("Status", "lifecycle", "", issue.lifecycle || "open", [["open", "Offen"], ["observed", "Beobachten"]]);
+  }
+  const remove = el("button", "issue-remove", "Punkt entfernen"); remove.type = "button"; remove.setAttribute("aria-label", "Diesen offenen Punkt entfernen"); remove.addEventListener("click", () => { row.remove(); $("issue-add").disabled = editor.children.length >= 20; });
+  row.append(remove); editor.append(row); $("issue-add").disabled = editor.children.length >= 20;
 }
 function openConditionEditor() {
   if (state.entry && state.entry.busy) return;
@@ -86,13 +157,13 @@ function openConditionEditor() {
   if (!validCondition(condition) || state.saving) return;
   state.editingRevision = condition.revision; $("readiness-input").value = condition.readiness; $("issue-editor").replaceChildren();
   for (const item of condition.issues) if (item && display(item.text)) appendIssueEditor(item);
-  $("issue-add").disabled = $("issue-editor").querySelectorAll("input").length >= 20;
+  $("issue-add").disabled = $("issue-editor").children.length >= 20;
   $("condition-view").hidden = true; $("condition-form").hidden = false; $("condition-edit").setAttribute("aria-expanded", "true"); $("condition-message").textContent = ""; $("readiness-input").focus();
 }
 async function saveCondition(event) {
   event.preventDefault(); if (state.saving || state.selected === null || state.editingRevision === null) return;
-  const id = state.selected; const inputs = Array.from($("issue-editor").querySelectorAll("input"));
-  const issues = inputs.map(input => { const item = {text: input.value.trim()}; if (input._issueId !== undefined && input._issueId !== null) item.id = input._issueId; return item; });
+  const id = state.selected; const rows = Array.from($("issue-editor").children);
+  const issues = rows.map(row => { const input = row.querySelectorAll("input")[0]; const item = {text: input.value.trim()}; if (input._issueId !== undefined && input._issueId !== null) item.id = input._issueId; if (state.scheduledWork) { const fields = row.querySelectorAll("select"); const date = row.querySelectorAll("input")[1].value; item.dueDate = date || null; item.severity = fields[0].value || null; item.lifecycle = fields[1].value || "open"; } return item; });
   if (issues.some(item => !item.text || item.text.length > 160 || /[\x00-\x1f\x7f]/.test(item.text))) { $("condition-message").textContent = "Bitte gib für jeden offenen Punkt eine Beschreibung mit höchstens 160 Zeichen ein."; return; }
   state.saving = true; $("condition-save").disabled = true; $("condition-cancel").disabled = true; $("condition-message").textContent = "Wird gespeichert …";
   try {
@@ -101,6 +172,7 @@ async function saveCondition(event) {
     const updated = await response.json(); if (!validCondition(updated)) throw new Error("Der gespeicherte Zustand konnte nicht gelesen werden. Bitte aktualisiere die Übersicht.");
     const vehicle = state.vehicles.find(v => String(v.id) === id); if (vehicle) vehicle.status = updated;
     renderCards(); if (state.selected === id) { closeConditionEditor(true); renderCondition(updated); }
+    await refreshWork();
   } catch (error) { if (state.selected === id) $("condition-message").textContent = error instanceof TypeError ? "Der Zustand konnte nicht gespeichert werden. Bitte prüfe deine Verbindung." : error.message || "Der Zustand konnte nicht gespeichert werden."; }
   finally { state.saving = false; $("condition-save").disabled = false; $("condition-cancel").disabled = false; const selectedVehicle = state.vehicles.find(v => String(v.id) === state.selected); $("condition-edit").disabled = !validCondition(selectedVehicle && selectedVehicle.status); }
 }
@@ -120,29 +192,76 @@ function renderRecords(target, items, kind) {
     container.append(row);
   }
 }
-async function selectVehicle(id) {
+function renderWorkDashboard() {
+  $("work-dashboard").hidden = !state.scheduledWork;
+  const container = $("work-items"); container.replaceChildren();
+  if (!state.scheduledWork) return;
+  if (state.work.status === "error") { setStatus("work-status", "Fälligkeiten momentan nicht verfügbar.", true); return; }
+  if (state.work.status !== "ready") { setStatus("work-status", "Fälligkeiten werden geladen …"); return; }
+  setStatus("work-status", `Stand: ${readableDate(state.work.today)} (${display(state.work.timeZone)}).`);
+  if (!state.work.items.length) { container.append(el("p", "condition-empty", "Keine offenen Punkte erfasst.")); return; }
+  for (const item of state.work.items) {
+    const row = el("article", "work-item"); const vehicle = state.vehicles.find(candidate => String(candidate.id) === String(item.vehicleId));
+    row.append(el("h3", "work-item-vehicle", vehicle ? vehicleName(vehicle) : "Fahrzeug"));
+    row.append(el("p", "work-item-text", display(item.text)));
+    const facts = [`Schweregrad: ${item.severity ? severityLabels[item.severity] || display(item.severity) : "Nicht eingestuft"}`, `Status: ${lifecycleLabels[item.lifecycle] || display(item.lifecycle)}`, dueStateLabels[item.dueState] || "Fälligkeitsstatus nicht verfügbar"];
+    if (item.dueDate) facts.push(`Fällig am ${readableDate(item.dueDate)}`);
+    row.append(el("p", "work-item-meta", facts.join(" · "))); container.append(row);
+  }
+}
+async function refreshWork() {
+  if (!state.standalone || !state.scheduledWork) return;
+  const generation = ++state.work.generation; const loadGeneration = state.loadGeneration;
+  state.work.items = null; state.work.today = null; state.work.timeZone = null; state.work.status = "loading";
+  renderCards(); renderWorkDashboard();
+  const vehicle = selectedVehicle(); if (vehicle && $("condition-form").hidden) renderCondition(vehicle.status);
+  try {
+    const result = await getJson("/garage-api/work");
+    if (generation !== state.work.generation || loadGeneration !== state.loadGeneration) return;
+    if (!result || !validIsoDate(result.today) || result.timeZone !== "Europe/Berlin" || !Array.isArray(result.items) || !result.items.every(validWorkItem)) throw new Error("invalid work projection");
+    const expected = state.vehicles.flatMap(vehicle => conditionIssueItems(vehicle.status).map(issue => ({vehicleId:vehicle.id, issue})));
+    if (expected.length !== result.items.length || expected.some(({vehicleId, issue}) => result.items.filter(item => String(item.vehicleId) === String(vehicleId) && String(item.id) === String(issue.id)).length !== 1 || !result.items.some(item => workItemMatchesIssue(item, vehicleId, issue)))) throw new Error("work projection does not match current status");
+    state.work.items = result.items; state.work.today = result.today; state.work.timeZone = result.timeZone; state.work.status = "ready";
+  } catch (_) {
+    if (generation !== state.work.generation || loadGeneration !== state.loadGeneration) return;
+    state.work.items = null; state.work.status = "error";
+  }
+  renderCards(); renderWorkDashboard();
+  const selected = selectedVehicle(); if (selected && $("condition-form").hidden) renderCondition(selected.status);
+}
+function invalidateWork() {
+  if (!state.scheduledWork) return;
+  state.work.generation++; state.work.items = null; state.work.today = null; state.work.timeZone = null; state.work.status = "loading";
+  renderCards(); renderWorkDashboard();
+  const vehicle = selectedVehicle(); if (vehicle && $("condition-form").hidden) renderCondition(vehicle.status);
+}
+async function selectVehicle(id, refreshProjection = true) {
   if (state.entry && state.entry.busy) return;
   if (state.entry) closeEntry();
   $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); closeLogbook(false);
+  state.issueFilter = "all"; $("issue-filter").value = "all";
   state.selected = id; renderCards(); const vehicle = state.vehicles.find((v) => String(v.id) === id); if (!vehicle) return;
   closeConditionEditor(); renderCondition(vehicle.status);
   $("detail").hidden = false; $("detail-heading").textContent = vehicleName(vehicle); $("detail-meta").textContent = vehicleSubtitle(vehicle); $("detail-content").hidden = true; setStatus("detail-status", "Fahrzeugdaten werden geladen …");
   const generation = ++state.generation;
   try { const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(id)}/summary`); if (generation !== state.generation) return; if (result.vehicle && validCondition(result.vehicle.status)) { vehicle.status = result.vehicle.status; if ($("condition-form").hidden) renderCondition(vehicle.status); renderCards(); } renderRecords("reminders", result.reminders, "reminders"); renderRecords("services", result.services, "services"); setStatus("detail-status", ""); $("detail-content").hidden = false; }
   catch (error) { if (generation === state.generation) setStatus("detail-status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeugdaten konnten nicht geladen werden. Bitte versuche es erneut.", true); }
+  if (refreshProjection && generation === state.generation) await refreshWork();
 }
 async function load(preferredId = null) {
-  $("refresh").disabled = true; setStatus("status", "Fahrzeuge werden geladen …"); $("vehicle-count").hidden = true; $("detail").hidden = true; $("detail-content").hidden = true; state.selected = null; ++state.generation; $("vehicles").replaceChildren();
-  try { const result = await getJson("/garage-api/vehicles"); if (!Array.isArray(result.vehicles)) throw new Error("invalid vehicles"); state.vehicles = result.vehicles.filter((v) => v && v.id !== null && v.id !== undefined); $("vehicle-count").textContent = state.vehicles.length; $("vehicle-count").hidden = false;
-    if (!state.vehicles.length) { const status = $("status"); status.replaceChildren(document.createTextNode("Deine Garage ist noch leer. ")); if (state.standalone) { const button = el("button", "condition-edit", "Erstes Fahrzeug anlegen"); button.type = "button"; button.addEventListener("click", () => openEntry("vehicle-new")); status.append(button); } else { const link = el("a", "", "Erstes Fahrzeug in LubeLogger anlegen"); link.href = "/Home"; status.append(link); } return; }
-    setStatus("status", ""); renderCards(); const selected = state.vehicles.find(v => String(v.id) === String(preferredId)) || state.vehicles[0]; await selectVehicle(String(selected.id));
-  } catch (error) { setStatus("status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); }
-  finally { $("refresh").disabled = false; }
+  const loadGeneration = ++state.loadGeneration;
+  $("refresh").disabled = true; setStatus("status", "Fahrzeuge werden geladen …"); $("vehicle-count").hidden = true; $("detail").hidden = true; $("detail-content").hidden = true; state.selected = null; state.vehicles = []; ++state.generation; $("vehicles").replaceChildren(); invalidateWork();
+  try { const result = await getJson("/garage-api/vehicles"); if (loadGeneration !== state.loadGeneration) return; if (!Array.isArray(result.vehicles)) throw new Error("invalid vehicles"); state.vehicles = result.vehicles.filter((v) => v && v.id !== null && v.id !== undefined); $("vehicle-count").textContent = state.vehicles.length; $("vehicle-count").hidden = false;
+    if (!state.vehicles.length) { const status = $("status"); status.replaceChildren(document.createTextNode("Deine Garage ist noch leer. ")); if (state.standalone) { const button = el("button", "condition-edit", "Erstes Fahrzeug anlegen"); button.type = "button"; button.addEventListener("click", () => openEntry("vehicle-new")); status.append(button); } else { const link = el("a", "", "Erstes Fahrzeug in LubeLogger anlegen"); link.href = "/Home"; status.append(link); } await refreshWork(); return; }
+    setStatus("status", ""); renderCards(); const selected = state.vehicles.find(v => String(v.id) === String(preferredId)) || state.vehicles[0]; await selectVehicle(String(selected.id), false); if (loadGeneration === state.loadGeneration) await refreshWork();
+  } catch (error) { if (loadGeneration === state.loadGeneration) { setStatus("status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); if (state.scheduledWork) { state.work.status = "error"; state.work.items = null; renderWorkDashboard(); } } }
+  finally { if (loadGeneration === state.loadGeneration) $("refresh").disabled = false; }
 }
 $("refresh").addEventListener("click", () => state.capabilitiesReady ? load(state.selected) : initialize());
 $("condition-edit").addEventListener("click", openConditionEditor);
 $("condition-cancel").addEventListener("click", () => closeConditionEditor(true));
 $("issue-add").addEventListener("click", () => appendIssueEditor());
+$("issue-filter").addEventListener("change", () => { state.issueFilter = $("issue-filter").value; const vehicle = selectedVehicle(); if (vehicle) renderCondition(vehicle.status); });
 $("condition-form").addEventListener("submit", saveCondition);
 
 function selectedVehicle() { return state.vehicles.find(v => String(v.id) === state.selected); }
@@ -302,7 +421,13 @@ function historyFacts(value) {
   if (value.vehicleType) facts.push(display(value.vehicleType));
   if (value.text) facts.push(display(value.text));
   if (value.readiness && readinessLabels[value.readiness]) facts.push(readinessLabels[value.readiness]);
-  if (Array.isArray(value.issues)) facts.push(value.issues.length ? `Offen: ${value.issues.map(item => display(item.text)).join("; ")}` : "Keine offenen Punkte");
+  if (Array.isArray(value.issues)) facts.push(value.issues.length ? `Offen: ${value.issues.map(item => {
+    const details = [display(item.text)];
+    if (Object.hasOwn(item, "dueDate")) details.push(item.dueDate ? `Fälligkeit ${readableDate(item.dueDate)}` : "Keine Fälligkeit");
+    if (Object.hasOwn(item, "severity")) details.push(`Schweregrad ${issueSeverityText(item)}`);
+    if (Object.hasOwn(item, "lifecycle")) details.push(`Status ${issueLifecycleText(item)}`);
+    return details.filter(Boolean).join(", ");
+  }).join("; ")}` : "Keine offenen Punkte");
   if (value.description) facts.push(display(value.description));
   if (value.kind) facts.push(value.kind === "repair" ? "Reparatur" : value.kind === "service" ? "Wartung" : display(value.kind));
   if (value.date) facts.push(readableDate(value.date));
@@ -435,11 +560,13 @@ async function initialize() {
     state.standalone = true;
     state.recordCorrections = capabilities.features.includes("recordCorrections");
     state.historyBrowsing = capabilities.features.includes("historyBrowsing");
+    state.scheduledWork = capabilities.features.includes("scheduledWork");
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
   state.capabilitiesReady = true;
   $("legacy-manage").hidden = state.standalone; $("legacy-banner").hidden = state.standalone;
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
   $("logbook-toggle").hidden = !state.historyBrowsing;
+  $("work-dashboard").hidden = !state.scheduledWork; renderWorkDashboard();
   $("reminders-panel").hidden = state.standalone; $("detail-content").classList.toggle("standalone-detail", state.standalone);
   await load();
 }

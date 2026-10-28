@@ -46,7 +46,7 @@ def create_app(config=None):
         app.config.update(config)
     origin = public_origin(app.config["GARAGE_PUBLIC_ORIGIN"])
     host = urlsplit(origin).netloc
-    store = Store(app.config["GARAGE_DB"])
+    store = Store(app.config["GARAGE_DB"], today_provider=app.config.get("GARAGE_TODAY_PROVIDER"))
     app.extensions["garage_store"] = store
 
     @app.before_request
@@ -139,7 +139,13 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork"])
+
+    @app.get("/garage-api/work")
+    def work():
+        if request.query_string:
+            raise ValidationError("This endpoint does not accept query parameters.")
+        return jsonify(store.list_active_work())
 
     @app.get("/garage-api/vehicles")
     def vehicles():
