@@ -51,7 +51,9 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
 
   // HU month projection is explicitly capability-gated and server-dated; the UI only renders its values.
   const huCases = [
-    {name:'Vorschau',dueMonth:'2026-12',inspection:huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'}),expected:/Dezember 2026, noch 2 Monate/},
+    {name:'Vorschau',dueMonth:'2026-12',inspection:huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'}),expected:/Dezember 2026, noch 2 Monate/,visualLevel:2},
+    {name:'Volle visuelle Skala',dueMonth:'2028-10',inspection:huProjection({dueMonth:'2028-10',state:'upcoming',monthsUntilDue:24,batteryLevel:12,validUntil:'2028-10-31',blockingFrom:'2028-12-01'}),expected:/noch 24 Monate/,visualLevel:24},
+    {name:'Visuelle Mitte bleibt rechts verankert',dueMonth:'2027-10',inspection:huProjection({dueMonth:'2027-10',state:'upcoming',monthsUntilDue:12,batteryLevel:12,validUntil:'2027-10-31',blockingFrom:'2027-12-01'}),expected:/noch 12 Monate/,visualLevel:12},
     {name:'Im Fälligkeitsmonat',dueMonth:'2026-10',inspection:huProjection({dueMonth:'2026-10',state:'due',monthsUntilDue:0,batteryLevel:0,validUntil:'2026-10-31',blockingFrom:'2026-12-01'}),expected:/diesen Monat fällig/},
     {name:'Erster überfälliger Monat',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-09-15',dueMonth:'2026-08',state:'overdue',monthsUntilDue:-1,batteryLevel:0,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),expected:/überfällig; automatisch INOP ab 01\.10\.2026/},
     {name:'Ab dem zweiten überfälligen Monat blockiert',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),effectiveReadiness:'not_ready',expected:/automatisch INOP ab 01\.10\.2026/},
@@ -66,19 +68,27 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
     assert.match(nodes.vehicles.children[0].attributes['aria-label'],/HU \/ TÜV/,testCase.name);
     assert.equal(nodes['condition-readiness'].textContent,testCase.effectiveReadiness==='not_ready'?'Nicht fahrbereit':'Fahrbereit',testCase.name);
     const cardIndicators=nodes.vehicles.children[0].children[0].children.find(child=>child.className==='card-indicators');
-    const cardBattery=cardIndicators.children.find(child=>child.className.startsWith('card-inspection'));
+    const cardBattery=nodes.vehicles.children[0].children.find(child=>(child.className||'').startsWith('card-inspection-progress'));
     assert.ok(cardBattery,testCase.name);
     assert.match(cardBattery.attributes.title,/HU \/ TÜV/,testCase.name);
+    assert.equal(cardBattery.children.length,24,testCase.name);
+    assert.equal(cardBattery.children.filter(cell=>cell.className.includes('filled')).length,testCase.visualLevel||0,testCase.name);
+    if (testCase.visualLevel) {
+      assert.equal(cardBattery.children.findIndex(cell=>cell.className.includes('filled')),24-testCase.visualLevel,testCase.name);
+      assert.match(cardBattery.className,new RegExp(`level-${testCase.visualLevel}`),testCase.name);
+    }
     if (testCase.inspection.state==='unknown') {
-      assert.equal(nodes['inspection-meter-wrap'].hidden,true);
+      assert.equal(nodes['inspection-meter-wrap'].hidden,false);
       assert.doesNotMatch(nodes['inspection-message'].textContent,/überfällig/);
       assert.doesNotMatch(nodes.vehicles.children[0].attributes['aria-label'],/INOP/);
+      assert.equal(cardBattery.className,'card-inspection-progress unknown');
+      assert.match(nodes['inspection-meter'].attributes['aria-label'],/unbekannt/);
     } else {
       assert.equal(nodes['inspection-meter-wrap'].hidden,false);
-      assert.equal(nodes['inspection-meter'].children.length,12);
-      assert.match(nodes['inspection-meter'].attributes['aria-label'],/von 12 Monaten/);
-      assert.equal(nodes['inspection-meter'].children.filter(cell=>cell.className.includes('filled')).length,testCase.inspection.batteryLevel);
-      assert.equal(cardBattery.querySelectorAll('rect').filter(cell=>cell.attributes.class==='inspection-card-cell filled').length,testCase.inspection.batteryLevel);
+      assert.equal(nodes['inspection-meter'].children.length,24);
+      assert.match(nodes['inspection-meter'].attributes['aria-label'],/visuelle Darstellung auf 24 Monate/);
+      assert.equal(nodes['inspection-meter'].children.filter(cell=>cell.className.includes('filled')).length,testCase.visualLevel||0);
+      assert.equal(nodes['inspection-meter'].children.findIndex(cell=>cell.className.includes('filled')),testCase.visualLevel?24-testCase.visualLevel:-1);
     }
     if (testCase.inspection.state==='blocking') {
       assert.match(nodes.vehicles.children[0].textContent,/INOP/);

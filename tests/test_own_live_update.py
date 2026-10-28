@@ -202,7 +202,7 @@ class LiveUpdaterTests(unittest.TestCase):
                  mock.patch.object(updater, "_image_schema", return_value=candidate_schema), \
                  mock.patch.object(updater, "_run") as run:
                 if original_schema == candidate_schema and original_schema in {3, 4}:
-                    updater._candidate_preflight("old:sha", "new:sha", self.config)
+                    self.assertEqual(updater._candidate_preflight("old:sha", "new:sha", self.config), candidate_schema)
                     self.assertEqual(run.call_count, 2, "same-schema candidate check remains isolated")
                 else:
                     with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3 or 4"):
@@ -215,6 +215,46 @@ class LiveUpdaterTests(unittest.TestCase):
         for live, candidate in ((3, 4), (4, 3), (2, 2)):
             with self.subTest(live=live, candidate=candidate):
                 preflight(live, candidate)
+
+    def test_deployment_allows_matching_schema4_and_blocks_cross_schema_before_candidate_start(self):
+        state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
+        state.mkdir(mode=0o700)
+
+        def make_live_backup(_image, _volume, workdir, filename):
+            with closing(sqlite3.connect(Path(workdir) / filename)) as database:
+                database.execute("CREATE TABLE meta (schema INTEGER NOT NULL)")
+                database.execute("INSERT INTO meta VALUES (4)")
+                database.commit()
+
+        compose_calls = []
+
+        def compose(_config, image, *args):
+            compose_calls.append((image, args))
+
+        with mock.patch.object(updater, "_safe_hook"), \
+             mock.patch.object(updater, "_compose", side_effect=compose), \
+             mock.patch.object(updater, "_backup_from_volume", side_effect=make_live_backup), \
+             mock.patch.object(updater, "_service_container", return_value="candidate-container"), \
+             mock.patch.object(updater, "_health", return_value=True), \
+             mock.patch.object(updater, "_run"), \
+             mock.patch.object(updater, "github_main_sha", return_value=SHA), \
+             mock.patch.object(updater, "checks_succeeded", return_value=True):
+            updater._deploy_candidate("new:sha", "old:sha", SHA, self.config, self.config, candidate_schema=4)
+        self.assertIn(("new:sha", ("up", "-d", "--no-deps", "garage_live")), compose_calls)
+
+        compose_calls.clear()
+        with mock.patch.object(updater, "_safe_hook"), \
+             mock.patch.object(updater, "_compose", side_effect=compose), \
+             mock.patch.object(updater, "_backup_from_volume", side_effect=make_live_backup), \
+             mock.patch.object(updater, "_service_container", return_value="old-container"), \
+             mock.patch.object(updater, "_health", return_value=True), \
+             mock.patch.object(updater, "_run"), \
+             mock.patch.object(updater, "github_main_sha", return_value=SHA), \
+             mock.patch.object(updater, "checks_succeeded", return_value=True):
+            with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3 or 4"):
+                updater._deploy_candidate("new:sha", "old:sha", SHA, self.config, self.config, candidate_schema=3)
+        self.assertNotIn(("new:sha", ("up", "-d", "--no-deps", "garage_live")), compose_calls)
+        self.assertIn(("old:sha", ("up", "-d", "--no-deps", "garage_live")), compose_calls)
 
     def test_failed_prepare_hook_does_not_stop_or_restart_live_service(self):
         with mock.patch.object(updater, "_safe_hook", side_effect=[updater.UpdateError("prepare failed"), None]) as hook, \

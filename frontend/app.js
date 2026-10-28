@@ -91,23 +91,21 @@ function issueReason(issue, vehicleId) {
   const projection = currentWorkProjection(vehicleId, issue);
   return [issue.severity === "critical" ? "Kritisch" : "", projection && dueStateLabels[projection.dueState] || "", issue.dueDate ? `fällig ${readableDate(issue.dueDate)}` : ""].filter(Boolean).join(", ");
 }
-function cardInspectionBattery(vehicle) {
-  const valid = validInspection(vehicle), value = valid ? vehicle.inspection : null;
-  const battery = el("span", `card-inspection ${valid ? `state-${value.state}` : "unavailable"}`);
-  battery.setAttribute("title", inspectionSummary(vehicle));
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 16"); svg.setAttribute("aria-hidden", "true");
-  const frame = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  frame.setAttribute("x", "1"); frame.setAttribute("y", "2"); frame.setAttribute("width", "20"); frame.setAttribute("height", "12"); frame.setAttribute("rx", "2"); frame.setAttribute("fill", "none");
-  const tip = document.createElementNS("http://www.w3.org/2000/svg", "path"); tip.setAttribute("d", "M23 6v4");
-  const level = valid ? value.batteryLevel : null;
-  const cells = Array.from({length:12}, (_, index) => {
-    const cell = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    cell.setAttribute("x", String(3 + index * 1.25)); cell.setAttribute("y", "5"); cell.setAttribute("width", "0.9"); cell.setAttribute("height", "6");
-    cell.setAttribute("class", level !== null && index < level ? "inspection-card-cell filled" : "inspection-card-cell");
-    return cell;
+function inspectionVisualLevel(vehicle) {
+  if (!state.inspectionStatus || !validInspection(vehicle) || vehicle.inspection.monthsUntilDue === null) return null;
+  return Math.max(0, Math.min(24, vehicle.inspection.monthsUntilDue));
+}
+function inspectionBarCells(level, className) {
+  return Array.from({length:24}, (_, index) => {
+    const cell = el("span", `${className}-cell${level !== null && index >= 24 - level ? " filled" : ""}`);
+    cell.setAttribute("aria-hidden", "true"); return cell;
   });
-  svg.append(frame, tip, ...cells); battery.append(svg); return battery;
+}
+function cardInspectionProgress(vehicle) {
+  const level = inspectionVisualLevel(vehicle);
+  const bar = el("span", `card-inspection-progress ${level === null ? "unknown" : `level-${level}`}`);
+  bar.setAttribute("title", inspectionSummary(vehicle)); bar.setAttribute("aria-hidden", "true");
+  bar.replaceChildren(...inspectionBarCells(level, "card-inspection")); return bar;
 }
 // These indicators share the existing header row; the detailed state remains in the accessible card name and detail panel.
 function cardIndicators(condition, issues, vehicleId, vehicle) {
@@ -116,7 +114,6 @@ function cardIndicators(condition, issues, vehicleId, vehicle) {
   const symbols = {not_ready: "INOP", unknown: "?", unavailable: "!"};
   const label = Object.hasOwn(readinessLabels, readiness) ? readinessLabels[readiness] : "Status nicht verfügbar";
   if (symbols[readiness]) { const indicator = el("span", `card-readiness ${readiness}`, symbols[readiness]); indicator.setAttribute("title", label); group.append(indicator); }
-  if (state.inspectionStatus) group.append(cardInspectionBattery(vehicle));
   if (validCondition(condition) && issues.length) { const warning = el("span", "card-work"); const reasons = issues.slice(0, 2).map(issue => `${display(issue.text)}${issueReason(issue, vehicleId) ? ` (${issueReason(issue, vehicleId)})` : ""}`); warning.setAttribute("title", state.scheduledWork && reasons.length ? `Offene Arbeit: ${reasons.join("; ")}` : "Wartung ausstehend"); warning.append(icon("tool")); group.append(warning); }
   return group;
 }
@@ -134,6 +131,7 @@ function renderCards() {
     button.append(top, name); if (plate || year) button.append(meta);
     const mileage = distance(vehicle.odometer, vehicle.odometerUnit); if (mileage) button.append(el("p", "mileage", mileage));
     if (make) button.append(make);
+    if (state.inspectionStatus) button.append(cardInspectionProgress(vehicle));
     button.addEventListener("click", () => selectVehicle(id)); container.append(button);
   }
 }
@@ -153,12 +151,12 @@ function renderInspection(vehicle) {
   if (!validInspection(vehicle)) { message.className = "inspection-message"; message.textContent = "HU-Status momentan nicht verfügbar."; asOf.textContent = ""; meterWrap.hidden = true; meter.replaceChildren(); return; }
   const value = vehicle.inspection; message.className = `inspection-message state-${value.state}`; message.textContent = inspectionSummary(vehicle);
   asOf.textContent = `Stand: ${readableDate(value.asOf)} (Europe/Berlin).`;
-  meterWrap.hidden = value.batteryLevel === null;
-  if (value.batteryLevel === null) { meter.replaceChildren(); meter.removeAttribute("aria-label"); return; }
-  meter.className = `inspection-meter state-${value.state}`;
+  meterWrap.hidden = false;
+  const level = inspectionVisualLevel(vehicle);
+  meter.className = `inspection-meter ${level === null ? "unknown" : `level-${level}`}`;
   meter.setAttribute("role", "img");
-  meter.setAttribute("aria-label", `HU-Vorlauf: ${value.batteryLevel} von 12 Monaten; Anzeige auf 12 Monate begrenzt.`);
-  meter.replaceChildren(...Array.from({length:12}, (_, index) => { const cell = el("span", `inspection-meter-cell${index < value.batteryLevel ? " filled" : ""}`); cell.setAttribute("aria-hidden", "true"); return cell; }));
+  meter.setAttribute("aria-label", level === null ? "HU-Vorlauf unbekannt; Darstellung neutral." : `HU-Vorlauf: ${value.monthsUntilDue} Monate; visuelle Darstellung auf 24 Monate begrenzt.`);
+  meter.replaceChildren(...inspectionBarCells(level, "inspection-meter"));
 }
 function renderCondition(condition) {
   const vehicle = selectedVehicle();
