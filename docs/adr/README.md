@@ -14,6 +14,7 @@ Stand: 2026-10-28. ADR-0001–0007 sind historische **Vorschläge**; deren LubeL
 | [0008](0008-single-user-access.md) | Ein Cloudflare-Login, alle Zugelassenen Admin | Produktvorgabe geklärt, Origin/Dienstzugang und Umsetzung offen |
 | [0009](0009-backend-ownership-challenge.md) | Eigener Garage-Kern | Entwicklung entschieden; produktive Übernahme separat |
 | [0010](0010-open-source-mit.md) | Eigenständiges Open Source unter MIT | Lizenz entschieden; veröffentlichbaren Quellstand und Installation prüfen |
+| [0011](0011-reading-provenance.md) | Provenienz zwischen Beleg und Kilometerstand | Vorgeschlagene Schema-4-Grundlage für spätere Datum-/Kilometerkorrektur; nicht angenommen |
 
 [Entscheidungsvorlage D01–D11](../planning/decision-brief.md) bündelt Empfehlungen und Konsequenzen. ADR-0008 hält die geklärte Produktvorgabe fest; seine technische Ausgestaltung und die übrigen ADRs bleiben Vorschläge.
 
