@@ -26,6 +26,8 @@ Compose stores the SQLite database in the named `garage_data` volume, mounted at
 
 To stop the container while retaining its data, use `docker compose ... down` (without `-v`). Do not remove the data volume as a cleanup step.
 
+`deploy/compose.release.yaml` is prepared for a future pinned image, but no registry image is published yet. Continue using the source-build target above until the release is explicitly available. After that, the release guide explains how to provide `GARAGE_IMAGE` and switch Compose files while preserving the same project name and data volume: [container releases](container-releases.md).
+
 ## Network boundary and access
 
 The Compose service binds to `127.0.0.1` on the host, by default port `8080`. Keep that loopback binding; never publish the container directly to the public Internet. The app has no in-app login or user authorization. Anyone who can reach it can view and change all vehicle data.

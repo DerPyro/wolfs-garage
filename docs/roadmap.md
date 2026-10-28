@@ -48,6 +48,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [ ] Complete export and documented isolated restore for all supported data and files.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
 - [ ] Establish release notes, upgrade instructions and repeatable independent backups.
+- [ ] Validate and enable pinned multi-architecture container releases; publish only from an explicitly published GitHub Release, with manual builds remaining push-free. The prepared [release Compose file](../deploy/compose.release.yaml) does not imply a published image.
 - [ ] Prepare a dry-run LubeLogger import with identity, unit, amount and document comparisons.
 - [ ] Decide and explicitly authorize any productive cutover; preserve the original data and account for new writes during rollback.
 
