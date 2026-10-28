@@ -1,0 +1,24 @@
+[Unit]
+Description=Check and safely update Wolfs Garage from tested GitHub main
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=HOME=/var/lib/wolfs-garage-updater
+Environment=DOCKER_CONFIG=/var/lib/wolfs-garage-updater/docker
+ExecStart=/usr/bin/python3 /opt/wolfs-garage/deploy/update-live.py --env-file /etc/wolfs-garage/live.env --once
+TimeoutStartSec=45min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/wolfs-garage/releases /var/lib/wolfs-garage-updater
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

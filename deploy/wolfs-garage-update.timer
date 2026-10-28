@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll tested Wolfs Garage main build every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=wolfs-garage-update.service
+
+[Install]
+WantedBy=timers.target

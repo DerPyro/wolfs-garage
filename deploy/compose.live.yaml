@@ -1,0 +1,30 @@
+# Local latest-main deployment. Credentials and host-specific values stay in
+# the root-owned env file; this service is reachable only on the existing proxy network.
+name: wolfs-garage-live
+services:
+  garage_live:
+    image: "${GARAGE_IMAGE:?Set GARAGE_IMAGE to the locally built immutable image tag}"
+    restart: unless-stopped
+    stop_grace_period: 40s
+    environment:
+      GARAGE_DB: /var/lib/wolfs-garage/garage.sqlite3
+      GARAGE_PUBLIC_ORIGIN: "${GARAGE_PUBLIC_ORIGIN:?Set GARAGE_PUBLIC_ORIGIN}"
+    volumes:
+      - garage_data:/var/lib/wolfs-garage
+    networks:
+      - origin
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+volumes:
+  garage_data:
+    external: true
+    name: "${GARAGE_DATA_VOLUME:?Set GARAGE_DATA_VOLUME to the existing external volume}"
+
+networks:
+  origin:
+    external: true
+    name: "${GARAGE_ORIGIN_NETWORK:?Set GARAGE_ORIGIN_NETWORK to the existing proxy network}"

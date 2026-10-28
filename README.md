@@ -1,5 +1,7 @@
 # Wolfs Garage
 
+<img src="docs/assets/wolfs-garage-logo.png" alt="Wolfs Garage" width="600">
+
 An open-source, self-hosted vehicle logbook with a focused mobile interface. Track cars and motorcycles, readiness, open work and completed maintenance. Original project code is licensed under [MIT](LICENSE); artwork and dependencies retain their [own notices](THIRD_PARTY_NOTICES.md).
 
 ## Current status
@@ -39,6 +41,8 @@ Open **http://localhost:8080**. Initialize a new database once only. The data vo
 The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
 
 See the [standalone guide](docs/standalone.md) for configuration, backup, isolated restore and development commands.
+
+The private reference installation uses the [tested-main updater](docs/live-updates.md). This updater is specific to that installation; other self-hosters opt in separately and can keep using the Compose workflow above.
 
 The source-build Compose setup above remains the supported install path. A pinned-image Compose file and release plan are prepared, but no GHCR image is published yet; see the [container release plan](docs/container-releases.md). The [changelog](CHANGELOG.md) currently contains unreleased entries.
 
