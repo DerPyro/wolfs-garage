@@ -1,6 +1,6 @@
 # Container release plan
 
-This is release preparation only. No release tag or GHCR image is published by this change. Source builds remain the supported default described in the [standalone guide](standalone.md). In particular, `ghcr.io/derpyro/wolfs-garage:0.1.0a4` below is an example for a possible first release, not a published image or promise that the tag can be pulled.
+This is release preparation only. No release tag or GHCR image is published by this change. Source builds remain the supported default described in the [standalone guide](standalone.md). In particular, `ghcr.io/derpyro/wolfs-garage:0.1.0a5` below is an example for a possible first release, not a published image or promise that the tag can be pulled.
 
 ## Release image configuration
 
@@ -9,7 +9,7 @@ This is release preparation only. No release tag or GHCR image is published by t
 After a first image has actually been published, a fresh installation could use commands like these. They intentionally do not work until that image exists and is accessible:
 
 ```sh
-export GARAGE_IMAGE=ghcr.io/derpyro/wolfs-garage:0.1.0a4
+export GARAGE_IMAGE=ghcr.io/derpyro/wolfs-garage:0.1.0a5
 
 docker compose --env-file .env.example -f deploy/compose.release.yaml pull
 docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage init-db
@@ -44,7 +44,7 @@ The prepared `.github/workflows/release.yml` implements this policy:
 
 - Only a GitHub Release event with action `published` and a non-draft release can publish; the publication job waits for checks.
 - A manual `workflow_dispatch` validates the checked-out repository and source, runs the checks, and builds both target architectures without pushing. It has no registry-publish permission.
-- The release tag must exactly match the strict app version as `v<application-version>`; for example, version `0.1.0a4` requires `v0.1.0a4`. The checked-out HEAD must equal the tag commit, and that commit must be an ancestor of `origin/main`.
+- The release tag must exactly match the strict app version as `v<application-version>`; for example, version `0.1.0a5` requires `v0.1.0a5`. The checked-out HEAD must equal the tag commit, and that commit must be an ancestor of `origin/main`.
 - Tests and image build use the same exact source commit SHA; the workflow passes the validated full SHA to the reusable checks workflow. A release build targets both `linux/amd64` and `linux/arm64`.
 - Publish the exact version tag only; do not publish or update a floating `latest` tag. Never move or reuse a released tag. Record the release source commit and resulting manifest digest in the release notes; a digest is the immutable image reference.
 - The image name is `ghcr.io/derpyro/wolfs-garage`. GHCR package visibility is a separate setting and must be deliberately made public before anonymous pulls are documented.

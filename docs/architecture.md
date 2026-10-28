@@ -21,6 +21,8 @@ Die eigenständige Oberfläche kann abgeschlossene Vorgänge und Kilometerständ
 
 Das Fälligkeits-Dashboard ist eine lesende Projektion über aktive Punkte (Lifecycle `open` oder `observed`), nicht eine Regel- oder Erinnerungsengine. Die Statusrevision, der manuelle Schweregrad und das optionale Datum sind führend im Fahrzeugstatus. Die aktuelle Tagesgrenze wird einmal innerhalb derselben SQLite-Lesetransaktion aus `Europe/Berlin` ermittelt; UTC-Zeitpunkte kurz vor oder nach lokaler Mitternacht ergeben daher den passenden Berliner Kalendertag. Nicht eingestufte Punkte bleiben `null` statt automatisch diagnostiziert zu werden. Der Endpunkt erzeugt keine zusätzlichen Audit-Ereignisse. Vertrag und Abnahmefälle: [Scheduled work](planning/scheduled-work.md).
 
+Der portable Owner-Datenexport ist eine versionierte Einweg-JSON-Projektion aller Geschäfts- und Auditdaten aus einer einzigen SQLite-Lesetransaktion. Der Export behält gespeicherte Dezimalstrings bei, dekodiert ältere Audit-Snapshots typgetreu und schließt Befehlswiederholungen, Konfiguration/Secrets, abgeleitete Projektionen und externe Dokumentbytes aus. Er wird weder importiert noch zur Wiederherstellung verwendet. SQLite-Backups bleiben der vollständige Restorepfad inklusive Command-Replay-Daten. Vertrag und Bedienung: [Owner data export](data-export.md).
+
 ## Historischer Phase-0-Zielentwurf
 
 Die folgenden Abschnitte dokumentieren frühere, teilweise inzwischen ersetzte Architekturvorschläge. Ihr damaliger Status ist keine Beschreibung des heutigen Produktumfangs.

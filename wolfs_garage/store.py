@@ -18,6 +18,8 @@ from urllib.parse import urlsplit
 import uuid
 from zoneinfo import ZoneInfo
 
+from . import __version__
+
 
 SCHEMA = 3
 UNITS = {"km", "mi", "h"}
@@ -776,6 +778,94 @@ class Store:
             self._vehicle(db, vehicle_id)
             return [{"sequence": row["sequence"], "action": row["action"], "occurredAt": row["occurred_at"], "before": json.loads(row["before_json"]), "after": json.loads(row["after_json"])}
                     for row in db.execute("SELECT * FROM history WHERE vehicle_id=? ORDER BY sequence", (vehicle_id,))]
+
+    def export_data(self):
+        """Return an owner data export from one consistent read transaction.
+
+        This is a data portability view, not a restorable database backup. It
+        deliberately excludes command replay state and other internal tables.
+        """
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            try:
+                exported_at = datetime.now(timezone.utc).isoformat()
+                vehicles = []
+                statuses = []
+                for row in db.execute("SELECT * FROM vehicles ORDER BY id"):
+                    vehicle_id = row["id"]
+                    vehicles.append({
+                        "id": vehicle_id, "make": row["make"], "model": row["model"],
+                        "name": row["name"], "year": row["year"],
+                        "licensePlate": row["license_plate"], "vehicleType": row["vehicle_type"],
+                        "odometerUnit": row["unit"], "revision": row["revision"],
+                    })
+                    status = self._status(db, vehicle_id)
+                    statuses.append({"vehicleId": vehicle_id, **status})
+
+                readings = [
+                    {"id": row["id"], "vehicleId": row["vehicle_id"], "date": row["day"],
+                     "odometer": row["value"], "unit": row["unit"], "note": row["note"]}
+                    for row in db.execute("SELECT * FROM odometer_readings ORDER BY id")
+                ]
+                records = [
+                    {"id": row["id"], "vehicleId": row["vehicle_id"],
+                     "description": row["description"], "kind": row["kind"], "date": row["day"],
+                     "odometer": row["odometer"], "odometerUnit": row["unit"],
+                     "cost": row["cost"], "currency": row["currency"],
+                     "documentUrl": row["document_url"], "closedIssueId": row["closed_issue_id"],
+                     "revision": row["revision"]}
+                    for row in db.execute("SELECT * FROM records ORDER BY id")
+                ]
+                history = [
+                    {"sequence": row["sequence"], "action": row["action"],
+                     "occurredAt": row["occurred_at"], "vehicleId": row["vehicle_id"],
+                     "before": json.loads(row["before_json"]), "after": json.loads(row["after_json"])}
+                    for row in db.execute("SELECT * FROM history ORDER BY sequence")
+                ]
+                result = {
+                    "format": "wolfs-garage-owner-export", "formatVersion": 1,
+                    "applicationVersion": __version__, "databaseSchema": SCHEMA,
+                    "exportedAt": exported_at, "vehicles": vehicles, "statuses": statuses,
+                    "odometerReadings": readings, "records": records, "history": history,
+                }
+                db.execute("COMMIT")
+                return result
+            except BaseException:
+                if db.in_transaction:
+                    db.execute("ROLLBACK")
+                raise
+
+    def export_to_file(self, destination):
+        """Write a new restrictive owner export, never replacing a path."""
+        data = self.export_data()
+        payload = json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2).encode("utf-8")
+        path = os.fspath(destination)
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+        fd = None
+        created = False
+        created_identity = None
+        try:
+            fd = os.open(path, flags, 0o600)
+            created = True
+            stat = os.fstat(fd)
+            created_identity = (stat.st_dev, stat.st_ino)
+            with os.fdopen(fd, "wb") as output:
+                fd = None
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+        except BaseException:
+            if fd is not None:
+                os.close(fd)
+            if created:
+                try:
+                    stat = os.stat(path, follow_symlinks=False)
+                    if (stat.st_dev, stat.st_ino) == created_identity:
+                        os.unlink(path)
+                except FileNotFoundError:
+                    pass
+            raise
+        return Path(path)
 
     def backup(self, destination):
         """Create a new consistent full-store backup with restrictive permissions."""

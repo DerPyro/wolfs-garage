@@ -15,6 +15,7 @@ Available now:
 - Correct the description, service/repair kind, cost, currency and HTTPS document reference of a completed record, with a reason and before/after history. Record date, odometer reading, unit and issue closure remain fixed.
 - Browse complete service/repair and odometer histories in date-sorted pages with date filters; work records can also be filtered by kind.
 - Set an optional due date, severity and open/observed lifecycle on existing open work; view active work in a Europe/Berlin date-aware dashboard.
+- Download a portable owner-data JSON export, separate from the restorable SQLite backup.
 - Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
 
 Recurring maintenance rules, corrections to record dates or odometer readings, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.

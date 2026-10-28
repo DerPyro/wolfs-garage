@@ -48,6 +48,8 @@ Vehicle detail provides separate paginated views for completed records and odome
 
 Existing open work can have an optional due date, a user-selected severity (`observation`, `repair`, `critical`, or unclassified), and lifecycle `open` or `observed`. The dashboard derives overdue/today/upcoming/unscheduled labels from the current `Europe/Berlin` calendar date. This does not create recurring rules or infer severity. Legacy issue JSON is normalized when read; upgrade does not rewrite its stored JSON. See the [scheduled work contract](planning/scheduled-work.md).
 
+The application also supports a portable owner-data JSON export for inspection or transfer to another system. It is not a restorable backup or an import file; use the SQLite backup procedure below for restoration. See [owner data export](data-export.md).
+
 ## Explicit schema upgrade (standalone only)
 
 Fresh initialization creates schema version 3. Current application reads accept schema 3; the backup command can read supported schema-1, schema-2 and schema-3 databases. Existing schema-1 and schema-2 standalone databases are upgraded only by an explicit command. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.

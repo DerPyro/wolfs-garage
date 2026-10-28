@@ -1,3 +1,3 @@
 """Wolfs Garage: a standalone, self-hosted vehicle logbook."""
 
-__version__ = "0.1.0a4"
+__version__ = "0.1.0a5"

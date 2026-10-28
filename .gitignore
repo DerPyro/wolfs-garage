@@ -12,6 +12,7 @@ secrets/
 *.pfx
 backups/
 dumps/
+wolfs-garage-export*.json
 *.dump
 *.sql
 private-documents/

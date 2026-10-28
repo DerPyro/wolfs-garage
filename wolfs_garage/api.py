@@ -1,12 +1,13 @@
 """Standalone HTTP API. Authentication belongs to the trusted reverse proxy."""
 import ipaddress
+import json
 import os
 from pathlib import Path
 import re
 import sqlite3
 from urllib.parse import urlsplit
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import __version__
@@ -139,7 +140,15 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport"])
+
+    @app.get("/garage-api/export")
+    def export_data():
+        if request.query_string:
+            raise ValidationError("This endpoint does not accept query parameters.")
+        body = json.dumps(store.export_data(), ensure_ascii=False, allow_nan=False, indent=2)
+        return Response(body, mimetype="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="wolfs-garage-export.json"'})
 
     @app.get("/garage-api/work")
     def work():

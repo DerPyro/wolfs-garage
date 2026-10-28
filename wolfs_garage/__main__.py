@@ -9,7 +9,7 @@ from .store import Store
 
 def main():
     parser = argparse.ArgumentParser(description="Wolfs Garage database administration")
-    parser.add_argument("command", choices=["init-db", "backup", "check-db", "upgrade-db"])
+    parser.add_argument("command", choices=["init-db", "backup", "check-db", "upgrade-db", "export"])
     parser.add_argument("destination", nargs="?")
     args = parser.parse_args()
     path = Path(os.environ.get("GARAGE_DB", "data/garage.sqlite3"))
@@ -24,6 +24,11 @@ def main():
                 parser.error("backup requires a new destination filename")
             store.backup(args.destination)
             print("Consistent garage backup created and checked.")
+        elif args.command == "export":
+            if not args.destination:
+                parser.error("export requires a new destination filename")
+            store.export_to_file(args.destination)
+            print("Owner data export created.")
         elif args.command == "upgrade-db":
             if not args.destination:
                 parser.error("upgrade-db requires a new backup destination filename")
