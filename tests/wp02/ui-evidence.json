@@ -1,0 +1,185 @@
+{
+  "project": "wolfs-wp02ui-ddc857706d",
+  "startedAt": "2026-10-27T13:44:11.076459+00:00",
+  "finishedAt": "2026-10-27T13:44:54.315109+00:00",
+  "lubeloggerImage": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "browserImageId": "sha256:b27e719ecbfef153e13fd24e8341736733bf2658b229677eb21ff57ff5d7fb29",
+  "browserVersion": "Chrome/140.0.7339.16",
+  "steps": [
+    {
+      "name": "local root test settings saved",
+      "pass": true
+    },
+    {
+      "name": "five synthetic vehicles created",
+      "pass": true
+    },
+    {
+      "name": "synthetic maintenance, part and reminder persisted",
+      "pass": true
+    },
+    {
+      "name": "Chromium reached all three viewports",
+      "pass": true
+    },
+    {
+      "name": "three UI-created synthetic services persisted",
+      "pass": true
+    }
+  ],
+  "viewports": [
+    {
+      "width": 320,
+      "height": 800,
+      "steps": [
+        "five rendered garage cards",
+        "mouse navigation into first vehicle",
+        "service history and explicit cost visible",
+        "service entry modal opens with key fields",
+        "synthetic maintenance entered and saved using UI",
+        "vehicle reminder visible",
+        "synthetic part visible"
+      ],
+      "garageCards": 5,
+      "garageDocumentWidth": 320,
+      "garageCardKeyboard": {
+        "focusable": false,
+        "tag": "DIV",
+        "tabIndex": -1,
+        "role": null
+      },
+      "service": {
+        "recordVisible": true,
+        "rowText": "20.10.2026 12000 UI-SERVICE-ALPHA 123,45 € UI-SYNTHETIC-NOTE",
+        "costBadge": "Total: 123,45 €",
+        "tableWidth": 278,
+        "containerWidth": 299,
+        "documentWidth": 320,
+        "dateCell": {
+          "clientWidth": 276,
+          "scrollWidth": 276,
+          "cssTextOverflow": "ellipsis",
+          "title": null,
+          "text": "20.10.2026"
+        },
+        "addButtons": 2
+      },
+      "serviceCreated": true,
+      "reminderShown": true,
+      "supplyShown": true
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "steps": [
+        "five rendered garage cards",
+        "mouse navigation into first vehicle",
+        "service history and explicit cost visible",
+        "service entry modal opens with key fields",
+        "synthetic maintenance entered and saved using UI",
+        "vehicle reminder visible",
+        "synthetic part visible"
+      ],
+      "garageCards": 5,
+      "garageDocumentWidth": 753,
+      "garageCardKeyboard": {
+        "focusable": false,
+        "tag": "DIV",
+        "tabIndex": -1,
+        "role": null
+      },
+      "service": {
+        "recordVisible": true,
+        "rowText": "20.10.2026 12000 UI-SERVICE-ALPHA 123,45 € UI-SYNTHETIC-NOTE",
+        "costBadge": "Total: 128,45 €",
+        "tableWidth": 672,
+        "containerWidth": 696,
+        "documentWidth": 768,
+        "dateCell": {
+          "clientWidth": 112,
+          "scrollWidth": 112,
+          "cssTextOverflow": "ellipsis",
+          "title": null,
+          "text": "20.10.2026"
+        },
+        "addButtons": 2
+      },
+      "serviceCreated": true,
+      "reminderShown": true,
+      "supplyShown": true
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "steps": [
+        "five rendered garage cards",
+        "mouse navigation into first vehicle",
+        "service history and explicit cost visible",
+        "service entry modal opens with key fields",
+        "synthetic maintenance entered and saved using UI",
+        "vehicle reminder visible",
+        "synthetic part visible"
+      ],
+      "garageCards": 5,
+      "garageDocumentWidth": 1280,
+      "garageCardKeyboard": {
+        "focusable": false,
+        "tag": "DIV",
+        "tabIndex": -1,
+        "role": null
+      },
+      "service": {
+        "recordVisible": true,
+        "rowText": "20.10.2026 12000 UI-SERVICE-ALPHA 123,45 € UI-SYNTHETIC-NOTE",
+        "costBadge": "Total: 133,45 €",
+        "tableWidth": 1092,
+        "containerWidth": 1116,
+        "documentWidth": 1280,
+        "dateCell": {
+          "clientWidth": 91,
+          "scrollWidth": 102,
+          "cssTextOverflow": "ellipsis",
+          "title": null,
+          "text": "20.10.2026"
+        },
+        "addButtons": 2
+      },
+      "serviceCreated": true,
+      "reminderShown": true,
+      "supplyShown": true
+    }
+  ],
+  "consoleExceptions": [],
+  "externalRequests": [],
+  "httpResponses400OrAbove": [],
+  "containersStopped": true,
+  "reusedEmptySyntheticNetwork": "wolfs-wp02ui-2bf1ae3e16_isolated",
+  "screenshots": {
+    "tests/wp02/ui-shots/ui-after-add-1280.png": "244eb98fa9ed70f89f9acf38667812c9535ce794332559c881deef0483bc783f",
+    "tests/wp02/ui-shots/ui-after-add-320.png": "ef872dd7a15044574fd28b42f930fd844f3a09f2882c8134f5b6225543751531",
+    "tests/wp02/ui-shots/ui-after-add-768.png": "77fd8376d5c1b45638a62b8e1dabd76a9189bdeff51f1ce8f4b61d0b9c3b3788",
+    "tests/wp02/ui-shots/ui-garage-1280.png": "6bbedbcd57abd9e1ba434f9f4c2835ee72ed9e65e6c2e82c1348af7019111593",
+    "tests/wp02/ui-shots/ui-garage-320.png": "0be0cf2895fcc563ca8938c16c1a34dea14d5f2ce6c76b2dabd3ebef45af9f1c",
+    "tests/wp02/ui-shots/ui-garage-768.png": "cf1e9f329159a774775436d97545e944cb8c6ff3f4478b341aa09d0551bc28fb",
+    "tests/wp02/ui-shots/ui-reminder-1280.png": "229a487ee4ec9062df76cdfbedd8700fac1d6d3b9297a66a0876e66ff07f53a4",
+    "tests/wp02/ui-shots/ui-reminder-320.png": "09bb88e3e6c3d1eb2cbd36b34e9a92a06e3eaa4e1aeed22908fa2bd41f5d6c3f",
+    "tests/wp02/ui-shots/ui-reminder-768.png": "7aeb0e857f36054e8162e9a0079f4dd261fa52edf126946e7693b6ed969e2bd6",
+    "tests/wp02/ui-shots/ui-service-1280.png": "ed87068aadb86146ea754493904ebbef4cea8823ac67d4f0da2eddae4dfb2258",
+    "tests/wp02/ui-shots/ui-service-320.png": "ce9e0b2be8d46425e0fb89a80b15c7ed512c6b144f404d30345e34dbb0d517a5",
+    "tests/wp02/ui-shots/ui-service-768.png": "82cd15e14b594de5e3412738d6dfec305357afc876c758097c2e31e8f85fb0b2",
+    "tests/wp02/ui-shots/ui-service-form-1280.png": "244eb98fa9ed70f89f9acf38667812c9535ce794332559c881deef0483bc783f",
+    "tests/wp02/ui-shots/ui-service-form-320.png": "ef872dd7a15044574fd28b42f930fd844f3a09f2882c8134f5b6225543751531",
+    "tests/wp02/ui-shots/ui-service-form-768.png": "77fd8376d5c1b45638a62b8e1dabd76a9189bdeff51f1ce8f4b61d0b9c3b3788",
+    "tests/wp02/ui-shots/ui-supply-1280.png": "420b3a67b06abc79988d57d19fd0319f3b3eabbe6a0a04351da9146d84c5b345",
+    "tests/wp02/ui-shots/ui-supply-320.png": "e351616555eb50d4e0694191598091bdcdabdfd2d93b8320e1d2c2c82a2d44fc",
+    "tests/wp02/ui-shots/ui-supply-768.png": "24a58b6a642e85aa1d0c16612f64b4637730d6a5e84d4f919c264b1540627eda",
+    "tests/wp02/ui-shots/ui-vehicle-1280.png": "a2e1761773ca12ef2686ff08c25c98ffac3cac219bac75f5b165630fad85c5ba",
+    "tests/wp02/ui-shots/ui-vehicle-320.png": "3c680404d7914e16e621dee4101a4e06e5579352bc507f2062aa3f292f9d2492",
+    "tests/wp02/ui-shots/ui-vehicle-768.png": "54ae0261493d80eb25f80c9ee5b42186cd669c3c452978fad0b0608c8cf8a107"
+  },
+  "currentScriptSha256": {
+    "tests/wp02/ui_run.py": "a2284a237c44a928625589126cf4b4b98e1f29e1f38946009bb1afbbb8c525df",
+    "tests/wp02/ui_browser.js": "91c527fb97e3931d64bd3cd2445b779234ae6ff6d79e0ab17a114013bfed208f"
+  }
+}

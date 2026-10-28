@@ -1,0 +1,4 @@
+# Preserve upstream license/catalogue bytes used as historical evidence.
+# Their original CRLF/trailing spaces are not project-source whitespace errors.
+frontend/vehicle-icons-Pictogrammers-LICENSE.txt -text -whitespace
+tests/lubelogger/upstream/api.v1.7.4.json -text -whitespace

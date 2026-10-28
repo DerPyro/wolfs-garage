@@ -1,6 +1,6 @@
 # Anforderungen — Wolfs Garage
 
-Status: abgestimmene Produktanforderungen; technische Details sind noch zu validieren.
+Status: Produktanforderungen mit entschiedener eigenständiger Entwicklung unter MIT. Der erste Alpha-Kern ist implementiert; weitere fachliche und betriebliche Details bleiben zu validieren.
 
 ## Fahrzeugstammdaten
 - REQ-001: Mindestens fünf Autos/Motorräder verwalten, beliebig erweiterbar.
@@ -54,7 +54,7 @@ Status: abgestimmene Produktanforderungen; technische Details sind noch zu valid
 - REQ-039: Self-hosted, Docker-basiert, auf bestehendem Proxmox-Homelab.
 - REQ-040: Backups und dokumentierte Wiederherstellung.
 - REQ-041: Geheimnisse über Environment/Secret-Management, niemals im Repository.
-- REQ-042: Web-Authentifizierung und Autorisierung zusätzlich zur Cloudflare-Schutzschicht prüfen.
+- REQ-042: Cloudflare Access ist das einzige gewünschte interaktive Web-Login. Alle dort zugelassenen Webnutzer erhalten Administratorrechte auf sämtliche Fahrzeuge und Dokumente. Den Schutz der internen Anwendung vor direktem, nicht durch Access geprüftem Zugriff sowie passende Dienstzugänge prüfen; eine zweite interaktive Anmeldung ist nicht das Ziel.
 - REQ-043: Änderungsprotokoll für Wartungs- und Logbucheinträge.
 - REQ-044: KI-Ergebnisse von Fakten trennen; Nutzer bestätigt Änderungen.
 - REQ-045: Zeitstempel und Fälligkeiten in Europe/Berlin korrekt verarbeiten.
@@ -63,8 +63,21 @@ Status: abgestimmene Produktanforderungen; technische Details sind noch zu valid
 - REQ-048: Integrationstests für Terminberechnung, Berechtigungen und Bot-Dialoge.
 - REQ-049: Wartungsintervalle, Erinnerungsgrenzen und Schweregrade konfigurierbar.
 
+## Eigenständige Open-Source-Anwendung — Nutzerentscheidung 2026-10-28
+
+- REQ-050: Der neue Anwendungskern verwaltet seine Daten eigenständig; LubeLogger ist keine erforderliche Laufzeitabhängigkeit. Eine bestehende LubeLogger-Instanz wird erst durch einen gesonderten, kontrollierten Übernahmeauftrag ersetzt.
+- REQ-051: Eigener Projektcode wird unter MIT bereitgestellt. Lizenzen und Hinweise zu Drittkomponenten und Markenabbildungen bleiben erhalten.
+- REQ-052: Andere Betreiber können die Anwendung mit generischer Konfiguration und eigener Datenhaltung selbst installieren. Persönliche Fahrzeugdaten, Hostkonfiguration und Geheimnisse gehören nicht in die öffentliche Quelle oder Beispieldaten.
+- REQ-053: Der Kern funktioniert ohne verpflichtende Cloud-APIs. Cloudflare Access bleibt der gewünschte Eingang der Referenzinstallation; andere Betreiber können einen passenden authentifizierenden Reverse-Proxy einsetzen. Ein eigenes Mehrrollen- oder Mandantensystem wird dadurch nicht beauftragt.
+
+Der erste eigenständige Entwicklungsstand umfasst Fahrzeuge, unabhängige Fahrbereitschaft/offene Punkte, Kilometer, Service-/Reparaturbelege, Verlauf und Backup. Wiederkehrende Regeln, Belegkorrekturen, Anhänge, Teile, Telegram, Kalender und KI bleiben weitere Arbeitspakete; die bestehenden Anforderungen werden dadurch nicht gestrichen.
+
+## Klarstellung zum Betriebsmodell vom 2026-10-27
+
+Der Nutzer betreibt die Anwendung für sich. Cloudflare Access ist der gewünschte Eingang; nach erfolgreicher Anmeldung erhalten zugelassene Nutzer volle Adminrechte. Eine rollen-, fahrzeug- oder dokumentbezogene Trennung **zwischen** angemeldeten Webnutzern ist kein Produktziel. Das erlaubt es nicht, die Anwendung für nicht angemeldete Personen über einen direkten Originweg zu öffnen. Telegram bleibt ein separater Zugang mit eigener ID-Allowlist und Bestätigungen. REQ-020/043 zu Historie und Änderungsprotokoll bleiben bestehen; deren genaue native Abdeckung wird geprüft, ohne zusätzliche Details als bereits beauftragt zu unterstellen.
+
 ## Offene Entscheidungen
-- Genaue LubeLogger-API-/Datenmodellabdeckung und Alternative bei Lücken.
+- Vollständigkeit des späteren LubeLogger-Imports und konkreter Schreibwechsel; der eigenständige Kern ist als Ziel entschieden.
 - Kalender: eigene Kalender-ID, Ereignisidentität, Duplikatvermeidung und Ausnahmen bei HU-Fälligkeiten.
 - KI-Anbieter, Kostenbudget und Datenschutz bei Dokument-/Historienübermittlung.
 - Speicherung technischer Logbucheinträge und Anhänge.

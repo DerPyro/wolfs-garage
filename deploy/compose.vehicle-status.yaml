@@ -1,0 +1,11 @@
+# Ergänzt den Dashboard-Adapter um einen dauerhaften Statusspeicher.
+services:
+  garage_gateway:
+    environment:
+      GARAGE_STATUS_DB: /var/lib/wolfs-garage/status.sqlite3
+      GARAGE_PUBLIC_ORIGIN: ${GARAGE_PUBLIC_ORIGIN:?Öffentlichen HTTPS-Origin festlegen}
+      GARAGE_PROVIDER_ID: ${GARAGE_PROVIDER_ID:?Stabile LubeLogger-Instanzkennung festlegen}
+    volumes:
+      - vehicle_status:/var/lib/wolfs-garage
+volumes:
+  vehicle_status:

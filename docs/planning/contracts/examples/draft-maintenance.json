@@ -1,0 +1,18 @@
+{
+  "operation": "recordMaintenance",
+  "vehicleId": "00000000-0000-4000-8000-000000000001",
+  "expectedVehicleRevision": 3,
+  "payload": {
+    "performedOn": "2026-10-26",
+    "kilometers": 12345,
+    "kind": "service",
+    "description": "Synthetischer Wartungsvorgang",
+    "totalCost": {
+      "amountMinor": 12345,
+      "currency": "EUR"
+    },
+    "workKind": "self",
+    "laborMinutes": 60,
+    "completedTaskIds": []
+  }
+}

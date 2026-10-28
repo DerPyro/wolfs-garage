@@ -1,0 +1,877 @@
+{
+  "project": "wolfs-b02-5a27f0cb20",
+  "startedAt": "2026-10-26T17:20:20.433387+00:00",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "tests": [
+    {
+      "name": "image revision and version",
+      "status": "pass",
+      "detail": {
+        "imageId": "sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+        "architecture": "amd64"
+      }
+    },
+    {
+      "name": "auth required after setup",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "invalid API key denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "actual application locale is de-DE",
+      "status": "pass",
+      "detail": {
+        "currentVersion": "1.7.4",
+        "locale": "de-DE",
+        "currencySymbol": "€",
+        "decimalSeparator": ",",
+        "dateFormat": "dd.MM.yyyy"
+      }
+    },
+    {
+      "name": "isolated application has no default IPv4 route",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "viewer can read empty vehicle list",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "viewer cannot create vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "five synthetic vehicles and engine extra field",
+      "status": "pass",
+      "detail": {
+        "vehicleIds": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "name": "outsider list does not leak vehicles",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "outsider cannot read vehicle odometer",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "viewer cannot delete vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "editor cannot delete vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "viewer cannot create odometer",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "outsider cannot write vehicle",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "denied writes have no effects",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "odometer JSON roundtrip, number types and invariant date",
+      "status": "pass",
+      "detail": [
+        {
+          "vehicleId": 1,
+          "id": 1,
+          "date": "2026-10-26",
+          "initialOdometer": 12000,
+          "odometer": 12345,
+          "notes": "synthetic-reading",
+          "tags": "",
+          "extraFields": [],
+          "files": [],
+          "equipmentRecordId": ""
+        }
+      ]
+    },
+    {
+      "name": "German locale differs from invariant",
+      "status": "pass",
+      "detail": [
+        {
+          "vehicleId": "1",
+          "id": "1",
+          "date": "26.10.2026",
+          "initialOdometer": "12000",
+          "odometer": "12345",
+          "notes": "synthetic-reading",
+          "tags": "",
+          "extraFields": [],
+          "files": [],
+          "equipmentRecordId": ""
+        }
+      ]
+    },
+    {
+      "name": "viewer cannot update existing record",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "outsider cannot update foreign record ID",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "outsider all-record list is filtered",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "viewer and editor cannot delete odometer record",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "odometer correction and backdated history retained",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "servicerecords numeric cost and extra fields",
+      "status": "pass",
+      "detail": [
+        {
+          "vehicleId": 1,
+          "id": 1,
+          "date": "2026-10-26",
+          "odometer": 12500,
+          "description": "synthetic-servicerecords",
+          "notes": null,
+          "cost": 123.45,
+          "tags": "",
+          "extraFields": [
+            {
+              "name": "Arbeitsart",
+              "value": "Eigenarbeit",
+              "isRequired": false,
+              "fieldType": 0
+            },
+            {
+              "name": "DauerMinuten",
+              "value": "60",
+              "isRequired": false,
+              "fieldType": 0
+            }
+          ],
+          "files": []
+        }
+      ]
+    },
+    {
+      "name": "repairrecords numeric cost and extra fields",
+      "status": "pass",
+      "detail": [
+        {
+          "vehicleId": 1,
+          "id": 1,
+          "date": "2026-10-26",
+          "odometer": 12500,
+          "description": "synthetic-repairrecords",
+          "notes": null,
+          "cost": 67.89,
+          "tags": "",
+          "extraFields": [
+            {
+              "name": "Arbeitsart",
+              "value": "Eigenarbeit",
+              "isRequired": false,
+              "fieldType": 0
+            },
+            {
+              "name": "DauerMinuten",
+              "value": "60",
+              "isRequired": false,
+              "fieldType": 0
+            }
+          ],
+          "files": []
+        }
+      ]
+    },
+    {
+      "name": "service automatically adds odometer history",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "ISO date and German decimal string roundtrip",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 5,
+        "id": 2,
+        "date": "2026-10-02",
+        "odometer": 12000,
+        "description": "synthetic-ISO-and-string-cost",
+        "notes": null,
+        "cost": 123.45,
+        "tags": "",
+        "extraFields": [],
+        "files": []
+      }
+    },
+    {
+      "name": "auto odometer insert can be disabled",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "HTTP 200 does not imply write success",
+      "status": "pass",
+      "detail": {
+        "http": 200,
+        "body": {
+          "success": false,
+          "message": "Input object invalid, DueDate and DueOdometer must be valid if Metric is Both"
+        }
+      }
+    },
+    {
+      "name": "Both km-first and date-first become overdue",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "calendar-day boundary discrepancy reproduced",
+      "status": "gap",
+      "detail": {
+        "synthetic-day-0": {
+          "dueDate": "2026-10-26",
+          "dueDays": 0,
+          "urgency": "PastDue"
+        },
+        "synthetic-day-7": {
+          "dueDate": "2026-11-02",
+          "dueDays": 6,
+          "urgency": "VeryUrgent"
+        },
+        "synthetic-day-30": {
+          "dueDate": "2026-11-25",
+          "dueDays": 29,
+          "urgency": "Urgent"
+        }
+      }
+    },
+    {
+      "name": "public reminder export omits recurrence",
+      "status": "gap",
+      "detail": {
+        "vehicleId": 2,
+        "id": 6,
+        "description": "synthetic-recurring",
+        "urgency": "NotUrgent",
+        "metric": "Both",
+        "userMetric": "Both",
+        "notes": null,
+        "dueDate": "2028-01-31",
+        "dueOdometer": 20000,
+        "dueDays": 461,
+        "dueDistance": 20000,
+        "tags": ""
+      }
+    },
+    {
+      "name": "API update preserves existing recurrence and UI advances leap month",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 6,
+        "description": "synthetic-recurring-updated",
+        "urgency": "NotUrgent",
+        "metric": "Both",
+        "userMetric": "Both",
+        "notes": "",
+        "dueDate": "2028-02-29",
+        "dueOdometer": 21000,
+        "dueDays": 490,
+        "dueDistance": 21000,
+        "tags": ""
+      }
+    },
+    {
+      "name": "UI maintenance completion advances fixed recurrence",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 6,
+        "description": "synthetic-recurring-updated",
+        "urgency": "NotUrgent",
+        "metric": "Both",
+        "userMetric": "Both",
+        "notes": null,
+        "dueDate": "2028-03-29",
+        "dueOdometer": 22000,
+        "dueDays": 519,
+        "dueDistance": 1000,
+        "tags": ""
+      }
+    },
+    {
+      "name": "flexible recurrence advances from confirmed completion",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 7,
+        "description": "synthetic-flexible",
+        "urgency": "NotUrgent",
+        "metric": "Both",
+        "userMetric": "Both",
+        "notes": "",
+        "dueDate": "2028-03-15",
+        "dueOdometer": 21500,
+        "dueDays": 505,
+        "dueDistance": 500,
+        "tags": ""
+      }
+    },
+    {
+      "name": "public API silently ignores recurrence input",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "response": {
+          "success": false,
+          "message": "Unable to update reminder because it no longer exists."
+        }
+      }
+    },
+    {
+      "name": "API maintenance does not advance selected reminder",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "recurrence calendar arithmetic 29.02.2028",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 9,
+        "description": "synthetic-calendar-29.02.2028",
+        "urgency": "NotUrgent",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": "",
+        "dueDate": "2029-02-28",
+        "dueOdometer": 20000,
+        "dueDays": 855,
+        "dueDistance": 0,
+        "tags": ""
+      }
+    },
+    {
+      "name": "recurrence calendar arithmetic 28.03.2026",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 10,
+        "description": "synthetic-calendar-28.03.2026",
+        "urgency": "PastDue",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": "",
+        "dueDate": "2026-03-30",
+        "dueOdometer": 20000,
+        "dueDays": -210,
+        "dueDistance": 0,
+        "tags": ""
+      }
+    },
+    {
+      "name": "recurrence calendar arithmetic 24.10.2026",
+      "status": "pass",
+      "detail": {
+        "vehicleId": 2,
+        "id": 11,
+        "description": "synthetic-calendar-24.10.2026",
+        "urgency": "PastDue",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": "",
+        "dueDate": "2026-10-26",
+        "dueOdometer": 20000,
+        "dueDays": 0,
+        "dueDistance": 0,
+        "tags": ""
+      }
+    },
+    {
+      "name": "native GET can advance due date without completion",
+      "status": "gap",
+      "detail": {
+        "vehicleId": 2,
+        "id": 12,
+        "description": "synthetic-autorefresh",
+        "urgency": "Urgent",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": "",
+        "dueDate": "2026-11-16",
+        "dueOdometer": 20000,
+        "dueDays": 20,
+        "dueDistance": 0,
+        "tags": ""
+      }
+    },
+    {
+      "name": "custom threshold affects subsequent standard reminder",
+      "status": "gap",
+      "detail": [
+        {
+          "vehicleId": 3,
+          "id": 13,
+          "description": "synthetic-standard-before",
+          "urgency": "NotUrgent",
+          "metric": "Date",
+          "userMetric": "Date",
+          "notes": null,
+          "dueDate": "2026-12-25",
+          "dueOdometer": 0,
+          "dueDays": 59,
+          "dueDistance": 0,
+          "tags": ""
+        },
+        {
+          "vehicleId": 3,
+          "id": 14,
+          "description": "synthetic-custom",
+          "urgency": "VeryUrgent",
+          "metric": "Date",
+          "userMetric": "Date",
+          "notes": null,
+          "dueDate": "2026-12-25",
+          "dueOdometer": 20000,
+          "dueDays": 59,
+          "dueDistance": 0,
+          "tags": ""
+        },
+        {
+          "vehicleId": 3,
+          "id": 15,
+          "description": "synthetic-standard-after",
+          "urgency": "VeryUrgent",
+          "metric": "Date",
+          "userMetric": "Date",
+          "notes": null,
+          "dueDate": "2026-12-25",
+          "dueOdometer": 0,
+          "dueDays": 59,
+          "dueDistance": 0,
+          "tags": ""
+        }
+      ]
+    },
+    {
+      "name": "supply requisition decreases stock; explicit total includes used part",
+      "status": "pass",
+      "detail": {
+        "remainingSupply": {
+          "vehicleId": 3,
+          "id": 1,
+          "date": "2026-10-26",
+          "partNumber": "SYNTH-PART",
+          "partSupplier": "",
+          "partQuantity": 1,
+          "description": "synthetic-part",
+          "cost": 10.0,
+          "notes": "",
+          "tags": "",
+          "extraFields": [],
+          "files": []
+        },
+        "service": {
+          "vehicleId": 3,
+          "id": 6,
+          "date": "2026-10-26",
+          "odometer": 1000,
+          "description": "synthetic-part-install",
+          "notes": null,
+          "cost": 15.0,
+          "tags": "",
+          "extraFields": [],
+          "files": []
+        }
+      }
+    },
+    {
+      "name": "public API ignores Supplies and does not decrease stock",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "document linked to record and authenticated download",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "document scope for authenticated outsider",
+      "status": "gap",
+      "detail": {
+        "http": 200,
+        "bytesDisclosedToOutsider": true
+      }
+    },
+    {
+      "name": "anonymous document access denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "normal integration account cannot create backup",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "transport response loss reconciled without retry or duplicate",
+      "status": "pass",
+      "detail": {
+        "connectionClosedBeforeResponseHeaders": true,
+        "clientTransportFailure": true,
+        "upstreamCommitted": [
+          true
+        ],
+        "reconciledCount": 1
+      }
+    },
+    {
+      "name": "identical POST is not deduplicated upstream",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "reconciliation sees direct UI write",
+      "status": "pass",
+      "detail": [
+        {
+          "vehicleId": 4,
+          "id": 2,
+          "date": "2026-10-26",
+          "odometer": 120,
+          "description": "synthetic-ui-repair",
+          "notes": null,
+          "cost": 12.5,
+          "tags": "",
+          "extraFields": [],
+          "files": []
+        }
+      ]
+    },
+    {
+      "name": "running image API documentation matches pinned source",
+      "status": "pass",
+      "detail": {
+        "sha256": "118df316583d3d173d48229c18e79b8264a967537682f906c62ab317696c6082",
+        "bytes": 56745
+      }
+    },
+    {
+      "name": "authenticated /api documentation renders",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "webhook retries after two local HTTP 500 responses",
+      "status": "pass",
+      "detail": {
+        "attempts": 3
+      }
+    },
+    {
+      "name": "webhook contains API and native UI event types",
+      "status": "pass",
+      "detail": [
+        {
+          "type": "repairrecord.add.api",
+          "timestamp": "2026-10-26T17:20:24.8551674Z",
+          "data": {
+            "user": "sandbox-owner",
+            "description": "synthetic-webhook-api",
+            "odometer": "130",
+            "vehicleId": "4",
+            "cost": "0,00"
+          },
+          "vehicleId": "4",
+          "username": "sandbox-owner",
+          "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+        },
+        {
+          "type": "repairrecord.add.api",
+          "timestamp": "2026-10-26T17:20:24.8682663Z",
+          "data": {
+            "user": "sandbox-owner",
+            "description": "synthetic-webhook-api",
+            "odometer": "130",
+            "vehicleId": "4",
+            "cost": "0,00"
+          },
+          "vehicleId": "4",
+          "username": "sandbox-owner",
+          "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+        },
+        {
+          "type": "repairrecord.add.api",
+          "timestamp": "2026-10-26T17:20:24.8694369Z",
+          "data": {
+            "user": "sandbox-owner",
+            "description": "synthetic-webhook-api",
+            "odometer": "130",
+            "vehicleId": "4",
+            "cost": "0,00"
+          },
+          "vehicleId": "4",
+          "username": "sandbox-owner",
+          "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+        },
+        {
+          "type": "repairrecord.add",
+          "timestamp": "2026-10-26T17:20:24.9501074Z",
+          "data": {
+            "user": "sandbox-owner",
+            "description": "synthetic-webhook-ui",
+            "odometer": "140",
+            "vehicleId": "4",
+            "cost": "0,00"
+          },
+          "vehicleId": "4",
+          "username": "sandbox-owner",
+          "action": "sandbox-owner Added Repair Record Description: synthetic-webhook-ui"
+        }
+      ]
+    },
+    {
+      "name": "webhook lacks stable event ID and complete before-after data",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "backup excludes DataProtection keys (separate backup needed)",
+      "status": "gap",
+      "detail": null
+    },
+    {
+      "name": "restored native authentication remains enabled",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restored API key and vehicle identities",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restore preserves records, amounts, IDs and references",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restored outsider rights and editor delete restriction",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restored anonymous document access denied",
+      "status": "pass",
+      "detail": null
+    },
+    {
+      "name": "restored root login and attachment byte equality",
+      "status": "pass",
+      "detail": null
+    }
+  ],
+  "observations": {
+    "odometerInvariant": [
+      {
+        "vehicleId": 1,
+        "id": 1,
+        "date": "2026-10-26",
+        "initialOdometer": 12000,
+        "odometer": 12345,
+        "notes": "synthetic-reading",
+        "tags": "",
+        "extraFields": [],
+        "files": [],
+        "equipmentRecordId": ""
+      }
+    ],
+    "reminderBoundaries": [
+      {
+        "vehicleId": 1,
+        "id": 1,
+        "description": "synthetic-day-0",
+        "urgency": "PastDue",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": null,
+        "dueDate": "2026-10-26",
+        "dueOdometer": 0,
+        "dueDays": 0,
+        "dueDistance": 0,
+        "tags": ""
+      },
+      {
+        "vehicleId": 1,
+        "id": 2,
+        "description": "synthetic-day-7",
+        "urgency": "VeryUrgent",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": null,
+        "dueDate": "2026-11-02",
+        "dueOdometer": 0,
+        "dueDays": 6,
+        "dueDistance": 0,
+        "tags": ""
+      },
+      {
+        "vehicleId": 1,
+        "id": 3,
+        "description": "synthetic-day-30",
+        "urgency": "Urgent",
+        "metric": "Date",
+        "userMetric": "Date",
+        "notes": null,
+        "dueDate": "2026-11-25",
+        "dueOdometer": 0,
+        "dueDays": 29,
+        "dueDistance": 0,
+        "tags": ""
+      },
+      {
+        "vehicleId": 1,
+        "id": 4,
+        "description": "synthetic-km-first",
+        "urgency": "PastDue",
+        "metric": "Odometer",
+        "userMetric": "Both",
+        "notes": null,
+        "dueDate": "2027-01-24",
+        "dueOdometer": 12000,
+        "dueDays": 89,
+        "dueDistance": -500,
+        "tags": ""
+      },
+      {
+        "vehicleId": 1,
+        "id": 5,
+        "description": "synthetic-date-first",
+        "urgency": "PastDue",
+        "metric": "Date",
+        "userMetric": "Both",
+        "notes": null,
+        "dueDate": "2026-10-25",
+        "dueOdometer": 99999,
+        "dueDays": -1,
+        "dueDistance": 87499,
+        "tags": ""
+      }
+    ],
+    "webhooks": [
+      {
+        "type": "repairrecord.add.api",
+        "timestamp": "2026-10-26T17:20:24.8551674Z",
+        "data": {
+          "user": "sandbox-owner",
+          "description": "synthetic-webhook-api",
+          "odometer": "130",
+          "vehicleId": "4",
+          "cost": "0,00"
+        },
+        "vehicleId": "4",
+        "username": "sandbox-owner",
+        "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+      },
+      {
+        "type": "repairrecord.add.api",
+        "timestamp": "2026-10-26T17:20:24.8682663Z",
+        "data": {
+          "user": "sandbox-owner",
+          "description": "synthetic-webhook-api",
+          "odometer": "130",
+          "vehicleId": "4",
+          "cost": "0,00"
+        },
+        "vehicleId": "4",
+        "username": "sandbox-owner",
+        "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+      },
+      {
+        "type": "repairrecord.add.api",
+        "timestamp": "2026-10-26T17:20:24.8694369Z",
+        "data": {
+          "user": "sandbox-owner",
+          "description": "synthetic-webhook-api",
+          "odometer": "130",
+          "vehicleId": "4",
+          "cost": "0,00"
+        },
+        "vehicleId": "4",
+        "username": "sandbox-owner",
+        "action": "sandbox-owner Added Repair Record via API Description: synthetic-webhook-api"
+      },
+      {
+        "type": "repairrecord.add",
+        "timestamp": "2026-10-26T17:20:24.9501074Z",
+        "data": {
+          "user": "sandbox-owner",
+          "description": "synthetic-webhook-ui",
+          "odometer": "140",
+          "vehicleId": "4",
+          "cost": "0,00"
+        },
+        "vehicleId": "4",
+        "username": "sandbox-owner",
+        "action": "sandbox-owner Added Repair Record Description: synthetic-webhook-ui"
+      }
+    ],
+    "backup": {
+      "sha256": "d86bdf808125d942f1cccfcd0da21660869f8e8694bb28e00adb6f0f6f10b445",
+      "includesDataProtectionKeys": false,
+      "entries": 4
+    }
+  },
+  "runtime": {
+    "docker": "29.9.2",
+    "timezone": "Europe/Berlin",
+    "locale": "de-DE",
+    "publishedPorts": [],
+    "networkInternal": true
+  },
+  "containersStopped": true,
+  "finishedAt": "2026-10-26T17:20:29.782125+00:00",
+  "harnessSha256": "67be3363808867db2e6c94542aa87ac1001e84e31d69a1929afe81923660e063",
+  "composeSha256": "dda9cdd1f6d72ccc7b0e1889b20c33109c1289bb4947fa89ec46b28f973e6170",
+  "summary": {
+    "pass": 51,
+    "gap": 11
+  }
+}

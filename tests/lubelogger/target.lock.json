@@ -1,0 +1,22 @@
+{
+  "scope": "isolated B01/B02 test baseline; not production approval",
+  "selectedOn": "2026-10-26",
+  "upstreamRepository": "https://github.com/hargata/lubelog",
+  "release": "v1.7.4",
+  "releaseUrl": "https://github.com/hargata/lubelog/releases/tag/v1.7.4",
+  "sourceRevision": "63fa5cd267497ba01c29f4888c65efbbdd4b94bf",
+  "image": "ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2",
+  "platform": "linux/amd64",
+  "apiCatalogue": {
+    "path": "upstream/api.v1.7.4.json",
+    "format": "LubeLogger custom API documentation, not OpenAPI",
+    "sha256": "118df316583d3d173d48229c18e79b8264a967537682f906c62ab317696c6082"
+  },
+  "license": {
+    "spdx": "MIT",
+    "path": "upstream/LICENSE",
+    "sha256": "5745d164b9897a203a75e43b51a25c84eec6d0d16982947a0067e3e020e4caef"
+  },
+  "runtimeVerified": true,
+  "distributionSbomComplete": false
+}

@@ -1,0 +1,7 @@
+# Fahrzeugtyp über LubeLogger-Zusatzfeld: isolierter Laufzeitnachweis
+
+Stand 2026-10-28. In einer neuen, internen Testinstanz des gepinnten Images LubeLogger v1.7.4 (Digest aus `tests/lubelogger/target.lock.json`) wurden zwei vollständig synthetische Fahrzeuge mit `ExtraFields` und dem Feld `Fahrzeugtyp` angelegt. Der Host veröffentlichte keinen Port; es gab keinen Zugriff auf Produktionsdaten oder Cloudflare.
+
+Der dokumentierte Abruf `GET /api/vehicles` lieferte für beide Fahrzeuge `extraFields` mit den gespeicherten Name-/Wertpaaren. Der Wolfs-Garage-Adapter projizierte daraus `vehicleType: Limousine` bzw. `vehicleType: Cross-Motorrad`. Der erfolgreiche Testcontainer `wolfs-type-check-dbedd07f` wurde gestoppt; synthetische Testressourcen bleiben erhalten. Ein erster Testlauf stoppte nach erfolgreichem HTTP-200-Abruf wegen einer fehlerhaften Helferannahme im Testskript, nicht wegen eines Upstream-Fehlers; das Skript wurde anschließend korrigiert und erneut erfolgreich ausgeführt.
+
+Reproduktion: `GARAGE_TEST_NETWORK=<leeres-internes-testnetz> python3 tests/vehicle_types_runtime.py`. Das Skript prüft ein leeres, internes Netz, nutzt ein zufälliges Containerpräfix, erfasst keine echten Fahrzeugdaten und stoppt den Testcontainer. Die Probe belegt das Anlegen über die offizielle API und den anschließenden Leseweg für diese zwei synthetischen Werte; die Bearbeitung über die native Oberfläche oder die vorhandene produktive Instanz wurde nicht getestet.

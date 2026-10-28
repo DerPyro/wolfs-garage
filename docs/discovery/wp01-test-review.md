@@ -1,0 +1,78 @@
+# WP01 — unabhängiger Bedrohungs- und Testreview
+
+Stand: 2026-10-27. **Read-only-Review, keine durch diesen Agenten ausgeführten Laufzeittests.** Betrachtet: aktueller `tests/lubelogger/run.py`, AGENTS/Requirements/Architektur/Roadmap, bestehende Security-/Runbookplanung und offizieller lokal vorliegender Release-Quellcode `/tmp/wolfs-b01-source`, SHA `63fa5cd267497ba01c29f4888c65efbbdd4b94bf`. Koordination mit dem unabhängigen Source-Agent `b01_source`; dieser prüft das größere Routeninventar. Keine Sandbox, Konfiguration oder gemeinsame Datei geändert, keine Dienste gestartet.
+
+## Bestandsaufnahme und Prüfziel
+
+B02 hat bekannten Dokumentzugriff eines angemeldeten Outsiders bereits belegt. Der bisherige Treiber prüft direkte Dokumentbytes, native Upload-/Restorewege und ausgewählte Rollen, aber keine komplette household-basierte native Read-only-Grenze oder Proxy-Routennormalisierung. WP01 muss zwei Aussagen trennen: **Ist die native Identität tatsächlich read-only?** Und **kann ein zusätzlicher Vermittler bestimmte Zugänge wirksam begrenzen, ohne notwendige UI-Funktion zu verlieren?** Ein isolierter Minimalproxy ist nur ein Experiment für definierte Routen; er beweist keine sichere produktive Reverse-Proxy-/Access-Architektur.
+
+Vorgehen: reproduzierbare Actors und synthetische Dateien anlegen → direkte Originbaseline → Pfad-/Methodenvarianten → eingeschränkte Proxyansicht → Zustand vor/nach Reads und Writes unabhängig lesen → Grenzen und nicht geprüfte Fälle dokumentieren. In diesem Review genannte Routen sind geprüfte Quellaktionen oder ausdrücklich markierte Testkandidaten, keine neue produktive Integrations-API.
+
+## Rasch zu prüfende Quellkandidaten
+
+1. `Files.UploadCoordinates` hat kein HTTP-Verb-Attribut und erzeugt Temp-CSV ohne Fahrzeug-/Editprüfung. Ein GET kann deshalb Schreibwirkung haben. Die Laufzeit muss Route, Ergebnis und persistierte Markerbytes nachweisen; Quellbefund allein ist kein Runtime-Pass.
+2. `Vehicle.SaveVehicle` prüft `Edit` nur für vorhandene `Id`. Bei neuer `Id == 0` werden Fahrzeug und direkte Benutzerrechte angelegt. Haushalt-View-only auf fremden Bestandsfahrzeugen bedeutet damit **keine globale native Nur-Lesen-Rolle**.
+3. `UserCanEditVehicle` erlaubt direkten Collaborators unabhängig von Household-Permission volle Rechte. Testnutzer muss ausschließlich Child eines berechtigten Parent sein; keine direkte Collaboration, keine Admin-/Rootrolle und keine andere editberechtigte Household-Verbindung.
+4. `Vehicle.GetOdometerRecordsByVehicleId` ist GET mit Viewfilter, schreibt aber bei ausschließlich `InitialMileage == 0` über `AutoConvertOdometerRecord` Kilometerdatensätze. Zwei passende Belege vor/nach vergleichen; eine leere Liste wäre ein wirkungsloser Test.
+5. `Vehicle.CheckRecurringTaxRecords` ist POST mit Viewfilter, ruft aber persistierende `UpdateRecurringTaxes` auf. Überfällige tatsächlich wiederkehrende Steuer als Fixture nötig; sonst beweist `200/false` keine effektive Read-only-Grenze.
+6. `Vehicle.MoveRecord` hat keinen Verbconstraint und kann bei Editrecht den Datentyp/Vorgang verschieben. GET pauschal zuzulassen ist kein hinreichender Nur-Lesen-Schutz, selbst wenn die spezielle Haushalt-Identität diesen Pfad ablehnt.
+7. `Files.PreviewFile` rendert HTML mit Links/Bildquelle. HTML-200 und darin reflektierter bekannter Dateipfad beweisen **keinen unabhängigen serverseitigen Byteabruf**. Das tatsächlich verlinkte Ziel mit demselben Actor separat abrufen.
+
+## Actor- und Nachweismatrix
+
+Mindestens getrennte Cookieclients: anonym, Owner ohne Root, Child-View-only, angemeldeter Outsider ohne Beziehung, Root ausschließlich Setup. API-Keys ebenfalls mit getrennten cookie-freien Clients. Zusätzliche Kontrollidentität mit direkter Collaboration verdeutlicht den Unterschied zu Child-View-only. Household-Setup und Berechtigungen per nachvollziehbaren UI-/Controlleraktionen setzen, keine fremde DB manipulieren.
+
+Baseline je Actor: richtige Identität, erwartete Fahrzeugliste, Zugriff auf bekanntes Zielfahrzeug, Schreibtest auf existierendem Beleg und `Id == 0`-Neuanlage getrennt. Nach Rechteentzug dieselbe alte Cookie-Session sowie neue Anmeldung testen. Bei mehreren Parents eine einzelne View-Verbindung nicht als wirksames Gesamtrecht interpretieren. Root-Cookie, Basic-Header und API-Key dürfen einander nicht still übersteuern.
+
+| Fall | Konkreter Request / Voraussetzung | Erwarteter Sicherheitsnachweis |
+| --- | --- | --- |
+| F01 Dokumentbaseline | Owner lädt synthetische Markerdatei hoch, verknüpft sie mit Fahrzeugrecord; alle Actors lesen zurückgegebenen `/documents/{name}`-Pfad | Berechtigter Actor erhält bytegleichen Marker; anonym gesperrt; Outsider-Zugriff als reproduzierter Gap, keine erfolgreiche Schutzabnahme |
+| F02 Tempbaseline | Owner lädt Marker über `POST /Files/HandleFileUpload` oder `HandleMultipleFileUpload` nach Temp; Outsider/Child lesen zurückgegebenen Pfad | Tempdatei separat prüfen, nicht von Dokumentergebnis ableiten; Bytezugriff ohne Besitzerrecht als eigener Gap |
+| F03 Preview | `GET /Files/PreviewFile?fileName=synthetic.txt&fileLocation=<bekannter Pfad>` | HTML/Link und eigenständige Dateibytes getrennt erfassen; bei Proxy muss jeder sekundäre Abruf ebenfalls kontrolliert sein |
+| F04 Attributrouting | `/documents/{name}`, `/temp/{name}`, `/images/{name}`, `/translations/{name}` aus `GetStaticFile` | Nur tatsächlich dort existierende Marker sind positive Routefixtures; fehlende Datei/404 beweist keine Autorisierung |
+| F05 vermeintlicher Alias | `/Files/GetStaticFile?fileName={name}` und konventionelle Varianten als **Testkandidat** | Erreichbarkeit nicht voraussetzen: attributgeroutete Aktion ist nicht automatisch konventionell erreichbar; 404 als nicht erreichbaren Kandidat dokumentieren |
+| F06 Groß-/Kleinschreibung | `/Documents/{name}`, `/DOCUMENTS/{name}`, `/Temp/{name}`, Controller-/Actioncase | Rawpath, Originstatus und Proxyentscheidung vergleichen; Linux-Dateicase kann 404 erzeugen, obwohl Router case-insensitiv matcht — nicht als geblockten Zugriff missdeuten |
+| F07 einzelne Kodierung | `/%64ocuments/{name}`, `/documents/%<zulässiges Filenamezeichen>`, `/%74emp/{name}` | Raw-Request tatsächlich übertragen, einmalige Clientnormalisierung ausschließen; Proxy darf originwirksame verbotene Route nicht freigeben |
+| F08 doppelte Kodierung | `/%2564ocuments/{name}`, `/%2574emp/{name}`, kodierte Separatoren nur auf bekannte synthetische Ziele | Normalisierung pro Hop dokumentieren; 400/404 unterscheiden von Proxydeny. Erfolg/Fehler wird nicht pauschal vorausgesagt |
+| F09 Slash-/Dotvarianten | doppelte Slashes, `/safe/../documents/{name}`, kodierte Dotsegmente, `/documents/{name}?x=1`, trailing slash | Rawtransport nutzen; kein Zugriff auf reale Hostdateien. Varianten mit bekanntem Marker beweisen Routeäquivalenz oder Nichterreichbarkeit |
+| F10 Methoden | GET/HEAD auf Markerpfad, POST/OPTIONS als Kandidaten, Range-GET | HEAD darf Markerbody nicht erwarten; Status und Content-Type/-Length/Cacheheader erfassen. Kein geschützter Metadaten-/Bytezugang über andere Methode; Range unterstützt oder abgelehnt separat ausweisen |
+| F11 Header-Manipulation | `X-Original-URL`, `X-Rewrite-URL`, `X-Forwarded-Host/Proto`, Method-Override mit harmlosem Markerziel | Testproxy darf keine Autorität aus beliebigen Forwardedheadern übernehmen; unterstützte Overrides prüfen, nicht erfinden |
+| F12 Native Uploads | Child/Outsider POST `HandleFileUpload`, `HandleMultipleFileUpload`, `/api/documents/upload` | Ablehnung oder tatsächliche Uploadfähigkeit durch Rückgabepfad plus Markerbytes beweisen; HTTP 200 allein reicht nicht |
+| F13 Temp-GET-Write | Child GET `/Files/UploadCoordinates?coordinates=<Marker>` | Neu erzeugter Rückgabepfad und von Owner/Root gelesene Markerbytes beweisen Write; HTTPbody allein kein Schreibnachweis |
+| F14 native Neuanlage | Child POST `/Vehicle/SaveVehicle` mit vollständigem synthetischem Neufahrzeug, keine bestehende Id | Owner-/Rootinventar und Child-Liste vor/nach; neue Id/direkter Zugriff sind Gegenbeweis globaler Read-only-Rolle |
+| F15 Bestandswrite | Child POST native Kilometer-/Wartungskorrektur auf Parentfahrzeug | Abgelehnt und unabhängiges APIlesen unverändert; Ergebnisobjekt prüfen, nicht nur Status |
+| F16 Read-Konvertierung | Child GET `/Vehicle/GetOdometerRecordsByVehicleId?vehicleId=...`; zwei bestehende Stände mit Startstand 0 | Origin-GET erzeugt keine verdeckte Persistenz oder tatsächliche Konvertierung als Read-only-Gap belegen; anschließend öffentliche API unabhängig lesen |
+| F17 Steuerfortschreibung | Child POST `/Vehicle/CheckRecurringTaxRecords`, überfällige recurring Fixture | Vorher/nachher Recordanzahl, Daten und Fälligkeit prüfen; keine Wirkung bei falscher Fixture ist kein ausreichender Sicherheitspass |
+| F18 optionaler GET-Write | Owner GET `/Vehicle/MoveRecord`, bekannter synthetischer Record | Source-/Zielrecords vor/nach; dient Methode≠Sicherheitsgrenze-Beweis, nicht als Child-Eskalation ausweisen |
+| F19 Admin-Export/Restore | Nichtroot auf `/api/makebackup?output=download`, `/Files/RestoreBackup`, bekannte Tempdatei | Keine ZIPbytes/Restorewirkung; Rootaktionen nur auf separater Restore-Testinstanz und wenn im Scope; keine Produktionsdaten/DBdateien |
+| F20 Rechteentzug | Parentbeziehung/Fahrzeugrecht entziehen, alte Session liest bekannte native Datei | Entzug muss beim Objektabruf greifen; eine leere Fahrzeugliste genügt nicht für Dokumentrechte |
+
+## Testproxy und direkter Origin: aussagekräftiger Aufbau
+
+Eine einfache geschlossene Allowlist aus Methode plus wohldefiniertem Raw-/Normalpfad kann **für die tatsächlich getesteten Pfade** scheitern oder funktionieren. Sie ist keine vollständige UI-Erlaubnisliste. Defaultdeny nicht durch catch-all für GET/`/Vehicle/`/`/Files/`/`/api/` ersetzen. Bypassfälle immer in zwei Richtungen prüfen: verbotener Markerpfad darf nicht upstream gelangen; eine bewusst erlaubte, benötigte Lesefunktion muss mit derselben zulässigen Identität tatsächlich erfolgreich sein. UIassets, Anmeldung, Partialviews und GET-Seiteneffekte benötigen später eigene Browserabnahme.
+
+Der Testproxy darf keinen Root-/Owner-Key injizieren. Derselbe Client/Actor soll bei Direktorigin und Vermittler verglichen werden. Falls der Proxy andere Credentials verwendet, muss das eine gesonderte, nicht transparente Vermittlungsarchitektur mit eigener Objektprüfung sein; Proxy-200 mit Root ist kein Weiterreichen der Nutzerrechte.
+
+Mindestens protokollieren: Raw-Requesttarget, Methode, sanitizierte Actorrolle, normalisierte Proxyentscheidung, ob Upstreamkontakt stattfand, Originstatus, Fachstatus, Bytehash/-länge und Datenzustand vor/nach. Proxydeny kann an Status **und ausbleibendem Upstreamrequest** nachgewiesen werden. Unbekannte HTTP-Methode am Pythonhandler (501) ist keine bewiesene Sicherheitsregel eines künftig anderen Servers.
+
+Direktorigin-Kontrollfall: derselbe verbotene bekannte Marker darf nicht über alternativen Hostport/LAN-/Containernetz erreicht werden, wenn das Ziel eine vollständige Vermittlung ist. In der bestehenden Docker-Sandbox darf der Host technisch bewusst direkt auf Container-IP zugreifen. Ein dort erfolgreicher Direktorigin-Read ist deshalb **ein bekannter ungeklärter Deployment-Bypass**, kein Nachweis, dass ein Proxy den Origin technisch isoliert. Ein Minimalproxy allein kann diese Netzwerkfrage nicht lösen. Separate Ziele für Autorisierungs-/Routeexperiment und künftige Netzwerkisolation sichtbar halten; kein produktiver Origin-/Cloudflaretest behaupten.
+
+## Grenzen des vorhandenen B02-Treibers für WP01
+
+- `Client.call` deaktiviert Umgebungsproxies und automatische Redirects — gut für unverfälschte Zielwahl. Es gibt bisher nur Status/JSON/Body zurück; Header für HEAD, Redirectziel, Cache und Cookieprüfung gesondert sanitisiert erfassen.
+- `urllib.request` kann URLformen normalisieren oder ablehnen. Für Rawpathvarianten ausdrücklich sicherstellen, welche Bytes am Testproxy und Origin ankommen; nötigenfalls `http.client` mit festem isoliertem Ziel verwenden. Keine URL-/Hosttargets aus externem Input übernehmen.
+- `check(..., gap=True)` unterscheidet charakterisierte Lücke von Pass. Ein Test, der sowohl „denied“ als auch „bekannte Bytes ausgeliefert“ akzeptiert, braucht im Befund die genaue Beobachtung; die Gesamtzahl grüner Charakterisierungstests darf nicht als Sicherheitsabnahme erscheinen.
+- „HTTP 200 und kein Marker“ kann Fehlerseite/Preview/HTML sein. Objektstatus, Inhaltstyp und echte Bytefolge prüfen; „HEAD leer“ ist protokollbedingt und kein Zugriffsschutz.
+- Für Zustandsmutationen API-Reads mit nichtmutierendem getesteten Pfad verwenden. Dieselbe native GET-Aktion zum Vorherlesen kann bereits die zu untersuchende Konvertierung auslösen.
+- Neue synthetische Fixture je mutierendem Test oder nachvollziehbarer Reset verhindert, dass schon erledigte Wiederholung einen späteren Read-only-Test wirkungslos macht. Keine Hostuhränderung nötig; vergangenes Datum genügt für Steuerfixture.
+- Keine Tests gegen vorhandene Proxmox-/Cloudflare-/Paperlessressourcen. Zufälliges isoliertes Projekt, leere eigene Volumes, kein Publishedport, separate Credentials und kein Egress; Testinstanzen am Ende stoppen. Dieser Reviewer ändert oder stoppt selbst keine fremden Sandboxprozesse.
+
+## Entscheidungsrelevante Ergebnisse statt pauschaler Freigabe
+
+WP01 darf ein negatives Ergebnis liefern: **Household View-only allein reicht nicht als globaler kontrollierter Schreibweg**, wenn Neuanlage, Temp-Upload, GET-Konvertierung oder Steuerfortschreibung funktionieren. Das ist präziser als eine behauptete vollständige Rechteeskalation auf jedes Fahrzeug. Ein Proxy kann einzelne bekannte Pfade blockieren, aber ohne vollständiges Routeninventar, notwendigen UI-Funktionsumfang, native-/alternative Schreibwege, Originisolation und auditierbaren Ersatz noch keinen vollständigen B03/B16-Nachweis liefern.
+
+ADRs/Blocker nur anhand tatsächlich ausgeführter Cases aktualisieren; ausstehende Encoding-/Browser-/Host-/Restorefälle offen ausweisen. Kein öffentlicher Dienst oder produktiver Proxy ergibt sich aus diesem Review. Produktive Deployments, Cloudflare-Änderungen, Löschungen und Migrationen bleiben gemäß AGENTS.md explizit freigabepflichtig.
+
+## Primärquellen
+
+Gepinnte offizielle Quelltexte, lokal erneut gelesen am 2026-10-27: [FilesController](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/FilesController.cs), [Previewview](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Views/Files/_AttachmentPreview.cshtml), [FileHelper](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Helper/FileHelper.cs), [UserLogic](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Logic/UserLogic.cs), [CollaboratorFilter](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Filter/CollaboratorFilter.cs), [VehicleController](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/VehicleController.cs), [native Kilometeraktionen](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/Vehicle/OdometerController.cs), [OdometerLogic](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Logic/OdometerLogic.cs), [native Steueraktionen](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/Vehicle/TaxController.cs), [Routing](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Program.cs). Quellkandidaten sind von tatsächlichem Laufzeitverhalten ausdrücklich zu trennen.

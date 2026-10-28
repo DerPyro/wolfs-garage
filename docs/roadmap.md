@@ -1,26 +1,64 @@
 # Roadmap
 
-## Phase 0 — Discovery und Architektur
-LubeLogger und Paperless-API prüfen; Datenmodell, Deployment-Grenzen, Backups, Authentifizierung und Integrationsvertrag festlegen. Ergebnis: ADRs, Compose-Entwurf, priorisierter Backlog.
+Wolfs Garage is an independent, self-hosted application under MIT. The standalone alpha owns its data and does not require LubeLogger. This roadmap describes targets, not delivery dates or features already present. The [requirements](requirements.md) retain the full product scope.
 
-## Version 1.0 — Basisverwaltung
-LubeLogger auf Proxmox via Docker; Cloudflare Tunnel/Access; Fahrzeugstammdaten; Kilometerstände; Wartungsintervalle; Reparaturen; Kosten; Web-Listenübersicht; HU/Steuer/Versicherung; Backups. Eigene UI nur wenn die Bestandslösung Anforderungen nicht ausreichend abdeckt.
+## Available: 0.1 alpha
 
-## Version 1.1 — Assistent und Integrationen
-Spring-Boot-Telegram-Bot; ID-Allowlist; natürlichsprachliche Erfassung mit Bestätigung; 30-Tage-Erinnerungen; prognostizierte Kilometerfälligkeiten; Google-Kalender-HU-Synchronisierung; Paperless-Verknüpfung; technisches Logbuch und Schweregrade.
+- [x] Responsive vehicle dashboard with types, manufacturer artwork and monochrome plates.
+- [x] INOP for manually recorded unavailability and a wrench for open work; no task counter or green readiness check.
+- [x] Vehicle creation and metadata editing with stable local identities.
+- [x] Readiness and open issues maintained independently.
+- [x] Dated odometer readings and service/repair records with explicit currency and optional HTTPS document references.
+- [x] Atomic work-record creation and explicit issue closure; readable change history.
+- [x] Revision checks and idempotent reading/record submissions.
+- [x] Consistent SQLite backup and synthetic isolated restore evidence.
+- [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
 
-## Version 2.0 — KI-Diagnose
-Fahrzeughistorienbasierte interaktive Diagnose; Recherche mit Quellen; Screenshot-Erkennung für Fehlercodes; Verknüpfung wiederkehrender Probleme; Statusverfolgung und Sicherheitswarnungen.
+[Standalone guide](standalone.md) · [API contract](api.md) · [verification evidence](discovery/standalone-core.md)
 
-## Später / Nicht-Ziele
-OBD-Live-Anbindung, automatische Telemetrie, Tankprotokoll als Pflichtfeature, Mehrbenutzerbetrieb, Videoanalyse.
+## Next: complete the daily maintenance workflow
 
-## Codex-Arbeitspakete
-1. Architektur-/Integrationsprüfung (zuerst, blockiert Implementierung).
-2. Infrastructure Agent: Compose, Cloudflare-Konzept, Secrets, Backup.
-3. Domain Agent: Datenmodell, Wartungs- und Fälligkeitslogik.
-4. Integration Agent: LubeLogger, Paperless, Google Calendar.
-5. Bot Agent: Telegram, Dialoge, Authentifizierung.
-6. Quality Agent: Tests, Security-Review, Dokumentation.
+- [ ] Correct completed records while retaining earlier values and correction history.
+- [ ] Browse complete odometer and maintenance history with filtering and pagination.
+- [ ] Give open work explicit due dates, severity and lifecycle instead of only short issue text.
+- [ ] Connect the maintenance indicator to due work as well as manually open issues, with clear reasons.
+- [ ] Improve empty/error states, mobile forms and accessibility from actual use.
+- [ ] Provide a clear path for optional interface translations.
 
-Parallelisierung erst nach geklärten Schnittstellen; jeder Agent arbeitet in abgegrenztem Bereich.
+## Maintenance planning
+
+- [ ] Date-based and distance-based rules, including whichever limit comes first.
+- [ ] Explicit completion and next-due calculation, with fixed versus completion-based intervals.
+- [ ] Test month-end, leap-year and Europe/Berlin date boundaries.
+- [ ] Track manufacturer sources and applicability; do not invent maintenance intervals or diagnoses.
+- [ ] Keep readiness a separate explicit assessment rather than inferring it from completed tasks.
+
+## Documents, parts and costs
+
+- [ ] Choose secure local attachments, Paperless references, or both, with the required access and backup behavior.
+- [ ] Link documents and parts to vehicles and individual work records.
+- [ ] Distinguish part purchase, consumption and work costs to avoid double counting.
+- [ ] Show useful annual vehicle costs and clearly define their relationship to payments.
+
+## Reliable 1.0 operation
+
+- [ ] Versioned schema upgrades that preserve existing data; schema-1 initialization is not an upgrade mechanism.
+- [ ] Complete export and documented isolated restore for all supported data and files.
+- [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
+- [ ] Establish release notes, upgrade instructions and repeatable independent backups.
+- [ ] Prepare a dry-run LubeLogger import with identity, unit, amount and document comparisons.
+- [ ] Decide and explicitly authorize any productive cutover; preserve the original data and account for new writes during rollback.
+
+## Later integrations
+
+- [ ] Telegram with a configurable allowed user, confirmed writes and durable duplicate handling.
+- [ ] Reminders and Google Calendar synchronization with explicit failure and retry behavior.
+- [ ] Mileage projections clearly marked as estimates.
+- [ ] Advisory AI using approved history and verifiable sources, with confirmation before changes.
+- [ ] OBD screenshot interpretation and manually maintained fault-code history.
+
+Each instance initially serves a trusted owner; a public multi-tenant service, a complex role system, video analysis and automatic OBD access are not part of this roadmap. Fuel tracking is outside the MVP.
+
+## Decisions and historical evidence
+
+The decision to build an independent core is accepted in [ADR-0009](adr/0009-backend-ownership-challenge.md), and MIT/reuse in [ADR-0010](adr/0010-open-source-mit.md). LubeLogger remains the data source for the separately running legacy installation until an authorized migration. The earlier [challenge](planning/lubelogger-vs-own.md) and [historical implementation log](discovery/roadmap-history.md) document how this direction was chosen; their old pending items do not reverse these decisions.

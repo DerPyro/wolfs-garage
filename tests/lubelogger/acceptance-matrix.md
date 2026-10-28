@@ -1,0 +1,85 @@
+# LubeLogger v1.7.4 — unabhängige B02-Abnahmematrix
+
+Stand: 2026-10-26. **Prüfplan, keine Ausführung und keine bestandenen Tests.** Diese Datei wurde durch einen unabhängigen Quality-Agenten aus dem Release-Quellcode abgeleitet. Tatsächliche Ergebnisse gehören in ein getrenntes Laufzeitprotokoll mit Fall-ID, Image-Digest, Eingabe, Antwort und Abweichung. Bestandsaufnahme: nur Planungsdokumente im Projekt; für diesen Auftrag ausschließlich diese Matrix ergänzt. Plan: Quellcode für Rechte, Terminlogik, Teile/Kosten, UI-Schreibwege und Backup lesen, daraus nachprüfbare Fälle ableiten. Die Projektanforderungen und Architektur werden nicht verändert.
+
+## Voraussetzungen und synthetische Fixtures
+
+- Ausschließlich isolierte lokale Testinstanz, kein Tunnel, keine externen Integrationen, keine echten Dokumente/Fahrzeugdaten. Zeitzone `Europe/Berlin`; Prozessdatum/-zeit bei jeder Messung festhalten.
+- Zielstand v1.7.4, Commit `63fa5cd267497ba01c29f4888c65efbbdd4b94bf`. Image-Digest, Locale und Serverkonfiguration vor Test im Laufzeitprotokoll festhalten.
+- Fünf Fahrzeuge `WG-TEST-01` bis `WG-TEST-05` als Kilometerfahrzeuge anlegen; zusätzlich ein fremdes Fahrzeug `WG-OTHER` ohne Freigabe an den Integrationsnutzer. IDs aus Antworten übernehmen, niemals feste Datenbank-IDs annehmen.
+- Root ausschließlich für isolierte Einrichtung/Backup; eigener Nicht-Root-Nutzer mit Zugriff auf die fünf Testfahrzeuge. Viewer-, Editor- und Manager-API-Schlüssel getrennt erzeugen; Werte außerhalb von Git und Logs halten. API-Requests nutzen `x-api-key`, nie Query-Token.
+- `EnableAutoReminderRefresh` zunächst **aus**, um unbestätigte Fristfortschreibung durch UI-Aufrufe zu verhindern. `EnableAutoOdometerInsert` pro Fall ausdrücklich aus/an setzen. Vor-/Nachzustand jeweils lesen.
+- Für API-Schreibvorgänge JSON verwenden; Leseausgaben jeweils mit/ohne `culture-invariant` prüfen. Erfolgsantwort enthält `Success`/`Message`/ggf. `AdditionalData.recordId`; tatsächliches JSON-Casing aus Laufzeitantwort sichern. Ein HTTP-2xx ist kein Erfolgskriterium.
+- Relative Daten `D` beziehen sich auf den lokalen Kalendertag der Ausführung. API-Datum als ISO-String `YYYY-MM-DD`; Kontrollmessung zusätzlich mit deutscher Eingabe. Für deterministische Zukunftsfälle separate synthetische Daten verwenden; keine Systemuhr eines gemeinsam genutzten Hosts verstellen.
+
+## Reproduzierbare Referenzrequests
+
+IDs, Root-/Nutzer-Session und Keys sind Laufzeitwerte. Folgende Bodies enthalten keine Credentials. `vehicleId` gehört bei JSON-Anlage in den Query, Update-ID in den Body.
+
+| Zweck | Methode und Pfad | JSON-Body |
+| --- | --- | --- |
+| Kilometerbeleg | `POST /api/vehicle/odometerrecords/add?vehicleId=V1` | `{"Date":"2026-10-01","InitialOdometer":10000,"Odometer":10100,"Notes":"WG synthetic"}` |
+| Wartung | `POST /api/vehicle/servicerecords/add?vehicleId=V1` | `{"Date":"2026-10-02","Odometer":10200,"Description":"WG synthetic service","Cost":123.45,"Notes":"WG synthetic"}` |
+| Teilelager | `POST /api/vehicle/supplyrecords/add?vehicleId=V1` | `{"Date":"2026-10-01","Description":"WG synthetic part","PartNumber":"WG-PART-001","PartSupplier":"WG synthetic supplier","PartQuantity":2,"Cost":20.00}` |
+| Beide Fälligkeiten | `POST /api/vehicle/reminders/add?vehicleId=V1` | `{"Description":"WG synthetic reminder","Metric":"Both","DueDate":"2026-11-25","DueOdometer":12000}` |
+| Defekte Both-Eingabe | `POST /api/vehicle/reminders/add?vehicleId=V1` | `{"Description":"WG synthetic invalid","Metric":"Both","DueDate":"invalid","DueOdometer":12000}` |
+
+Die Datumswerte sind nur Fixtures, keine Herstellerintervalle oder realen Wartungsempfehlungen. Bei Ausführung nach dem Beispieldatum werden vergangene Fälligkeiten erwartet; relative Grenztests verwenden stets das protokollierte `D`.
+
+## Fälle und Erwartungen
+
+Jede Zeile hat Status **offen**. „Quellcodeerwartung“ beschreibt das zu charakterisierende Upstream-Verhalten, nicht automatisch die Erfüllung einer Wolfs-Garage-Anforderung. Abweichungen können Produktlücken statt Testfehler sein.
+
+| ID | Vorgehen | Erwartung / zu sichernde Evidenz |
+| --- | --- | --- |
+| B02-01 | `GET /api/vehicles` und fahrzeugbezogenen Kilometer-GET nach aktivierter Auth ohne Key, mit falschem Key und mit gültigem Viewer-Key abrufen. Redirects nicht automatisch als erfolgreiche Datenantwort werten. | Ungültige Identität erhält keine Fahrzeugdaten. Gültiger Viewer liest nur freigegebene Fahrzeuge. Status, Content-Type und Antwortkörper protokollieren. |
+| B02-02 | Viewer versucht synthetischen Kilometer-POST und bestehenden synthetischen Datensatz-PUT; Editor führt dieselben erlaubten Schritte aus. Vor-/Nachliste lesen. | Viewer-Änderungen abgewiesen, kein Seiteneffekt; Editor darf anlegen/ändern. `APIKeyFilter` erwartet Edit-Recht und setzt bei fehlender Rolle 403. |
+| B02-03 | Viewer und Editor versuchen `DELETE /api/vehicle/odometerrecords/delete?id=R` ausschließlich an einem dafür angelegten Testbeleg. | Beide abgewiesen, Beleg bleibt vorhanden. Erfolgreiche Manager-Löschung ist ein separater bewusst destruktiver Sandboxfall, keine Produktivfreigabe. |
+| B02-04 | Fremde Fahrzeug-ID bei GET und POST sowie fremde Datensatz-ID bei PUT verwenden; auch `/all`-Listen abrufen. | Keine fremden Daten und keine Änderung. Achtung: `CollaboratorFilter` kann bei Schreibwegen ein Fehlerobjekt ohne 403 liefern; Body und Vor-/Nachzustand prüfen. |
+| B02-05 | Referenz-Kilometerbeleg anlegen, GET nach ID lesen; deutsches Locale und invariantem Header gegenüberstellen. | Datum, 10000/10100, Einheit, Notiz und ID bleiben gleichwertig; invariant liefert typisierte Werte. Tatsächliches Property-Casing als Fixture sichern. |
+| B02-06 | Zwei historische Belege mit ansteigenden Ständen anlegen, danach einen dazwischen rückdatierten Beleg. Einen Stand begründet per PUT korrigieren. | Chronologie, InitialOdometer-/Distanzverhalten und höchster Fahrzeugstand werden protokolliert. Sinkende Stände werden nicht still zu negativer Fahrleistungsprognose übernommen; nötige Garage-Validierung als Lücke festhalten. |
+| B02-07 | Wartung bei ausgeschaltetem, dann bei eingeschaltetem Auto-Odometer-Insert speichern; Kilometerliste und höchsten Stand lesen. | Zusätzliche Belege nur gemäß tatsächlich wirksamer Einstellung. Ein Wartungsstand kann die Reminder-Dringlichkeit auch ohne separat manuell angelegten Stand beeinflussen. Doppelte Historienpunkte markieren. |
+| B02-08 | Synthetisches Fahrzeug mit Meilen bzw. Betriebsstunden separat anlegen, denselben numerischen Stand lesen; Garage-Anwendungsfall gegen km-Konfiguration bewerten. | Provider-Einheit ist nachvollziehbar. Adapter muss abweichende Einheit explizit behandeln/ablehnen; API-Zahl allein ist kein Kilometerbeweis. |
+| B02-09 | Wartung mit `123.45` als JSON-Zahl anlegen, unter `de_DE` zurücklesen; zusätzlich deutscher String `"123,45"` in separatem Fall. Datum `2026-10-02` gegen `02.10.2026` prüfen. | Kein stiller Faktor-100- oder Tag/Monat-Fehler; tatsächlicher Parservertrag dokumentiert. `culture-invariant` steuert Ausgabe und darf nicht ungeprüft als Eingabeparser-Regel gelten. |
+| B02-10 | Both-Reminder mit Datum D−1 und fernem Kilometerziel; zweiter mit Datum D+365 und unter dem höchsten Stand liegendem Kilometerziel; dritter mit beidem künftig. | Erstes bzw. zweites Ereignis wird als überfällig erkannt; `UserMetric` bleibt Both, `Metric` kann die auslösende Grenze anzeigen. Für REQ-006 muss jede Grenze unabhängig wirken. |
+| B02-11 | Datum D, D+7, D+30, D−1 und Kilometerziel exakt am aktuellen Stand anlegen, lokale Uhrzeit mitschreiben. | Fachlich „heute“ und exakte Tagesgrenzen gesondert bewerten. Quellcode vergleicht `DateTime`/`Now` und striktes `<`, daher kann D um 00:00 schon `PastDue`, D+30 bei `DueDays` nur 29 ergeben; tatsächliche Abweichung zu LocalDate-Semantik sichtbar machen. |
+| B02-12 | Reminder via API anlegen und dabei unbekannte `IsRecurring`-/Intervallfelder mitsenden; GET und UI-Editansicht vergleichen. | Nicht als erfolgreiche Regelanlage interpretieren: öffentlicher DTO enthält diese Felder nicht. HTTP-Erfolg kann trotz ignorierter Zusatzfelder entstehen. Keine erfundene API-Refresh-Operation verwenden. |
+| B02-13 | Wiederkehrenden Both-Reminder über die native UI mit festen Intervallen anlegen. UI-Editansicht sichern; über API PUT Beschreibung/Fälligkeit ändern; UI nochmals öffnen. | API-PUT lädt bestehenden Datensatz und sollte Recurrence-/Threshold-Felder erhalten. GET kann Erhalt nicht beweisen, da es diese Felder nicht exportiert. Vorher/Nachher der UI-Felder vergleichen. |
+| B02-14 | Zwei wiederkehrende Reminder mit fester bzw. durch tatsächliche Erledigung verschobener Basis anlegen. Wartung in nativer UI speichern und gewählten Reminder bestätigen. | Fester Modus rechnet von alter Fälligkeit, flexibler Modus mit übergebenem Wartungsdatum/-stand. Monatsende und tatsächlicher Stand bleiben nachvollziehbar. Unterschied zu manuellem „Pushback“ separat festhalten. |
+| B02-15 | Identische Wartung über öffentliche API anlegen und Reminder vorher/nachher lesen. | API-GenericRecord enthält keine Reminder-Auswahl; es darf keine belegte automatische Recurrence-Fortschreibung behauptet werden. Unterschied zum nativen UI-Fall ist Integrationslücke. |
+| B02-16 | In separater Sandboxkopie `EnableAutoReminderRefresh` aktivieren, überfälligen wiederkehrenden Reminder anlegen und native Übersicht/Dringlichkeitsabfrage öffnen. | Quellcode kann Reminder beim GET fortschreiben. Keine bestätigte Durchführung daraus ableiten. Produktionsvorschlag muss Einstellung ausschalten bzw. ausdrücklich entscheiden. |
+| B02-17 | Custom-Threshold-Reminder und nachfolgenden Standard-Reminder anlegen; Reihenfolge durch separate Neuanlage umkehren und Ergebnisse vergleichen. | Standard-Reminder sollte fachlich dieselben globalen Grenzen benutzen. Quellcode setzt Config vor foreach und überschreibt bei Custom-Fall ohne Reset: mögliche Reihenfolgeabhängigkeit gezielt protokollieren. |
+| B02-18 | Wiederkehrende UI-Reminder 31.01.2028 plus 1 Monat, 29.02.2028 plus 12 Monate und Tagesintervalle über 29.03.2026/25.10.2026 fortschreiben. | Erwartete Monatsdaten 29.02.2028 bzw. 28.02.2029 bei .NET-AddMonths-Semantik. Fachliche Berlin-Tage bleiben erhalten; keine behauptete 24h-Garantie. Historische Fixtures benötigen keine Host-Uhrverstellung. |
+| B02-19 | Referenzteil mit Menge 2/Kosten 20 anlegen. In nativer UI bei Wartung 1 Teil verwenden; Restbestand, Verwendungshistorie, Wartungskosten und Jahresübersicht lesen. | Restmenge 1/Restkosten 10, UsageHistory 1/10; Wartungsbetrag muss den gewünschten Gesamtbetrag nachvollziehbar enthalten. Kostenmodell protokollieren; Lagerkauf nicht zusätzlich zur Wartung doppelt summieren. |
+| B02-20 | Öffentliche API-Wartung mit derselben Teilreferenz als unbekanntem Feld anlegen. | API-GenericRecord unterstützt keine Supplies-Requisition. Kein automatischer Lagerabgang allein aus erfolgreichem HTTP-POST ableiten. Eigenständiger Kosten-/Bestandsvertrag bleibt erforderlich. |
+| B02-21 | Motorisierung am Fahrzeug und Arbeitsart/Dauer/Werkstatt als konfiguriertes Zusatzfeld in nativer UI setzen, API-Roundtrip lesen/ändern. | Werte und Feldtypen bleiben erhalten. Nicht konfigurierte Freitextkonventionen erfüllen Pflichtdaten nicht von selbst. |
+| B02-22 | Synthetische Textdatei hochladen, einer Wartung zuordnen und über Browser laden; unberechtigter Nutzer versucht Direktlink. | Richtige Zuordnung und gleicher Dateihash, keine fremden Inhalte. Ergebnis für API-Key vs. Browser-Session separat protokollieren. |
+| B02-23 | Referenz-Both-Eingabe mit ungültigem Datum senden; Bestand vor/nach lesen. | Quellcodezweig liefert `Success=false` möglicherweise HTTP 200; keine Anlage. Adapter muss Bodyfehler erkennen. Fehlendes Description liefert dagegen explizit 400; beide Pfade getrennt testen. |
+| B02-24 | Nur lokaler Testproxy: erfolgreichen synthetischen POST upstream abschließen lassen, Antwort zum Client verwerfen, anschließend per GET nach markiertem Beleg suchen. | Genau ein Datensatz nach erstem Versuch; Clientausgang unklar. Keine blinde Wiederholung. Ein erneut identischer POST könnte einen zweiten Datensatz erzeugen; Provider-Idempotenz wird nicht behauptet. |
+| B02-25 | API- und native UI-Änderung desselben Testbelegs bei ausschließlich lokalem Webhook-Recorder durchführen. | Eventtyp unterscheidet ggf. `.api`; Payload und fehlende vollständige Vorher/Nachherwerte/Datensatz-ID sichern. Timestamp ist Serialisierungszeit aus Getter, kein belastbarer Eventschlüssel. |
+| B02-26 | Lokaler Recorder antwortet kontrolliert 500, dann wieder 200; separater Fall Prozessabbruch während Sendung. | Sender enthält maximal fünf Versuche, aber keine belegte persistente Queue. Keinen dauerhaften Audit-/Exactly-once-Vertrag daraus ableiten; native Änderungen bleiben per Reconciliation auffindbar, verlorene Historie nicht automatisch rekonstruierbar. |
+| B02-27 | Root: `GET /api/makebackup?output=download`, ZIP-Inhalt prüfen; gleicher Request als normaler Nutzer/API-Key. | Root erhält ZIP; gewöhnlicher Integrationsnutzer nicht. ZIP erfasst DB, Dokumente/Bilder und Konfiguration laut Laufzeitbestand. ASP.NET-DataProtection-Keys separat sichern, da nicht explizit im Exportcode enthalten. |
+| B02-28 | ZIP nur in einer zweiten, isolierten Testinstanz via nativer Restore-Funktion einspielen; dieselbe Version, externe Egress-Ziele gesperrt. | Fahrzeug-/Beleg-IDs, Werte, Anhänge/Hashes, Zusatzfelder, native Auth, Nutzer und API-Rechte prüfen. Bestehen belegt nur diesen Sandboxrestore; noch keine Proxmox-/RPO-/RTO-Abnahme. |
+
+## Native UI-Routen für die Testeinrichtung
+
+Diese Quellcode-Routen dürfen im Testharness die native UI bedienen; sie sind **kein empfohlener öffentlicher Integrationsvertrag** für Garage. Session-Authentifizierung und tatsächlich wirksame CSRF-Konfiguration sind bei Verwendung separat zu prüfen. Endpunkte mit POST können Datensätze verändern, daher ausschließlich isolierte synthetische Fixture-Daten verwenden.
+
+| Native Aktion | Quellcodebasierte Route/Parameter |
+| --- | --- |
+| Reminder vollständig speichern | `POST /Vehicle/SaveReminderRecordToVehicleId` mit `ReminderRecordInput`, unter anderem `VehicleId`, `Date`, `Mileage`, `Metric`, `IsRecurring`, `FixedIntervals`, `ReminderMonthInterval`, `ReminderMileageInterval`, Custom-Felder |
+| Reminder-Editansicht prüfen | `GET /Vehicle/GetReminderRecordForEditById?reminderRecordId=R` → HTML-Partial, kein JSON-DTO |
+| Reminder manuell weiterschieben | `POST /Vehicle/PushbackRecurringReminderRecord` mit `reminderRecordId=R`; flexible Basis erhält hier keine tatsächlichen Erledigungswerte |
+| Wartung samt gewählten Regeln/Teilen | `POST /Vehicle/SaveServiceRecordToVehicleId` mit `ServiceRecordInput`, darunter `ReminderRecordId`-Liste und `Supplies`-Liste |
+| Backup erstellen | `GET /Files/MakeBackup` → Serverpfad als JSON, Root-only |
+| Backup hochladen/wiederherstellen | `POST /Files/HandleFileUpload` mit `file`, dann `POST /Files/RestoreBackup` mit zurückgegebenem `fileName`, Root-only Restore |
+
+## Quellenevidenz
+
+Gelesen wurde ausschließlich der gepinnte Release-Quellcode für die Ableitung dieser Erwartungen. Statische Befunde ersetzen keine Laufzeitprüfung.
+
+- [API-Key-Filter](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Filter/APIKeyFilter.cs), [Fahrzeugrechte](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Filter/CollaboratorFilter.cs).
+- [API-Reminder](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/API/ReminderController.cs), [Reminder-UI](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/Vehicle/ReminderController.cs), [ReminderHelper](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Helper/ReminderHelper.cs).
+- [Öffentliche DTOs](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Models/Shared/ImportModel.cs), [API-Wartung](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/API/ServiceController.cs), [native Wartung](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/Vehicle/ServiceController.cs), [Teileverwendung](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/Vehicle/SupplyController.cs).
+- [Webhook-Sender](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Logic/Event/EventLogic.cs), [Payload](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Models/Shared/WebHookPayload.cs).
+- [Backup-Export/Restore](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Helper/FileHelper.cs), [FilesController](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/FilesController.cs), [öffentlicher Backup-Download](https://github.com/hargata/lubelog/blob/63fa5cd267497ba01c29f4888c65efbbdd4b94bf/Controllers/APIController.cs).

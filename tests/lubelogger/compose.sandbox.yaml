@@ -1,0 +1,48 @@
+# Ausschließlich lokale B01/B02-Erprobung, keine Produktivkonfiguration.
+# Projektname pro Lauf zufällig; interne Netze verhindern Provider-Egress.
+services:
+  lubelogger:
+    image: ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2
+    platform: linux/amd64
+    restart: "no"
+    environment:
+      TZ: Europe/Berlin
+      LC_ALL: de_DE.UTF-8
+      LANG: de_DE.UTF-8
+      LUBELOGGER_LOCALE_OVERRIDE: de-DE
+    networks: [isolated]
+    volumes:
+      - sandbox-data:/App/data
+      - sandbox-keys:/root/.aspnet/DataProtection-Keys
+    mem_limit: 768m
+    cpus: 1
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  restore:
+    profiles: [restore]
+    image: ghcr.io/hargata/lubelogger@sha256:483a9d7582c4e6258615fd822b3de4193b4fcc4230d0a92432c6d407faf75af2
+    platform: linux/amd64
+    restart: "no"
+    environment:
+      TZ: Europe/Berlin
+      LC_ALL: de_DE.UTF-8
+      LANG: de_DE.UTF-8
+      LUBELOGGER_LOCALE_OVERRIDE: de-DE
+    networks: [isolated]
+    volumes:
+      - restore-data:/App/data
+      - restore-keys:/root/.aspnet/DataProtection-Keys
+    mem_limit: 768m
+    cpus: 1
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+networks:
+  isolated:
+    internal: true
+volumes:
+  sandbox-data:
+  sandbox-keys:
+  restore-data:
+  restore-keys:
