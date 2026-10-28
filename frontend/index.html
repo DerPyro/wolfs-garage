@@ -52,7 +52,7 @@
     <section id="detail" class="detail-section" aria-labelledby="detail-heading" hidden>
       <div class="section-heading detail-title"><div><p class="eyebrow"><span class="eyebrow-line"></span> IM DETAIL</p><h2 id="detail-heading">Fahrzeugübersicht</h2></div><span class="detail-meta" id="detail-meta"></span></div>
       <div id="detail-status" class="status" role="status" aria-live="polite"></div>
-      <div id="own-detail-actions" class="own-toolbar" hidden><button id="vehicle-edit" class="condition-edit" type="button">Fahrzeug bearbeiten</button><button id="odometer-add" class="condition-edit" type="button">Stand erfassen</button><button id="record-add" class="condition-edit" type="button">Arbeit dokumentieren</button><button id="history-toggle" class="condition-edit" type="button" aria-controls="history-panel" aria-expanded="false">Verlauf anzeigen</button></div>
+      <div id="own-detail-actions" class="own-toolbar" hidden><button id="vehicle-edit" class="condition-edit" type="button">Fahrzeug bearbeiten</button><button id="odometer-add" class="condition-edit" type="button">Stand erfassen</button><button id="record-add" class="condition-edit" type="button">Arbeit dokumentieren</button><button id="history-toggle" class="condition-edit" type="button" aria-controls="history-panel" aria-expanded="false">Verlauf anzeigen</button><button id="logbook-toggle" class="condition-edit" type="button" aria-controls="logbook-panel" aria-expanded="false" hidden>Logbuch anzeigen</button></div>
       <article id="condition-panel" class="condition-panel" aria-labelledby="condition-title">
         <div class="condition-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> AKTUELLER ZUSTAND</p><h3 id="condition-title">Fahrbereitschaft &amp; offene Punkte</h3></div><button id="condition-edit" class="condition-edit" type="button" aria-controls="condition-form" aria-expanded="false">Bearbeiten</button></div>
         <div id="condition-view"><div id="condition-readiness"></div><div id="condition-issues" class="condition-issues"></div></div>
@@ -71,6 +71,19 @@
         <article class="panel"><div class="panel-heading"><div><span class="panel-icon"><svg><use href="#i-tool"/></svg></span><h3>Zuletzt gemacht</h3></div><span class="panel-kicker">WARTUNG</span></div><div id="services"></div></article>
       </div>
       <article id="history-panel" class="panel history-panel" aria-labelledby="history-title" hidden><h3 id="history-title">Änderungsverlauf</h3><p id="history-message" class="status" role="status" aria-live="polite"></p><div id="history-events"></div></article>
+      <article id="logbook-panel" class="panel history-panel logbook-panel" aria-labelledby="logbook-title" hidden>
+        <div class="logbook-heading"><div><h3 id="logbook-title" tabindex="-1">Logbuch</h3><p class="form-hint">Erfasste Arbeiten und Kilometerstände für dieses Fahrzeug.</p></div><button id="logbook-close" class="condition-edit" type="button">Logbuch schließen</button></div>
+        <form id="logbook-filters" class="logbook-filters">
+          <div class="own-field"><label for="logbook-type">Einträge</label><select id="logbook-type" name="type"><option value="records">Erledigte Arbeiten</option><option value="odometer">Kilometerverlauf</option></select></div>
+          <div class="own-field"><label for="logbook-from">Von</label><input id="logbook-from" name="from" type="date"></div>
+          <div class="own-field"><label for="logbook-to">Bis</label><input id="logbook-to" name="to" type="date"></div>
+          <div id="logbook-kind-field" class="own-field"><label for="logbook-kind">Arbeitsart</label><select id="logbook-kind" name="kind"><option value="">Alle</option><option value="service">Wartung</option><option value="repair">Reparatur</option></select></div>
+          <button id="logbook-apply" class="condition-edit" type="submit">Filter anwenden</button>
+        </form>
+        <p id="logbook-message" class="status" role="status" aria-live="polite"></p>
+        <div id="logbook-records" aria-live="polite"></div>
+        <div class="logbook-actions"><button id="logbook-more" class="condition-edit" type="button" hidden>Weitere laden</button><button id="logbook-reload" class="condition-edit" type="button" hidden>Verlauf neu laden</button></div>
+      </article>
     </section>
     <aside id="legacy-banner" class="manage-banner" hidden><div class="manage-banner-icon"><svg><use href="#i-tool"/></svg></div><div><h2>Etwas eintragen?</h2><p>Fahrzeuge und Einträge verwaltest du derzeit in LubeLogger.</p></div><a href="/Home">Zur Verwaltung <svg><use href="#i-arrow"/></svg></a></aside>
   </main>

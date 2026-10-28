@@ -21,7 +21,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 ## Next: complete the daily maintenance workflow
 
 - [ ] Implement a safe date/odometer correction workflow with explicit links to measurement history.
-- [ ] Browse complete odometer and maintenance history with filtering and pagination.
+- [x] Browse complete odometer and maintenance history in date-sorted pages, with inclusive date filters, record-kind filtering, safe cursor restart after changes, and correction access on later record pages.
 - [ ] Give open work explicit due dates, severity and lifecycle instead of only short issue text.
 - [ ] Connect the maintenance indicator to due work as well as manually open issues, with clear reasons.
 - [ ] Improve empty/error states, mobile forms and accessibility from actual use.

@@ -13,6 +13,7 @@ Available now:
 - Record dated odometer readings and completed service/repair work with costs and an optional HTTPS document reference.
 - Close a selected issue atomically with its work record and inspect the change history.
 - Correct the description, service/repair kind, cost, currency and HTTPS document reference of a completed record, with a reason and before/after history. Record date, odometer reading, unit and issue closure remain fixed.
+- Browse complete service/repair and odometer histories in date-sorted pages with date filters; work records can also be filtered by kind.
 - Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
 
 Recurring maintenance rules, corrections to record dates or odometer readings, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. This is an early alpha, not the completed original feature list.

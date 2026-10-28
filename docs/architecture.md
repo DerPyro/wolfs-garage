@@ -17,6 +17,8 @@ Der Standalone-Kern führt Fahrzeuge mit stabilen lokalen IDs, Kilometer, Bereit
 
 Der Kern ruft keine LubeLogger- oder Cloud-API auf. Die bisherige Instanz bleibt während der eigenständigen Entwicklung erhalten. Das Anwendungsschema ist Version 2; Version 1 wird nicht beim Start migriert und kann durch einen Betreiberbefehl mit geprüfter Vorabkopie aktualisiert werden. Korrekturen von Belegdatum und Kilometerstand, wiederkehrende Regeln, Datei-Uploads, Teile und externe Integrationen bleiben weitere Arbeit. Der ältere Python-Adapter bleibt als Legacy-Integrationscode getrennt erhalten. [Standalone-Anleitung](standalone.md), [Korrekturvertrag und Abnahmeannahmen](planning/record-corrections.md), [Entscheidungsgrundlage](planning/lubelogger-vs-own.md).
 
+Die eigenständige Oberfläche kann abgeschlossene Vorgänge und Kilometerstände in paginierten, absteigend nach Datum und stabiler Zeilen-ID sortierten Listen anzeigen. Die API verwendet gebundene Fortsetzungscursor und liest je Seite Daten sowie die aktuelle fahrzeugbezogene Audit-Sequenz in einer SQLite-Lesetransaktion. Änderungen am Fahrzeug machen ältere Cursor ungültig, damit nachträglich erfasste, rückdatierte Einträge oder korrigierte Vorgangsarten nicht still zu Lücken oder Duplikaten führen. Der eigene Audit-Verlauf bleibt ein separater, unveränderter Endpunkt. Vertrag und Abnahmefälle: [History browsing](planning/history-browsing.md).
+
 ## Historischer Phase-0-Zielentwurf
 
 Die folgenden Abschnitte dokumentieren frühere, teilweise inzwischen ersetzte Architekturvorschläge. Ihr damaliger Status ist keine Beschreibung des heutigen Produktumfangs.

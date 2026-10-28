@@ -2,6 +2,7 @@
 import ipaddress
 import os
 from pathlib import Path
+import re
 import sqlite3
 from urllib.parse import urlsplit
 
@@ -82,6 +83,25 @@ def create_app(config=None):
             raise ValidationError("JSON-Objekt erforderlich.")
         return data
 
+    def page_query(allow_kind=False):
+        allowed = {"from", "to", "limit", "cursor"} | ({"kind"} if allow_kind else set())
+        if any(key not in allowed or len(request.args.getlist(key)) != 1 for key in request.args):
+            raise ValidationError("Invalid query parameters.")
+        raw_limit = request.args.get("limit", "25")
+        if not re.fullmatch(r"[0-9]{1,3}", raw_limit):
+            raise ValidationError("limit must be between 1 and 100.")
+        limit = int(raw_limit)
+        if not 1 <= limit <= 100:
+            raise ValidationError("limit must be between 1 and 100.")
+        cursor = request.args.get("cursor")
+        if cursor is not None and (not cursor or len(cursor) > 2048):
+            raise ValidationError("Invalid cursor.")
+        result = {"from_date": request.args.get("from"), "to_date": request.args.get("to"),
+                  "limit": limit, "cursor": cursor}
+        if allow_kind:
+            result["kind"] = request.args.get("kind")
+        return result
+
     @app.errorhandler(ValidationError)
     def invalid(error):
         return jsonify(error=str(error)), 400
@@ -119,7 +139,7 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing"])
 
     @app.get("/garage-api/vehicles")
     def vehicles():
@@ -153,6 +173,10 @@ def create_app(config=None):
     def readings(vehicle_id):
         return jsonify(readings=store.list_odometer(vehicle_id))
 
+    @app.get("/garage-api/vehicles/<int:vehicle_id>/odometer/page")
+    def readings_page(vehicle_id):
+        return jsonify(store.page_odometer(vehicle_id, **page_query()))
+
     @app.post("/garage-api/vehicles/<int:vehicle_id>/odometer")
     def add_reading(vehicle_id):
         return jsonify(store.add_odometer(vehicle_id, payload())), 201
@@ -160,6 +184,10 @@ def create_app(config=None):
     @app.get("/garage-api/vehicles/<int:vehicle_id>/records")
     def records(vehicle_id):
         return jsonify(records=store.get_summary(vehicle_id)["services"])
+
+    @app.get("/garage-api/vehicles/<int:vehicle_id>/records/page")
+    def records_page(vehicle_id):
+        return jsonify(store.page_records(vehicle_id, **page_query(allow_kind=True)))
 
     @app.get("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>")
     def record(vehicle_id, record_id):
