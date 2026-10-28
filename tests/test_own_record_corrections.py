@@ -160,7 +160,7 @@ class SchemaUpgradeTests(unittest.TestCase):
         backup = self.directory / "before-upgrade.sqlite3"
         self.assertTrue(self.store.upgrade(backup))
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 3)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
             self.assertEqual(db.execute("SELECT id,description,revision FROM records").fetchone(), (11, "Legacy service", 1))
             self.assertEqual(db.execute("SELECT action,command_id,response FROM commands").fetchone(), ("record", "legacy-id", self.legacy_response))
             self.assertEqual(db.execute("SELECT sequence,action,after_json FROM history").fetchone(), (13, "record.created", self.legacy_response))

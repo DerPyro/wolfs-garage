@@ -5,6 +5,7 @@ committed together. Application history is append-only, not protection against a
 database administrator. Money stays an exact decimal string throughout storage.
 """
 from contextlib import closing, contextmanager
+import calendar
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
@@ -21,7 +22,7 @@ from zoneinfo import ZoneInfo
 from . import __version__
 
 
-SCHEMA = 3
+SCHEMA = 4
 UNITS = {"km", "mi", "h"}
 READINESS = {"ready", "not_ready", "unknown"}
 SEVERITIES = {"observation", "repair", "critical"}
@@ -75,6 +76,17 @@ def _day(value):
         raise ValidationError("Date must be YYYY-MM-DD.") from exc
     if parsed.isoformat() != value:
         raise ValidationError("Date must be YYYY-MM-DD.")
+    return value
+
+
+def _inspection_month(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", value):
+        raise ValidationError("inspectionDueMonth must be null or YYYY-MM.")
+    year = int(value[:4])
+    if not 1 <= year <= 9998:
+        raise ValidationError("inspectionDueMonth year must be between 0001 and 9998.")
     return value
 
 
@@ -182,12 +194,13 @@ class Store:
                 PRAGMA synchronous=FULL;
                 BEGIN IMMEDIATE;
                 CREATE TABLE meta(schema INTEGER NOT NULL);
-                INSERT INTO meta VALUES(3);
+                INSERT INTO meta VALUES(4);
                 CREATE TABLE vehicles(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     make TEXT NOT NULL, model TEXT NOT NULL, name TEXT NOT NULL,
                     year INTEGER, license_plate TEXT NOT NULL, vehicle_type TEXT NOT NULL,
-                    unit TEXT NOT NULL, revision INTEGER NOT NULL);
+                    unit TEXT NOT NULL, revision INTEGER NOT NULL,
+                    inspection_due_month TEXT);
                 CREATE TABLE states(
                     vehicle_id INTEGER PRIMARY KEY REFERENCES vehicles(id),
                     readiness TEXT NOT NULL, issues TEXT NOT NULL, revision INTEGER NOT NULL);
@@ -227,7 +240,7 @@ class Store:
             rows = db.execute("SELECT schema FROM meta").fetchall()
         except sqlite3.Error as exc:
             raise sqlite3.DatabaseError("Unsupported standalone schema.") from exc
-        if len(rows) != 1 or rows[0][0] not in (1, 2, 3):
+        if len(rows) != 1 or rows[0][0] not in (1, 2, 3, 4):
             raise sqlite3.DatabaseError("Unsupported standalone schema.")
         return rows[0][0]
 
@@ -243,7 +256,7 @@ class Store:
                     raise sqlite3.DatabaseError("Backup integrity check failed.")
                 if target.execute("PRAGMA foreign_key_check").fetchall():
                     raise sqlite3.DatabaseError("Backup foreign key check failed.")
-                if Store._schema(target) not in (1, 2, 3):
+                if Store._schema(target) not in (1, 2, 3, 4):
                     raise sqlite3.DatabaseError("Backup schema is unsupported.")
             with open(destination, "rb") as saved:
                 os.fsync(saved.fileno())
@@ -255,7 +268,7 @@ class Store:
             raise
 
     def upgrade(self, backup_destination):
-        """Explicitly upgrade schema 1 or 2 after a checked full backup.
+        """Explicitly upgrade schema 1, 2, or 3 after a checked full backup.
 
         The reserved migration lock prevents writers. A separate read connection
         supplies the backup snapshot, avoiding sqlite3.Connection.backup() from
@@ -266,14 +279,14 @@ class Store:
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA busy_timeout=5000")
             schema = self._schema(db)
-            if schema == 3:
+            if schema == 4:
                 return False
             db.execute("BEGIN IMMEDIATE")
             try:
                 # Recheck under the write reservation in case another operator
                 # completed the upgrade between the initial read and lock.
                 schema = self._schema(db)
-                if schema == 3:
+                if schema == 4:
                     db.execute("ROLLBACK")
                     return False
                 reader_uri = self.path.resolve().as_uri() + "?mode=ro"
@@ -281,7 +294,8 @@ class Store:
                     self._new_backup(reader, backup_destination)
                 if schema == 1:
                     db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
-                db.execute("UPDATE meta SET schema=3")
+                db.execute("ALTER TABLE vehicles ADD COLUMN inspection_due_month TEXT")
+                db.execute("UPDATE meta SET schema=4")
                 if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise sqlite3.DatabaseError("Integrity check failed after upgrade.")
                 if db.execute("PRAGMA foreign_key_check").fetchall():
@@ -358,6 +372,10 @@ class Store:
         row = db.execute("SELECT * FROM vehicles WHERE id=?", (vehicle_id,)).fetchone()
         if row is None:
             raise NotFound("Vehicle not found.")
+        try:
+            _inspection_month(row["inspection_due_month"])
+        except ValidationError as exc:
+            raise sqlite3.DatabaseError("Invalid stored inspection due month.") from exc
         # The latest dated explicit reading is the current stand. Historical
         # backdated readings remain stored and never silently replace it.
         latest = db.execute("SELECT value FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC LIMIT 1", (vehicle_id,)).fetchone()
@@ -366,7 +384,56 @@ class Store:
                 "licensePlate": row["license_plate"], "vehicleType": row["vehicle_type"],
                 "odometer": _number(latest["value"]) if latest else None,
                 "odometerUnit": row["unit"], "revision": row["revision"],
+                "inspectionDueMonth": row["inspection_due_month"],
                 "status": Store._status(db, vehicle_id)}
+
+    def _today(self):
+        today = self.today_provider()
+        if type(today) is not date:
+            raise ValueError("today_provider must return a datetime.date.")
+        return today
+
+    @staticmethod
+    def _with_inspection(vehicle, today):
+        due_month = vehicle["inspectionDueMonth"]
+        try:
+            due_month = _inspection_month(due_month)
+        except ValidationError as exc:
+            raise sqlite3.DatabaseError("Invalid stored inspection due month.") from exc
+
+        if due_month is None:
+            inspection = {"asOf": today.isoformat(), "timeZone": "Europe/Berlin", "dueMonth": None,
+                          "validUntil": None, "blockingFrom": None, "state": "unknown",
+                          "monthsUntilDue": None, "blocksReadiness": False,
+                          "batteryLevel": None, "scaleMonths": 12}
+        else:
+            year, month = (int(part) for part in due_month.split("-"))
+            months_until = year * 12 + month - (today.year * 12 + today.month)
+            if months_until > 0:
+                state = "upcoming"
+            elif months_until == 0:
+                state = "due"
+            elif months_until == -1:
+                state = "overdue"
+            else:
+                state = "blocking"
+            blocking_index = year * 12 + month - 1 + 2
+            blocking_year, blocking_month_index = divmod(blocking_index, 12)
+            inspection = {
+                "asOf": today.isoformat(), "timeZone": "Europe/Berlin", "dueMonth": due_month,
+                "validUntil": date(year, month, calendar.monthrange(year, month)[1]).isoformat(),
+                "blockingFrom": date(blocking_year, blocking_month_index + 1, 1).isoformat(),
+                "state": state, "monthsUntilDue": months_until,
+                "blocksReadiness": state == "blocking",
+                "batteryLevel": max(0, min(12, months_until)), "scaleMonths": 12,
+            }
+        response = dict(vehicle)
+        response["inspection"] = inspection
+        response["effectiveReadiness"] = (
+            "not_ready" if inspection["blocksReadiness"] or vehicle["status"]["readiness"] == "not_ready"
+            else vehicle["status"]["readiness"]
+        )
+        return response
 
     @staticmethod
     def _audit(db, vehicle_id, action, before, after):
@@ -375,9 +442,9 @@ class Store:
 
     @staticmethod
     def _vehicle_values(payload, old=None):
-        allowed = {"make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit"}
+        allowed = {"make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth"}
         _fields(payload, allowed | ({"revision"} if old else set()), {"revision"} if old else {"make", "model"})
-        result = {"make": "", "model": "", "name": "", "year": None, "licensePlate": "", "vehicleType": "", "odometerUnit": "km"}
+        result = {"make": "", "model": "", "name": "", "year": None, "licensePlate": "", "vehicleType": "", "odometerUnit": "km", "inspectionDueMonth": None}
         if old:
             result.update({key: old[key] for key in result})
         result.update({key: value for key, value in payload.items() if key in allowed})
@@ -388,30 +455,36 @@ class Store:
             raise ValidationError("Invalid year.")
         if not isinstance(result["odometerUnit"], str) or result["odometerUnit"] not in UNITS:
             raise ValidationError("Invalid odometerUnit.")
+        result["inspectionDueMonth"] = _inspection_month(result["inspectionDueMonth"])
         return result
 
     def create_vehicle(self, payload):
         values = self._vehicle_values(payload)
+        today = self._today()
         with self._transaction() as db:
-            cursor = db.execute("INSERT INTO vehicles(make,model,name,year,license_plate,vehicle_type,unit,revision) VALUES(?,?,?,?,?,?,?,1)",
-                                tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit")))
+            cursor = db.execute("INSERT INTO vehicles(make,model,name,year,license_plate,vehicle_type,unit,revision,inspection_due_month) VALUES(?,?,?,?,?,?,?,1,?)",
+                                tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth")))
             vehicle_id = cursor.lastrowid
             db.execute("INSERT INTO states VALUES(?,'unknown','[]',0)", (vehicle_id,))
             result = self._vehicle(db, vehicle_id)
             self._audit(db, vehicle_id, "vehicle.created", None, result)
-            return result
+            return self._with_inspection(result, today)
 
     def list_vehicles(self):
         with closing(self._connect()) as db:
             db.execute("BEGIN")
-            return [self._vehicle(db, row[0]) for row in db.execute("SELECT id FROM vehicles ORDER BY id")]
+            today = self._today()
+            return [self._with_inspection(self._vehicle(db, row[0]), today)
+                    for row in db.execute("SELECT id FROM vehicles ORDER BY id")]
 
     def get_vehicle(self, vehicle_id):
         with closing(self._connect()) as db:
             db.execute("BEGIN")
-            return self._vehicle(db, vehicle_id)
+            today = self._today()
+            return self._with_inspection(self._vehicle(db, vehicle_id), today)
 
     def update_vehicle(self, vehicle_id, payload):
+        today = self._today()
         with self._transaction() as db:
             before = self._vehicle(db, vehicle_id)
             base = dict(before)
@@ -421,11 +494,11 @@ class Store:
                 raise Conflict("Vehicle revision changed.")
             if values["odometerUnit"] != before["odometerUnit"] and db.execute("SELECT 1 FROM odometer_readings WHERE vehicle_id=? LIMIT 1", (vehicle_id,)).fetchone():
                 raise Conflict("A unit with recorded readings cannot be relabelled; conversion is a separate operation.")
-            db.execute("UPDATE vehicles SET make=?,model=?,name=?,year=?,license_plate=?,vehicle_type=?,unit=?,revision=revision+1 WHERE id=?",
-                       tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit")) + (vehicle_id,))
+            db.execute("UPDATE vehicles SET make=?,model=?,name=?,year=?,license_plate=?,vehicle_type=?,unit=?,inspection_due_month=?,revision=revision+1 WHERE id=?",
+                       tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth")) + (vehicle_id,))
             result = self._vehicle(db, vehicle_id)
             self._audit(db, vehicle_id, "vehicle.updated", before, result)
-            return result
+            return self._with_inspection(result, today)
 
     def get_status(self, vehicle_id):
         with closing(self._connect()) as db:
@@ -769,8 +842,9 @@ class Store:
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             vehicle = self._vehicle(db, vehicle_id)
+            projected_vehicle = self._with_inspection(vehicle, self._today())
             records = [self._record(row) for row in db.execute("SELECT * FROM records WHERE vehicle_id=? ORDER BY day DESC,id DESC", (vehicle_id,))]
-            return {"vehicle": vehicle, "status": vehicle["status"], "reminders": [], "services": records}
+            return {"vehicle": projected_vehicle, "status": vehicle["status"], "reminders": [], "services": records}
 
     def list_history(self, vehicle_id):
         with closing(self._connect()) as db:
@@ -798,6 +872,7 @@ class Store:
                         "name": row["name"], "year": row["year"],
                         "licensePlate": row["license_plate"], "vehicleType": row["vehicle_type"],
                         "odometerUnit": row["unit"], "revision": row["revision"],
+                        "inspectionDueMonth": row["inspection_due_month"],
                     })
                     status = self._status(db, vehicle_id)
                     statuses.append({"vehicleId": vehicle_id, **status})
@@ -823,7 +898,7 @@ class Store:
                     for row in db.execute("SELECT * FROM history ORDER BY sequence")
                 ]
                 result = {
-                    "format": "wolfs-garage-owner-export", "formatVersion": 1,
+                    "format": "wolfs-garage-owner-export", "formatVersion": 2,
                     "applicationVersion": __version__, "databaseSchema": SCHEMA,
                     "exportedAt": exported_at, "vehicles": vehicles, "statuses": statuses,
                     "odometerReadings": readings, "records": records, "history": history,
@@ -871,6 +946,6 @@ class Store:
         """Create a new consistent full-store backup with restrictive permissions."""
         source_uri = self.path.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(source_uri, uri=True, timeout=5)) as source:
-            if self._schema(source) not in (1, 2, 3):
+            if self._schema(source) not in (1, 2, 3, 4):
                 raise sqlite3.DatabaseError("Unsupported standalone schema.")
             self._new_backup(source, destination)

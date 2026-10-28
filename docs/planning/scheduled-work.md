@@ -44,7 +44,9 @@ Items include every `open` and `observed` issue across all vehicles. The endpoin
 
 The projection is read-only. It adds no audit events and does not update readiness or issue status. It is advertised through `scheduledWork`; any query string, including an empty or duplicate parameter, returns `400`.
 
-## Schema 3 and operator upgrade
+## Historical schema-3 baseline (2026-10-28)
+
+This section records the feature's tested schema-3 state at that date. The current application uses schema 4; see the [current standalone upgrade guide](../standalone.md) and [inspection status contract](inspection-status.md) for present behavior. The results below remain evidence for the earlier schema-3 release and are not rewritten as schema-4 checks.
 
 Fresh databases initialize at schema 3. Schema 1 and 2 require an explicit upgrade, with a new unused destination for a checked SQLite backup. The upgrade runs transactionally. Schema 1 receives the `records.revision` column it lacked; schema 2 needs only the schema version update. Stored issue JSON remains unchanged. A schema-3 upgrade request is a no-op and writes no backup. Backup accepts schema 1, 2 and 3 without migrating the source. Schema-2 binaries reject schema 3 and must never be started against a schema-3 database; downgrade requires a separate pre-upgrade copy.
 

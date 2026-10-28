@@ -24,7 +24,7 @@ Before publishing a GitHub Release, complete this review against the exact relea
 - Review source and history, dependency/artwork notices, changelog, screenshots and build context for secrets, personal data and license issues.
 - Confirm the strict `v<application-version>` tag points to a commit on `main`; run tests and build the image from that same source SHA.
 - Verify both intended Linux architectures (`amd64` and `arm64`), health behavior, non-root operation and the hardened Compose runtime settings.
-- Verify schema upgrade and restore behavior with fresh isolated copies. Keep pre-upgrade backups and never test rollback by starting an old image against a schema-3 database.
+- Verify schema upgrades and restore behavior with fresh isolated copies. Keep pre-upgrade backups and never test rollback by starting an older image against a schema-4 database.
 - Publish only on an explicit release-published event. Manual workflow dispatch must be build-only with no registry push permission.
 - Publish an exact version tag, avoid `latest`, record the manifest digest, and separately set GHCR package visibility before documenting public pulls.
 - Recheck all docs and links, and ensure no production deployment or LubeLogger migration is coupled to artifact publishing.

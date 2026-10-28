@@ -243,6 +243,8 @@ def _candidate_preflight(old_image, candidate, config):
         shutil.copyfile(workdir / "source.sqlite3", workdir / "candidate.sqlite3")
         os.chmod(workdir / "candidate.sqlite3", 0o600)
         candidate_schema = _image_schema(candidate)
+        if original_schema != candidate_schema or candidate_schema not in {3, 4}:
+            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3 or 4.")
         _run(["docker", "run", "--rm", "--network", "none", "--user", "0:0", "--read-only",
               "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit", "128",
               "--mount", f"type=bind,src={workdir},dst=/work",
@@ -253,8 +255,8 @@ def _candidate_preflight(old_image, candidate, config):
               "--mount", f"type=bind,src={workdir},dst=/work",
               "--env", "GARAGE_DB=/work/candidate.sqlite3", candidate,
               "python", "-m", "wolfs_garage", "check-db"], timeout=300)
-        if original_schema != candidate_schema or candidate_schema != 3 or _schema(workdir / "candidate.sqlite3") != candidate_schema:
-            raise UpdateError("Automatic update blocked: live and candidate schemas must match schema 3.")
+        if _schema(workdir / "candidate.sqlite3") != candidate_schema:
+            raise UpdateError("Automatic update blocked: isolated candidate check changed the database schema.")
 
 
 def _write_active_sha(state_dir, sha):

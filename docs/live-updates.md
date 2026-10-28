@@ -22,10 +22,11 @@ then builds a local candidate image.
 
 Before changing the running service, it validates the candidate against an
 isolated copy of the current database and makes a checked backup. Automatic
-updates are restricted to the same database schema as the running release.
-If the schema differs, the updater leaves the live application and database
-untouched and reports the required manual upgrade. Startup never performs an
-implicit schema migration.
+updates support schema 3 or 4 only when the running database, candidate image,
+and checked copy all report the same schema. A schema 3/4 mismatch or any
+unsupported schema leaves the live application and database untouched; the
+schema change requires a separate explicit checked-backup upgrade. Startup
+never performs an implicit schema migration.
 
 The configured maintenance-prepare hook must route requests to a maintenance
 response and allow active writes to drain before the live database is copied
