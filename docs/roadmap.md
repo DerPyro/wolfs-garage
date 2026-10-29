@@ -25,11 +25,14 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [ ] Implement a safe date/odometer correction workflow with explicit links to measurement history ([proposal](adr/0011-reading-provenance.md)).
 - [x] Browse complete odometer and maintenance history in date-sorted pages, with inclusive date filters, record-kind filtering, safe cursor restart after changes, and correction access on later record pages.
 - [x] Give existing open work optional due dates, user-assigned nullable severity and an `open`/`observed` lifecycle; show an active-work dashboard with Europe/Berlin date boundaries.
+- [x] Add per-issue **Bearbeiten** and **Erledigt** actions to vehicle detail. Completion drafts an existing issue into the explicit-save work form and atomically closes only that issue with the new record.
 - [ ] Connect the maintenance indicator to due work as well as manually open issues, with clear reasons.
 - [ ] Improve empty/error states, mobile forms and accessibility from actual use.
 - [ ] Provide a clear path for optional interface translations.
 
 ## Maintenance planning
+
+User decision — 2026-10-29: maintenance planning and reliable 1.0 operation take priority. Vehicle photo and invoice uploads are deferred; existing HTTPS document references remain supported.
 
 - [ ] Date-based and distance-based rules, including whichever limit comes first.
 - [ ] Explicit completion and next-due calculation, with fixed versus completion-based intervals.
@@ -37,10 +40,9 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [ ] Track manufacturer sources and applicability; do not invent maintenance intervals or diagnoses.
 - [ ] Keep readiness a separate explicit assessment rather than inferring it from completed tasks.
 
-## Documents, parts and costs
+## Parts and cost tracking
 
-- [ ] Choose secure local attachments, Paperless references, or both, with the required access and backup behavior.
-- [ ] Link documents and parts to vehicles and individual work records.
+- [ ] Link parts to vehicles and individual work records.
 - [ ] Distinguish part purchase, consumption and work costs to avoid double counting.
 - [ ] Show useful annual vehicle costs and clearly define their relationship to payments.
 
@@ -53,6 +55,13 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [ ] Validate and enable pinned multi-architecture container releases; publish only from an explicitly published GitHub Release, with manual builds remaining push-free. The prepared [release Compose file](../deploy/compose.release.yaml) does not imply a published image.
 - [ ] Prepare a dry-run LubeLogger import with identity, unit, amount and document comparisons.
 - [ ] Decide and explicitly authorize any productive cutover; preserve the original data and account for new writes during rollback.
+
+## Vehicle photos and invoice uploads — later
+
+Following the user decision of 2026-10-29, uploads are deferred until maintenance planning and reliable 1.0 operation are prioritized. Existing HTTPS document references on completed records remain supported.
+
+- [ ] Choose secure local attachments, Paperless references, or both, with the required access and backup behavior.
+- [ ] Link uploaded vehicle photos and invoice files to vehicles and individual work records.
 
 ## Later integrations
 

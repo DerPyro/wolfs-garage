@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, inspectionStatus: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, inspectionStatus: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -142,14 +142,23 @@ function renderCards() {
     button.addEventListener("click", () => selectVehicle(id)); container.append(button);
   }
 }
-function closeConditionEditor(restoreFocus = false) { $("condition-form").hidden = true; $("condition-view").hidden = false; $("condition-edit").setAttribute("aria-expanded", "false"); $("condition-message").textContent = ""; state.editingRevision = null; if (restoreFocus) $("condition-edit").focus(); }
+function closeConditionEditor(restoreFocus = false) { const opener = state.conditionActionOpener && $(state.conditionActionOpener); $("condition-form").hidden = true; $("condition-view").hidden = false; $("condition-edit").setAttribute("aria-expanded", "false"); $("condition-message").textContent = ""; state.editingRevision = null; state.conditionActionOpener = null; if (restoreFocus) (opener || $("condition-edit")).focus(); }
 function conditionIssueRow(issue, vehicleId) {
   const row = el("div", "condition-issue-row"); row.append(el("p", "condition-issue-text", display(issue.text)));
   const projection = currentWorkProjection(vehicleId, issue);
   const facts = [`Schweregrad: ${issueSeverityText(issue)}`, `Status: ${issueLifecycleText(issue)}`];
   if (issue.dueDate) facts.push(`Fällig am ${readableDate(issue.dueDate)}`);
   if (projection && dueStateLabels[projection.dueState]) facts.push(dueStateLabels[projection.dueState]);
-  row.append(el("p", "condition-issue-meta", facts.join(" · "))); return row;
+  row.append(el("p", "condition-issue-meta", facts.join(" · ")));
+  if (state.standalone && issue.id !== null && issue.id !== undefined) {
+    const actions = el("div", "condition-issue-actions"), suffix = encodeURIComponent(String(issue.id));
+    const edit = el("button", "condition-edit condition-issue-action", "Bearbeiten"); edit.type = "button"; edit.id = `issue-edit-${suffix}`; edit.setAttribute("aria-label", `Punkt bearbeiten: ${display(issue.text)}`);
+    edit.addEventListener("click", () => openConditionEditor(issue.id, edit.id));
+    const done = el("button", "condition-edit condition-issue-action", "Erledigt"); done.type = "button"; done.id = `issue-complete-${suffix}`; done.setAttribute("aria-label", `Als erledigt markieren: ${display(issue.text)}`);
+    done.addEventListener("click", () => openIssueCompletion(issue.id, issue.text, done.id));
+    actions.append(edit, done); row.append(actions);
+  }
+  return row;
 }
 function renderInspection(vehicle) {
   const panel = $("inspection-panel"); panel.hidden = !state.inspectionStatus;
@@ -188,6 +197,9 @@ function renderCondition(condition) {
       if (!visible.length) list.append(el("p", "condition-empty", "Keine offenen Punkte für diesen Filter."));
       else for (const issue of visible) list.append(conditionIssueRow(issue, state.selected));
       }
+    } else if (state.standalone) {
+      list.append(el("p", "condition-issues-title", "Offene Punkte"));
+      for (const issue of issues) list.append(conditionIssueRow(issue, state.selected));
     } else {
       const heading=el("p", "condition-issues-title", "Offene Punkte"); const ul=el("ul", "condition-issue-list"); for (const item of issues) ul.append(el("li", "", display(item.text))); list.append(heading, ul);
     }
@@ -205,10 +217,10 @@ function issueMatchesFilter(issue, vehicleId) {
 }
 function appendIssueEditor(issue = {}) {
   const editor = $("issue-editor"); if (editor.children.length >= 20) return;
-  const row = el("div", "issue-row"); const rowId = ++state.issueRowCounter;
+  const row = el("div", "issue-row"); const rowId = ++state.issueRowCounter; row._issueId = issue.id;
   const field = (labelText, name, type, value, options = null) => {
     const wrapper = el("div", `own-field issue-field issue-field-${name}`); const label = el("label", "", labelText); const control = el(options ? "select" : "input");
-    control.id = `issue-${rowId}-${name}`; label.setAttribute("for", control.id);
+    control.id = name === "text" && issue.id !== null && issue.id !== undefined ? `issue-edit-${encodeURIComponent(String(issue.id))}-text` : `issue-${rowId}-${name}`; label.setAttribute("for", control.id);
     if (options) for (const [optionValue, optionText] of options) { const option = el("option", "", optionText); option.value = optionValue; control.append(option); }
     else control.type = type;
     control.value = value === null || value === undefined ? "" : String(value); wrapper.append(label, control); row.append(wrapper); return control;
@@ -222,15 +234,16 @@ function appendIssueEditor(issue = {}) {
   const remove = el("button", "issue-remove", "Punkt entfernen"); remove.type = "button"; remove.setAttribute("aria-label", "Diesen offenen Punkt entfernen"); remove.addEventListener("click", () => { row.remove(); $("issue-add").disabled = editor.children.length >= 20; });
   row.append(remove); editor.append(row); $("issue-add").disabled = editor.children.length >= 20;
 }
-function openConditionEditor() {
-  if (state.entry && state.entry.busy) return;
-  if (state.entry) closeEntry();
+function openConditionEditor(focusIssueId = null, actionOpenerId = null) {
+  if (state.entry || state.saving || !$("condition-form").hidden) return;
   const vehicle = state.vehicles.find(v => String(v.id) === state.selected); const condition = vehicle && vehicle.status;
   if (!validCondition(condition) || state.saving) return;
-  state.editingRevision = condition.revision; $("readiness-input").value = condition.readiness; $("issue-editor").replaceChildren();
+  state.conditionActionOpener = actionOpenerId; state.editingRevision = condition.revision; $("readiness-input").value = condition.readiness; $("issue-editor").replaceChildren();
   for (const item of condition.issues) if (item && display(item.text)) appendIssueEditor(item);
   $("issue-add").disabled = $("issue-editor").children.length >= 20;
-  $("condition-view").hidden = true; $("condition-form").hidden = false; $("condition-edit").setAttribute("aria-expanded", "true"); $("condition-message").textContent = ""; $("readiness-input").focus();
+  $("condition-view").hidden = true; $("condition-form").hidden = false; $("condition-edit").setAttribute("aria-expanded", "true"); $("condition-message").textContent = "";
+  const issueRow = focusIssueId === null ? null : Array.from($("issue-editor").children).find(item => String(item._issueId) === String(focusIssueId));
+  (issueRow && issueRow.querySelectorAll("input")[0] || $("readiness-input")).focus();
 }
 async function saveCondition(event) {
   event.preventDefault(); if (state.saving || state.selected === null || state.editingRevision === null) return;
@@ -243,7 +256,7 @@ async function saveCondition(event) {
     if (!response.ok) { if (response.status === 409) throw new Error("Dieser Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und versuche es erneut."); if (response.status === 503) throw new Error("Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut."); throw new Error("Der Zustand konnte nicht gespeichert werden. Bitte versuche es erneut."); }
     const updated = await response.json(); if (!validCondition(updated)) throw new Error("Der gespeicherte Zustand konnte nicht gelesen werden. Bitte aktualisiere die Übersicht.");
     const vehicle = state.vehicles.find(v => String(v.id) === id); if (vehicle) { vehicle.status = updated; if (state.inspectionStatus) { vehicle.inspection = null; vehicle.effectiveReadiness = null; } }
-    renderCards(); if (state.selected === id) { closeConditionEditor(true); renderCondition(updated); }
+    renderCards(); if (state.selected === id) { renderCondition(updated); closeConditionEditor(true); }
     if (state.inspectionStatus && state.selected === id) {
       try { await refreshVehicleSummaryProjection(id); if (state.selected === id) setStatus("detail-status", ""); }
       catch (_) { if (state.selected === id) setStatus("detail-status", "HU-Status momentan nicht verfügbar. Bitte aktualisiere die Übersicht.", true); }
@@ -378,7 +391,7 @@ async function refreshInspectionVehicles() {
   } finally { state.inspectionRefreshInFlight = false; }
 }
 $("refresh").addEventListener("click", () => state.capabilitiesReady ? load(state.selected) : initialize());
-$("condition-edit").addEventListener("click", openConditionEditor);
+$("condition-edit").addEventListener("click", () => openConditionEditor());
 $("condition-cancel").addEventListener("click", () => closeConditionEditor(true));
 $("issue-add").addEventListener("click", () => appendIssueEditor());
 $("issue-filter").addEventListener("change", () => { state.issueFilter = $("issue-filter").value; const vehicle = selectedVehicle(); if (vehicle) renderCondition(vehicle.status); });
@@ -443,19 +456,19 @@ function closeEntry(restoreFocus = false) {
   const entry = state.entry; const opener = entry && $(entry.opener); state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true;
   if (restoreFocus) { if (opener) opener.focus(); else if (entry && entry.fromLogbook) $("logbook-title").focus(); else $("record-add").focus(); }
 }
-function openEntry(mode) {
+function openEntry(mode, action = {}) {
   if (!state.standalone || state.saving || state.entry && state.entry.busy) return;
   const vehicle = selectedVehicle(); if (mode !== "vehicle-new" && !vehicle) return;
-  const names = {"vehicle-new":"Fahrzeug hinzufügen", "vehicle-edit":"Fahrzeug bearbeiten", odometer:"Stand erfassen", record:"Arbeit dokumentieren"};
+  const names = {"vehicle-new":"Fahrzeug hinzufügen", "vehicle-edit":"Fahrzeug bearbeiten", odometer:"Stand erfassen", record:"Arbeit dokumentieren", "record-close-issue":"Punkt abschließen"};
   const openers = {"vehicle-new":"vehicle-add", "vehicle-edit":"vehicle-edit", odometer:"odometer-add", record:"record-add"};
   $("own-notice").textContent = "";
-  state.entry = {mode, vehicleId:vehicle && String(vehicle.id), revision:vehicle && vehicle.revision, statusRevision:vehicle && vehicle.status && vehicle.status.revision, opener:openers[mode], busy:false};
+  state.entry = {mode, vehicleId:vehicle && String(vehicle.id), revision:vehicle && vehicle.revision, statusRevision:vehicle && vehicle.status && vehicle.status.revision, opener:action.openerId || openers[mode], issueId:action.issue && action.issue.id, busy:false};
   $("record-edit-readonly").hidden = true;
-  if (mode === "odometer" || mode === "record") {
+  if (mode === "odometer" || mode === "record" || mode === "record-close-issue") {
     if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { state.entry = null; $("own-notice").textContent = "Zum Erfassen benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
     state.entry.commandId = globalThis.crypto.randomUUID();
   }
-  closeConditionEditor(); $("own-fields").replaceChildren(); $("own-message").textContent = ""; $("own-save").disabled = false; $("own-cancel").disabled = false; $("own-cancel").textContent = "Abbrechen"; $("own-title").textContent = names[mode]; $("own-hint").textContent = "";
+  closeConditionEditor(); $("own-fields").replaceChildren(); $("own-message").textContent = ""; $("own-save").disabled = false; $("own-save").textContent = "Speichern"; $("own-cancel").disabled = false; $("own-cancel").textContent = "Abbrechen"; $("own-title").textContent = names[mode]; $("own-hint").textContent = "";
   if (mode.startsWith("vehicle-")) {
     const values = mode === "vehicle-edit" ? vehicle : {};
     const make = entryField("Marke", "make", "text", values.make); make.required = true; make.maxLength = 80;
@@ -470,22 +483,38 @@ function openEntry(mode) {
     $("own-hint").textContent = state.inspectionStatus ? "Der HU-Monat steuert die automatische INOP-Regel. Deine manuelle Einschätzung bleibt erhalten." : "Die Fahrbereitschaft bleibt unabhängig von den Stammdaten. Eine Änderung der Einheit rechnet vorhandene Einträge nicht um.";
   } else {
     const date = entryField("Datum", "date", "date", localToday()); date.required = true;
-    if (mode === "record") {
-      entryField("Art der Arbeit", "kind", "", "service", [["service","Wartung"],["repair","Reparatur"]]);
-      const description = entryField("Durchgeführte Arbeit", "description", "text"); description.required = true; description.maxLength = 160;
+    const directCompletion = mode === "record-close-issue";
+    if (mode === "record" || directCompletion) {
+      entryField("Art der Arbeit", "kind", "", directCompletion ? "" : "service", [...(directCompletion ? [["","Bitte wählen"]] : []), ["service","Wartung"],["repair","Reparatur"]]);
+      const kind = $("entry-kind"); if (directCompletion) kind.required = true;
+      const description = entryField("Durchgeführte Arbeit", "description", "text", directCompletion ? action.issue.text : ""); description.required = true; description.maxLength = 160;
+      if (directCompletion) { const closeIssueId = el("input"); closeIssueId.type = "hidden"; closeIssueId.id = "entry-closeIssueId"; closeIssueId.name = "closeIssueId"; closeIssueId.value = String(action.issue.id); $("own-fields").append(closeIssueId); }
     }
-    const reading = entryField(`${mode === "record" ? "Stand (optional)" : "Stand"} in ${vehicle.odometerUnit}`, "odometer", "number", mode === "odometer" ? vehicle.odometer : ""); reading.required = mode === "odometer"; reading.min = "0"; reading.step = "any";
+    const reading = entryField(`${mode === "record" || directCompletion ? "Stand (optional)" : "Stand"} in ${vehicle.odometerUnit}`, "odometer", "number", mode === "odometer" ? vehicle.odometer : ""); reading.required = mode === "odometer"; reading.min = "0"; reading.step = "any";
     if (mode === "odometer") { const note = entryField("Notiz (optional)", "note", "text"); note.maxLength = 500; }
     else {
       const amount = entryField("Kosten (optional)", "cost", "text"); amount.inputMode = "decimal"; amount.placeholder = "z. B. 49,90"; amount.maxLength = 20;
       const currency = entryField("Währung bei Kostenangabe", "currency", "text"); currency.maxLength = 3; currency.placeholder = "z. B. EUR"; currency.autocapitalize = "characters";
       const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url"); link.maxLength = 2000; link.placeholder = "https://…";
-      const issues = validCondition(vehicle.status) ? vehicle.status.issues : [];
-      entryField("Offenen Punkt als erledigt markieren (optional)", "closeIssueId", "", "", [["","Keinen Punkt abschließen"], ...issues.map(issue => [issue.id, issue.text])]);
-      $("own-hint").textContent = "Dokumentiere eine tatsächlich durchgeführte Arbeit. Ein ausgewählter Punkt wird zusammen mit dem Beleg abgeschlossen. Andere offene Punkte und die Fahrbereitschaft bleiben bestehen.";
+      if (!directCompletion) {
+        const issues = validCondition(vehicle.status) ? vehicle.status.issues : [];
+        entryField("Offenen Punkt als erledigt markieren (optional)", "closeIssueId", "", "", [["","Keinen Punkt abschließen"], ...issues.map(issue => [issue.id, issue.text])]);
+      }
+      $("own-hint").textContent = directCompletion
+        ? "Der Punkttext ist als Entwurf eingetragen. Prüfe und bearbeite ihn so, dass die tatsächlich durchgeführte Arbeit dokumentiert wird. Beim Speichern wird genau dieser Punkt zusammen mit dem Beleg abgeschlossen."
+        : "Dokumentiere eine tatsächlich durchgeführte Arbeit. Ein ausgewählter Punkt wird zusammen mit dem Beleg abgeschlossen. Andere offene Punkte und die Fahrbereitschaft bleiben bestehen.";
+      if (directCompletion) $("own-save").textContent = "Arbeit speichern & Punkt abschließen";
     }
   }
   $("own-panel").hidden = false; $("own-title").focus();
+}
+function openIssueCompletion(issueId, issueText, openerId) {
+  if (!state.standalone || state.entry || state.saving || !$("condition-form").hidden) return;
+  const vehicle = selectedVehicle();
+  if (!vehicle || !validCondition(vehicle.status)) return;
+  const issue = conditionIssueItems(vehicle.status).find(item => String(item.id) === String(issueId) && display(item.text) === display(issueText));
+  if (!issue) return;
+  openEntry("record-close-issue", {issue, openerId});
 }
 async function saveEntry(event) {
   event.preventDefault(); const entry = state.entry; if (!entry || entry.busy) return;
@@ -515,27 +544,31 @@ async function saveEntry(event) {
     if (entry.mode === "odometer") { payload.unit = selectedVehicle().odometerUnit; if (field("note")) payload.note = field("note"); }
     else {
       payload.description = field("description"); payload.kind = field("kind");
+      if (entry.mode === "record-close-issue" && (!payload.description || payload.description.length > 160)) { $("own-message").textContent = "Bitte beschreibe die tatsächlich durchgeführte Arbeit mit höchstens 160 Zeichen."; return; }
+      if (entry.mode === "record-close-issue" && !["service", "repair"].includes(payload.kind)) { $("own-message").textContent = "Bitte wähle eine Arbeitsart aus."; return; }
       if (field("cost")) {
         if (!/^\d+(?:[.,]\d{1,2})?$/.test(field("cost")) || !/^[A-Za-z]{3}$/.test(field("currency"))) { $("own-message").textContent = "Bitte gib einen positiven Betrag mit höchstens zwei Nachkommastellen und eine dreistellige Währung an, z. B. EUR."; return; }
         payload.cost = field("cost").replace(",", "."); payload.currency = field("currency").toUpperCase();
       }
       if (field("documentUrl")) payload.documentUrl = field("documentUrl");
-      if (field("closeIssueId")) { payload.closeIssueId = field("closeIssueId"); payload.statusRevision = entry.statusRevision; }
+      if (entry.mode === "record-close-issue") { payload.closeIssueId = entry.issueId; payload.statusRevision = entry.statusRevision; }
+      else if (field("closeIssueId")) { payload.closeIssueId = field("closeIssueId"); payload.statusRevision = entry.statusRevision; }
     }
   }
   entry.busy = true; $("own-save").disabled = true; $("own-cancel").disabled = true; $("own-message").textContent = "Wird gespeichert …";
   try {
     const response = await fetch(path, {method, credentials:"same-origin", headers:{"Content-Type":"application/json", "X-Garage-Request":"1"}, body:JSON.stringify(payload)});
     if (!response.ok) {
-      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
+      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : entry.mode === "record-close-issue" ? "Dieser Punkt oder der Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und prüfe den Verlauf vor einem erneuten Versuch." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
       let message = "Die Angaben konnten nicht gespeichert werden. Bitte prüfe deine Eingaben.";
       try { const detail = await response.json(); if (typeof detail.error === "string") message = detail.error; } catch (_) { /* retain the useful fallback */ }
       throw new Error(message);
     }
     const result = await response.json(); const id = entry.mode === "vehicle-new" ? (result.vehicle || result).id : entry.vehicleId;
     entry.busy = false; closeEntry(); if (entry.mode === "record-edit" && entry.fromLogbook) { state.logbook.filter = readLogbookFilter(); state.logbook.records = []; state.logbook.cursor = null; }
-    await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : "Gespeichert.";
+    await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : entry.mode === "record-close-issue" ? "Arbeit gespeichert und Punkt abgeschlossen. Verlauf wurde aktualisiert." : "Gespeichert.";
     if (entry.mode === "record-edit") await showHistory(true);
+    if (entry.mode === "record-close-issue") { await showHistory(true); $("history-toggle").focus(); }
     if (entry.mode === "record-edit" && entry.fromLogbook) { await openLogbook(true); const button = document.getElementById(`log-record-edit-${entry.recordId}`); if (button) button.focus(); else $("logbook-title").focus(); }
     else if (entry.mode === "record-edit") { const button = document.getElementById(entry.opener); if (button) button.focus(); }
   } catch (error) {
