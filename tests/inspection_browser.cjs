@@ -25,7 +25,7 @@ async function until(expression, label) {
     try { if (await value(expression)) return; } catch (_) { /* wait for DOM/network transition */ }
   }
   let state = null;
-  try { state = await value(`({heading:document.querySelector('#detail-heading')?.textContent, message:document.querySelector('#inspection-message')?.textContent, editor:!document.querySelector('#own-panel')?.hidden, cards:document.querySelectorAll('#vehicles .vehicle-card').length, errors:${JSON.stringify(errors)}})`); } catch (_) {}
+  try { state = await value(`(()=>{const toolbar=document.querySelector('#own-detail-actions'),rect=toolbar?.getBoundingClientRect();return {heading:document.querySelector('#detail-heading')?.textContent,message:document.querySelector('#inspection-message')?.textContent,editor:!document.querySelector('#own-panel')?.hidden,cards:document.querySelectorAll('#vehicles .vehicle-card').length,scrollY,scrollHeight:document.documentElement.scrollHeight,innerHeight,toolbar:rect&&{top:rect.top,bottom:rect.bottom,height:rect.height},activeElement:document.activeElement?.id||document.activeElement?.getAttribute('aria-label'),errors:${JSON.stringify(errors)}}})()`); } catch (_) {}
   throw Error(`Timed out waiting for ${label}: ${JSON.stringify(state)}`);
 }
 function shiftMonth(isoDate, offset) {
@@ -42,14 +42,25 @@ async function request(path, method, payload) {
 }
 async function selectModel(model) {
   await value(`(()=>{const card=Array.from(document.querySelectorAll('#vehicles .vehicle-card')).find(node=>node.getAttribute('aria-label')?.includes(${JSON.stringify(model)}));if(!card)throw Error('Vehicle card not found: '+${JSON.stringify(model)});card.click()})()`);
-  await until(`!document.querySelector('#detail').hidden && document.querySelector('#detail-heading').textContent.endsWith(${JSON.stringify(model)}) && !document.querySelector('#inspection-panel').hidden`, `detail ${model}`);
+  await until(`!document.querySelector('#detail').hidden && document.querySelector('#detail-heading').textContent.endsWith(${JSON.stringify(model)}) && !document.querySelector('#inspection-panel').hidden && document.querySelector('#inspection-message').textContent.trim() && document.querySelector('#inspection-panel').children.length===1 && !document.querySelector('#inspection-meter')`, `compact detail ${model}`);
+}
+function lastDayLabel(month) {
+  const [year,number]=month.split('-').map(Number), day=new Date(Date.UTC(year,number,0)).getUTCDate();
+  return `${String(day).padStart(2,'0')}.${String(number).padStart(2,'0')}.${year}`;
+}
+async function assertSummary(model, expected, label=model) {
+  await selectModel(model);
+  const summary=await value("document.querySelector('#inspection-message').textContent.trim()");
+  if(!expected.every(fragment=>summary.includes(fragment)))throw Error(`Compact HU summary for ${label} is incomplete: ${summary}`);
+  if(await value("!!document.querySelector('#inspection-meter') || !!document.querySelector('#inspection-asof') || document.querySelector('#inspection-panel').children.length!==1"))throw Error('HU detail still contains a meter, duplicate as-of date, or extra panel content');
+  return summary;
 }
 async function saveRenewal(model, dueMonth) {
   await selectModel(model);
   await value("document.querySelector('#vehicle-edit').click()");
   await until("!document.querySelector('#own-panel').hidden && !!document.querySelector('#entry-inspectionDueMonth')", 'inspection month editor');
   await value(`(()=>{const field=document.querySelector('#entry-inspectionDueMonth');field.value=${JSON.stringify(dueMonth)};field.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#own-form').requestSubmit()})()`);
-  await until(`document.querySelector('#own-panel').hidden && document.querySelector('#detail-heading').textContent.endsWith(${JSON.stringify(model)}) && !document.querySelector('#inspection-panel').hidden && document.querySelector('#inspection-message').textContent.includes('noch')`, 'renewed inspection projection');
+  await until(`document.querySelector('#own-panel').hidden && document.querySelector('#detail-heading').textContent.endsWith(${JSON.stringify(model)}) && !document.querySelector('#inspection-panel').hidden && document.querySelector('#inspection-message').textContent.includes('fällig in circa')`, 'renewed inspection projection');
   return await value(`(async()=>{const vehicles=await(await fetch('/garage-api/vehicles')).json();return vehicles.vehicles.find(v=>v.model===${JSON.stringify(model)})})()`);
 }
 
@@ -62,6 +73,7 @@ async function main() {
   socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject});
   socket.onmessage=event=>{const data=JSON.parse(event.data);if(data.id&&pending.has(data.id)){const p=pending.get(data.id);pending.delete(data.id);data.error?p.reject(Error(data.error.message)):p.resolve(data.result)}else if(data.method==='Runtime.exceptionThrown'){errors.push(data.params.exceptionDetails.exception?.description||'runtime exception')}};
   await call('Page.enable');await call('Runtime.enable');await call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await call('Page.addScriptToEvaluateOnNewDocument',{source:'window.__garageOriginalSetInterval=window.setInterval.bind(window);window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.__garageInspectionRefreshTick=callback;return window.__garageOriginalSetInterval(callback,delay,...args)}'});
   await call('Page.navigate',{url:'http://127.0.0.1:18988'});
   await until("document.querySelector('#status')?.textContent.includes('leer')", 'synthetic empty garage');
 
@@ -84,9 +96,19 @@ async function main() {
   }
   await call('Page.reload');
   await until(`document.querySelectorAll('#vehicles .vehicle-card').length===8 && document.querySelectorAll('.card-inspection-progress').length===8`, 'eight inspection cards');
+  await until(`document.querySelector('#detail-heading').textContent.endsWith('Case A') && !document.querySelector('#inspection-panel').hidden && document.querySelector('#inspection-message').textContent.includes('nicht eingetragen') && !document.querySelector('#refresh').disabled && !document.querySelector('#detail-content').hidden && document.querySelector('#work-status').textContent.includes('Stand:')`, 'initial default vehicle selection and load complete');
+  await delay(120);
+  if(await value('window.scrollY>2'))throw Error('Initial vehicle load scrolled away from the page start');
+  await value("document.querySelector('#vehicles .vehicle-card:nth-child(5)').scrollIntoView({block:'center'})");await delay(300);
+  const scrollBeforeRefresh=await value('window.scrollY');
+  if(!await value("typeof window.__garageInspectionRefreshTick==='function'"))throw Error('Scheduled inspection refresh callback was not registered');
+  if(!await value('window.__garageInspectionRefreshTick()'))throw Error('Scheduled HU refresh did not execute');
+  const scrollAfterRefresh=await value('window.scrollY');
+  if(Math.abs(scrollAfterRefresh-scrollBeforeRefresh)>1)throw Error(`Automatic inspection refresh changed scroll position: ${scrollBeforeRefresh} -> ${scrollAfterRefresh}`);
+  await value('window.scrollTo(0,0)');await delay(120);
   const cardFacts=await value(`(()=>{const cards=Array.from(document.querySelectorAll('#vehicles .vehicle-card'));const a=cards.find(x=>x.getAttribute('aria-label')?.includes('Case A'));const b=cards.find(x=>x.getAttribute('aria-label')?.includes('Case B'));return {a:a?.getBoundingClientRect().height,b:b?.getBoundingClientRect().height,labels:cards.map(x=>x.getAttribute('aria-label'))}})()`);
   if(cardFacts.a!==cardFacts.b)throw Error('Inspection icon changed vehicle-card height: '+JSON.stringify(cardFacts));
-  for(const expected of ['nicht erfasst','noch 13 Monate','diesen Monat fällig','überfällig','automatisch INOP'])if(!cardFacts.labels.some(x=>x.includes(expected)))throw Error(`Missing card inspection summary ${expected}: ${cardFacts.labels}`);
+  for(const expected of ['nicht eingetragen','fällig in circa 13 Monaten','fällig diesen Monat','überfällig seit circa 1 Monat','automatisch INOP ab'])if(!cardFacts.labels.some(x=>x.includes(expected)))throw Error(`Missing card inspection summary ${expected}: ${cardFacts.labels}`);
   const cardBars=await value("(()=>{const cards=Array.from(document.querySelectorAll('#vehicles .vehicle-card'));return cards.map(card=>{const wrap=card.querySelector('.card-inspection-progress'),cells=Array.from(wrap?.querySelectorAll('.card-inspection-cell')||[]),firstFilled=cells.find(cell=>cell.classList.contains('filled')),marker=wrap?.querySelector('.card-inspection-marker'),barRect=wrap?.getBoundingClientRect(),markerRect=marker?.getBoundingClientRect();return {model:card.getAttribute('aria-label'),count:cells.length,filled:cells.map((cell,index)=>cell.classList.contains('filled')?index:-1).filter(index=>index>=0),unknown:wrap?.classList.contains('unknown'),expired:wrap?.classList.contains('expired'),due:wrap?.classList.contains('due'),level:[...(wrap?.classList||[])].find(name=>name.startsWith('level-')),color:firstFilled?getComputedStyle(firstFilled).backgroundColor:null,marker:marker?.textContent||null,centered:!!marker&&Math.abs(markerRect.x+markerRect.width/2-(barRect.x+barRect.width/2))<1}})})()");
   const cardB=cardBars.find(item=>item.model?.includes('Case B')),cardA=cardBars.find(item=>item.model?.includes('Case A')),cardG=cardBars.find(item=>item.model?.includes('Case G')),cardH=cardBars.find(item=>item.model?.includes('Case H')),cardC=cardBars.find(item=>item.model?.includes('Case C')),cardD=cardBars.find(item=>item.model?.includes('Case D')),cardE=cardBars.find(item=>item.model?.includes('Case E'));
   const red=cardH?.color?.match(/\d+/g)?.map(Number),purple=cardA?.color?.match(/\d+/g)?.map(Number),expiredRed=cardD?.color?.match(/\d+/g)?.map(Number),yellow=cardC?.color?.match(/\d+/g)?.map(Number);
@@ -94,26 +116,19 @@ async function main() {
   await value("document.querySelector('#vehicles').scrollIntoView({block:'start'})");await delay(150);
   let shot=await call('Page.captureScreenshot',{format:'png'});fs.writeFileSync('/out/inspection-cards-mobile.png',Buffer.from(shot.data,'base64'));
 
-  await selectModel('Case B');
-  await value("document.querySelector('#inspection-panel').scrollIntoView({block:'center'})");await delay(150);
-  shot=await call('Page.captureScreenshot',{format:'png'});fs.writeFileSync('/out/inspection-status-bar-mobile.png',Buffer.from(shot.data,'base64'));
-  const meter=await value("(()=>{const wrap=document.querySelector('#inspection-meter');const cells=Array.from(wrap.querySelectorAll('.inspection-meter-cell'));const firstFilled=cells.find(cell=>cell.classList.contains('filled'));return {cells:cells.length,filled:cells.map((cell,index)=>cell.classList.contains('filled')?index:-1).filter(index=>index>=0),level:[...wrap.classList].find(name=>name.startsWith('level-')),color:firstFilled?getComputedStyle(firstFilled).backgroundColor:null}})()");
-  if(meter.cells!==24||meter.filled.length!==13||meter.filled[0]!==11||meter.filled.at(-1)!==23||meter.level!=='level-13')throw Error('24-month preview should show 13 right-aligned cells for +13 months: '+JSON.stringify(meter));
-  await selectModel('Case G');
-  const maxMeter=await value("(()=>{const wrap=document.querySelector('#inspection-meter'),cells=Array.from(wrap.querySelectorAll('.inspection-meter-cell')),filled=cells.filter(cell=>cell.classList.contains('filled'));return {level:wrap.classList.contains('level-24'),count:cells.length,filled:filled.length,color:filled[0]?getComputedStyle(filled[0]).backgroundColor:null}})()");
-  const green=maxMeter.color?.match(/\d+/g)?.map(Number);
-  if(!maxMeter.level||maxMeter.count!==24||maxMeter.filled!==24||maxMeter.color===meter.color||!green||green[1]<=green[0]||green[1]<=green[2])throw Error('At least 24 remaining months should fill the green end of the visual window: '+JSON.stringify(maxMeter));
-  await selectModel('Case H');
-  if(!await value("document.querySelector('#inspection-meter').classList.contains('level-1') && document.querySelectorAll('#inspection-meter .inspection-meter-cell.filled').length===1 && document.querySelector('#inspection-meter .inspection-meter-cell:last-child').classList.contains('filled')"))throw Error('One remaining month should show the red end of the right-anchored visual scale');
-
-  await selectModel('Case A');
-  if(!await value("document.querySelector('#inspection-meter').classList.contains('unknown') && document.querySelectorAll('#inspection-meter .inspection-meter-cell').length===24 && document.querySelectorAll('#inspection-meter .inspection-meter-cell.filled').length===0 && document.querySelector('#inspection-message').textContent.includes('nicht erfasst')"))throw Error('Unknown month should show a neutral empty visual without guessing a date');
-  await selectModel('Case C');
-  if(await value("document.querySelectorAll('#inspection-meter .inspection-meter-cell').length!==24 || document.querySelectorAll('#inspection-meter .inspection-meter-cell.filled').length!==0 || !document.querySelector('#inspection-meter').classList.contains('level-0')"))throw Error('Due-this-month display should be empty at level 0');
+  await value(`(()=>{const card=(model)=>Array.from(document.querySelectorAll('#vehicles .vehicle-card')).find(node=>node.getAttribute('aria-label')?.includes(model));card('Case B').click();card('Case H').click()})()`);
+  await until(`(()=>{const toolbar=document.querySelector('#own-detail-actions'),rect=toolbar.getBoundingClientRect();return document.querySelector('#detail-heading').textContent.endsWith('Case H') && !document.querySelector('#inspection-panel').hidden && rect.top>=-2 && rect.bottom<=innerHeight+2 && window.scrollY>0 && !!document.activeElement.closest('#own-detail-actions')})()`, 'rapid selection scrolls to current vehicle actions');
+  const scrollCheck=await value("(()=>{const toolbar=document.querySelector('#own-detail-actions'),rect=toolbar.getBoundingClientRect();return {selected:document.querySelector('#vehicles .vehicle-card[aria-pressed=\"true\"]')?.getAttribute('aria-label'),scrollY,innerHeight,scrollHeight:document.documentElement.scrollHeight,toolbar:{top:rect.top,bottom:rect.bottom,height:rect.height},focused:!!document.activeElement.closest('#own-detail-actions')}})()");
+  if(!scrollCheck.selected?.includes('Case H')||scrollCheck.scrollY<=0||scrollCheck.toolbar.top < -2||scrollCheck.toolbar.bottom > scrollCheck.innerHeight+2||!scrollCheck.focused)throw Error('Rapid card selection did not leave the selected vehicle and action toolbar in view: '+JSON.stringify(scrollCheck));
+  await assertSummary('Case B',[lastDayLabel(thirteenAhead),'fällig in circa 13 Monaten']);
+  await assertSummary('Case G',[lastDayLabel(shiftMonth(asOf,24)),'fällig in circa 24 Monaten']);
+  await assertSummary('Case H',[lastDayLabel(shiftMonth(asOf,1)),'fällig in circa 1 Monat']);
+  await assertSummary('Case A',['nicht eingetragen']);
+  await assertSummary('Case C',[lastDayLabel(thisMonth),'fällig diesen Monat']);
   await selectModel('Case D');
-  if(!await value("document.querySelector('#inspection-message').textContent.includes('überfällig') && document.querySelector('#condition-readiness .readiness-badge').textContent.includes('Fahrbereit') && !document.querySelector('#vehicles .vehicle-card[aria-pressed=\"true\"] .card-readiness.not_ready')"))throw Error('First overdue month should remain ready until the blocking date');
+  if(!await value(`document.querySelector('#inspection-message').textContent.includes('${lastDayLabel(lastMonth)}') && document.querySelector('#inspection-message').textContent.includes('überfällig seit circa 1 Monat') && document.querySelector('#condition-readiness .readiness-badge').textContent.includes('Fahrbereit') && !document.querySelector('#vehicles .vehicle-card[aria-pressed=\"true\"] .card-readiness.not_ready')`))throw Error('First overdue month should show its date but remain ready until the blocking date');
   await selectModel('Case E');
-  if(!await value("document.querySelector('#condition-readiness .readiness-badge').textContent.includes('Nicht fahrbereit') && document.querySelector('#inspection-message').textContent.includes('INOP')"))throw Error('Blocking inspection did not project INOP for a manually ready vehicle');
+  if(!await value(`document.querySelector('#inspection-message').textContent.includes('${lastDayLabel(twoMonthsBack)}') && document.querySelector('#inspection-message').textContent.includes('überfällig seit circa 2 Monaten') && document.querySelector('#inspection-message').textContent.includes('automatisch INOP ab') && document.querySelector('#condition-readiness .readiness-badge').textContent.includes('Nicht fahrbereit')`))throw Error('Blocking inspection summary or readiness projection is missing');
   const readyBefore=await value(`(async()=>{const vehicles=await(await fetch('/garage-api/vehicles')).json();return vehicles.vehicles.find(v=>v.model==='Case E')})()`);
   if(readyBefore.status.readiness!=='ready'||readyBefore.effectiveReadiness!=='not_ready'||readyBefore.status.issues.length!==1)throw Error('Raw manual status was not kept separate from the blocker');
   const renewedReady=await saveRenewal('Case E',thirteenAhead);
@@ -123,6 +138,9 @@ async function main() {
   if(renewedNotReady.status.readiness!=='not_ready'||renewedNotReady.effectiveReadiness!=='not_ready')throw Error('Renewal cleared a manual not-ready assessment');
   const persisted=await request('/garage-api/vehicles/'+renewedNotReady.id,'GET');
   if(persisted.inspectionDueMonth!==thirteenAhead||persisted.status.issues.length!==1)throw Error('Renewed date or issue did not persist');
+  await selectModel('Case A');
+  const unavailable=await value(`(()=>{const vehicle=state.vehicles.find(item=>item.model==='Case A');vehicle.inspectionDueMonth='1900-01';renderCondition(vehicle.status);return {message:document.querySelector('#inspection-message').textContent,unavailable:document.querySelector('#inspection-message').classList.contains('unavailable'),meter:!!document.querySelector('#inspection-meter')}})()`);
+  if(!unavailable.unavailable||unavailable.meter||!unavailable.message.includes('Status momentan nicht verfügbar'))throw Error('Invalid inspection projection did not show a clear unavailable summary: '+JSON.stringify(unavailable));
 
   for(const width of [320,390,768,1280]){
     await call('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<700});await delay(120);
@@ -133,6 +151,6 @@ async function main() {
     console.log(width+'px inspection layout passed');
   }
   if(errors.length)throw Error('JavaScript errors: '+errors.join('; '));
-  console.log('Unknown purple, current due yellow, overdue/blocking red, 24-month visual scale, stable card heights and readiness separation: PASS');
+  console.log('Compact HU summaries, no detail meter, explicit card selection scroll, scroll-free initial/timed refresh, rapid selection, unchanged 24-month card bars, stable card heights: PASS');
 }
 main().catch(error=>{console.error(error.stack||error.message);process.exitCode=1}).finally(()=>{if(socket)socket.close();if(browser)browser.kill()});

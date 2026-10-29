@@ -59,16 +59,17 @@ function effectiveReadiness(vehicle) {
   if (vehicle.inspection.blocksReadiness && vehicle.effectiveReadiness !== "not_ready") return "unavailable";
   return vehicle.effectiveReadiness;
 }
-function inspectionMonthLabel(value) { if (!validInspectionMonth(value)) return ""; const names = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]; return `${names[Number(value.slice(5, 7)) - 1]} ${value.slice(0, 4)}`; }
 function inspectionSummary(vehicle) {
   if (!state.inspectionStatus) return "";
-  if (!validInspection(vehicle)) return "HU / TÜV Status nicht verfügbar";
+  if (!validInspection(vehicle)) return "HU / TÜV: Status momentan nicht verfügbar";
   const value = vehicle.inspection;
-  if (value.state === "unknown") return "HU / TÜV nicht erfasst";
-  const month = inspectionMonthLabel(value.dueMonth);
-  if (value.state === "upcoming") return `HU / TÜV ${month}, noch ${value.monthsUntilDue} ${value.monthsUntilDue === 1 ? "Monat" : "Monate"}; gültig bis ${readableDate(value.validUntil)}`;
-  if (value.state === "due") return `HU / TÜV ${month}, diesen Monat fällig; gültig bis ${readableDate(value.validUntil)}`;
-  return `HU / TÜV ${month}, überfällig; automatisch INOP ab ${readableDate(value.blockingFrom)}`;
+  if (value.state === "unknown") return "HU / TÜV: nicht eingetragen";
+  const date = readableDate(value.validUntil);
+  if (value.state === "upcoming") return `HU / TÜV: ${date} · fällig in circa ${value.monthsUntilDue} ${value.monthsUntilDue === 1 ? "Monat" : "Monaten"}`;
+  if (value.state === "due") return `HU / TÜV: ${date} · fällig diesen Monat`;
+  const overdueMonths = Math.abs(value.monthsUntilDue);
+  const overdueText = `überfällig seit circa ${overdueMonths} ${overdueMonths === 1 ? "Monat" : "Monaten"}`;
+  return value.state === "blocking" ? `HU / TÜV: ${date} · ${overdueText} · automatisch INOP ab ${readableDate(value.blockingFrom)}` : `HU / TÜV: ${date} · ${overdueText}`;
 }
 function validWorkItem(item) { return item && (typeof item.vehicleId === "number" || typeof item.vehicleId === "string") && item.id !== null && item.id !== undefined && typeof item.text === "string" && (item.dueDate === null || validIsoDate(item.dueDate)) && (item.severity === null || Object.hasOwn(severityLabels, item.severity)) && Object.hasOwn(lifecycleLabels, item.lifecycle) && Object.hasOwn(dueStateLabels, item.dueState); }
 function validCondition(condition) { return condition && Object.hasOwn(readinessLabels, condition.readiness) && Array.isArray(condition.issues) && Number.isInteger(condition.revision) && condition.revision >= 0; }
@@ -139,7 +140,7 @@ function renderCards() {
     const mileage = distance(vehicle.odometer, vehicle.odometerUnit); if (mileage) button.append(el("p", "mileage", mileage));
     if (make) button.append(make);
     if (state.inspectionStatus) button.append(cardInspectionProgress(vehicle));
-    button.addEventListener("click", () => selectVehicle(id)); container.append(button);
+    button.addEventListener("click", () => selectVehicle(id, true, {navigateToActions:true})); container.append(button);
   }
 }
 function closeConditionEditor(restoreFocus = false) { const opener = state.conditionActionOpener && $(state.conditionActionOpener); $("condition-form").hidden = true; $("condition-view").hidden = false; $("condition-edit").setAttribute("aria-expanded", "false"); $("condition-message").textContent = ""; state.editingRevision = null; state.conditionActionOpener = null; if (restoreFocus) (opener || $("condition-edit")).focus(); }
@@ -163,16 +164,10 @@ function conditionIssueRow(issue, vehicleId) {
 function renderInspection(vehicle) {
   const panel = $("inspection-panel"); panel.hidden = !state.inspectionStatus;
   if (!state.inspectionStatus) return;
-  const message = $("inspection-message"), asOf = $("inspection-asof"), meterWrap = $("inspection-meter-wrap"), meter = $("inspection-meter");
-  if (!validInspection(vehicle)) { message.className = "inspection-message"; message.textContent = "HU-Status momentan nicht verfügbar."; asOf.textContent = ""; meterWrap.hidden = true; meter.replaceChildren(); return; }
-  const value = vehicle.inspection; message.className = `inspection-message state-${value.state}`; message.textContent = inspectionSummary(vehicle);
-  asOf.textContent = `Stand: ${readableDate(value.asOf)} (Europe/Berlin).`;
-  meterWrap.hidden = false;
-  const level = inspectionVisualLevel(vehicle);
-  meter.className = `inspection-meter ${level === null ? "unknown" : `level-${level}`}`;
-  meter.setAttribute("role", "img");
-  meter.setAttribute("aria-label", level === null ? "HU-Vorlauf unbekannt; Darstellung neutral." : `HU-Vorlauf: ${value.monthsUntilDue} Monate; visuelle Darstellung auf 24 Monate begrenzt.`);
-  meter.replaceChildren(...inspectionBarCells(level, "inspection-meter"));
+  const message = $("inspection-message");
+  const value = validInspection(vehicle) ? vehicle.inspection : null;
+  message.className = `inspection-message${value ? ` state-${value.state}` : " unavailable"}`;
+  message.textContent = inspectionSummary(vehicle);
 }
 function renderCondition(condition) {
   const vehicle = selectedVehicle();
@@ -344,7 +339,14 @@ async function refreshVehicleSummaryProjection(id) {
   renderCards(); if ($("condition-form").hidden) renderCondition(vehicle.status);
   return true;
 }
-async function selectVehicle(id, refreshProjection = true) {
+function navigateToVehicleActions() {
+  const toolbar = $("own-detail-actions");
+  if (toolbar.hidden) return;
+  const reducedMotion = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  toolbar.scrollIntoView({behavior:reducedMotion ? "auto" : "smooth", block:"start"});
+  toolbar.focus({preventScroll:true});
+}
+async function selectVehicle(id, refreshProjection = true, options = {}) {
   if (state.entry && state.entry.busy) return;
   if (state.entry) closeEntry();
   $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); closeLogbook(false);
@@ -356,7 +358,8 @@ async function selectVehicle(id, refreshProjection = true) {
   try { const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(id)}/summary`); if (generation !== state.generation) return; if (mergeSummaryVehicle(vehicle, result.vehicle)) { if ($("condition-form").hidden) renderCondition(vehicle.status); renderCards(); } renderRecords("reminders", result.reminders, "reminders"); renderRecords("services", result.services, "services"); setStatus("detail-status", ""); $("detail-content").hidden = false; }
   catch (error) { if (generation === state.generation) setStatus("detail-status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeugdaten konnten nicht geladen werden. Bitte versuche es erneut.", true); }
   finally { if (generation === state.generation) state.detailLoading = false; }
-  if (refreshProjection && generation === state.generation) await refreshWork();
+  if (refreshProjection && state.standalone && state.scheduledWork && generation === state.generation) await refreshWork();
+  if (options.navigateToActions && generation === state.generation && state.selected === id) navigateToVehicleActions();
 }
 async function load(preferredId = null) {
   const loadGeneration = ++state.loadGeneration; state.loading = true;

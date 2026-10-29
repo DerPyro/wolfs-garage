@@ -12,22 +12,25 @@ class Element {
   append(...children) { for (const child of children) child.parent = this; this.children.push(...children); }
   prepend(...children) { for (const child of children) child.parent = this; this.children.unshift(...children); }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
-  focus() { this.focused = true; }
+  focus(options) { this.focused = true; this.focusOptions = options; }
+  scrollIntoView(options) { this.scrollCount = (this.scrollCount || 0) + 1; this.scrollOptions = options; }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tagName === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, inspectionStatus = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-heading','inspection-message','inspection-meter-wrap','inspection-meter','inspection-asof','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, inspectionStatus = false, reducedMotion = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+  nodes['inspection-panel'].append(nodes['inspection-message']);
+  nodes['own-detail-actions'].setAttribute('tabindex','-1');
   nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json';
   nodes['data-export-wrap'].append(nodes['data-export'], new Element('p'));
   nodes['data-export-wrap'].children[1].textContent='JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.';
-  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel','inspection-meter-wrap']) nodes[id].hidden = true;
+  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const documentListeners = {};
   let inspectionInterval;
   const document = { visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window:{matchMedia:()=>({matches:reducedMotion})}, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
   Object.defineProperty(nodes,'__visibilityChanged',{value:async visibilityState=>{document.visibilityState=visibilityState;return documentListeners.visibilitychange&&documentListeners.visibilitychange();}});
   Object.defineProperty(nodes,'__inspectionTick',{value:async()=>inspectionInterval&&inspectionInterval.callback()});
   Object.defineProperty(nodes,'__inspectionInterval',{value:()=>inspectionInterval&&inspectionInterval.delay});
@@ -51,20 +54,21 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
 
   // HU month projection is explicitly capability-gated and server-dated; the UI only renders its values.
   const huCases = [
-    {name:'Vorschau',dueMonth:'2026-12',inspection:huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'}),expected:/Dezember 2026, noch 2 Monate/,visualLevel:2},
-    {name:'Volle visuelle Skala',dueMonth:'2028-10',inspection:huProjection({dueMonth:'2028-10',state:'upcoming',monthsUntilDue:24,batteryLevel:12,validUntil:'2028-10-31',blockingFrom:'2028-12-01'}),expected:/noch 24 Monate/,visualLevel:24},
-    {name:'Visuelle Mitte bleibt rechts verankert',dueMonth:'2027-10',inspection:huProjection({dueMonth:'2027-10',state:'upcoming',monthsUntilDue:12,batteryLevel:12,validUntil:'2027-10-31',blockingFrom:'2027-12-01'}),expected:/noch 12 Monate/,visualLevel:12},
-    {name:'Im Fälligkeitsmonat',dueMonth:'2026-10',inspection:huProjection({dueMonth:'2026-10',state:'due',monthsUntilDue:0,batteryLevel:0,validUntil:'2026-10-31',blockingFrom:'2026-12-01'}),expected:/diesen Monat fällig/,visualLevel:24,barState:'due'},
-    {name:'Erster überfälliger Monat',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-09-15',dueMonth:'2026-08',state:'overdue',monthsUntilDue:-1,batteryLevel:0,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),expected:/überfällig; automatisch INOP ab 01\.10\.2026/,visualLevel:24,barState:'expired',marker:'!'},
-    {name:'Ab dem zweiten überfälligen Monat blockiert',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),effectiveReadiness:'not_ready',expected:/automatisch INOP ab 01\.10\.2026/,visualLevel:24,barState:'expired',marker:'!'},
-    {name:'HU nicht erfasst',dueMonth:null,inspection:huProjection(),expected:/HU \/ TÜV nicht erfasst/,visualLevel:24,barState:'unknown',marker:'?'}
+    {name:'Vorschau',dueMonth:'2026-12',inspection:huProjection({dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'}),expected:/HU \/ TÜV: 31\.12\.2026 · fällig in circa 2 Monaten/,visualLevel:2},
+    {name:'Volle Kartenleiste',dueMonth:'2028-10',inspection:huProjection({dueMonth:'2028-10',state:'upcoming',monthsUntilDue:24,batteryLevel:12,validUntil:'2028-10-31',blockingFrom:'2028-12-01'}),expected:/fällig in circa 24 Monaten/,visualLevel:24},
+    {name:'Kartenleiste Mitte',dueMonth:'2027-10',inspection:huProjection({dueMonth:'2027-10',state:'upcoming',monthsUntilDue:12,batteryLevel:12,validUntil:'2027-10-31',blockingFrom:'2027-12-01'}),expected:/fällig in circa 12 Monaten/,visualLevel:12},
+    {name:'Im Fälligkeitsmonat',dueMonth:'2026-10',inspection:huProjection({dueMonth:'2026-10',state:'due',monthsUntilDue:0,batteryLevel:0,validUntil:'2026-10-31',blockingFrom:'2026-12-01'}),expected:/31\.10\.2026 · fällig diesen Monat/,visualLevel:24,barState:'due'},
+    {name:'Erster überfälliger Monat',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-09-15',dueMonth:'2026-08',state:'overdue',monthsUntilDue:-1,batteryLevel:0,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),expected:/31\.08\.2026 · überfällig seit circa 1 Monat/,visualLevel:24,barState:'expired',marker:'!'},
+    {name:'Ab dem zweiten überfälligen Monat blockiert',dueMonth:'2026-08',inspection:huProjection({asOf:'2026-10-01',dueMonth:'2026-08',state:'blocking',monthsUntilDue:-2,batteryLevel:0,blocksReadiness:true,validUntil:'2026-08-31',blockingFrom:'2026-10-01'}),effectiveReadiness:'not_ready',expected:/31\.08\.2026 · überfällig seit circa 2 Monaten · automatisch INOP ab 01\.10\.2026/,visualLevel:24,barState:'expired',marker:'!'},
+    {name:'HU nicht erfasst',dueMonth:null,inspection:huProjection(),expected:/HU \/ TÜV: nicht eingetragen/,visualLevel:24,barState:'unknown',marker:'?'}
   ];
   for (const testCase of huCases) {
     const vehicle=huVehicle({...testCase,effectiveReadiness:testCase.effectiveReadiness||'ready'});
     nodes = await run(async path => ({ok:true,json:async()=>path.endsWith('/summary')?{vehicle,reminders:[],services:[]}:{vehicles:[vehicle]}}),{standalone:true,inspectionStatus:true});
     assert.equal(nodes['inspection-panel'].hidden,false,testCase.name);
     assert.match(nodes['inspection-message'].textContent,testCase.expected,testCase.name);
-    assert.match(nodes['inspection-asof'].textContent,/Europe\/Berlin/,testCase.name);
+    assert.equal(nodes['inspection-panel'].children.length,1,testCase.name);
+    assert.doesNotMatch(nodes['inspection-panel'].textContent,/Stand:|Darstellung:|Vorlauf/,testCase.name);
     assert.match(nodes.vehicles.children[0].attributes['aria-label'],/HU \/ TÜV/,testCase.name);
     assert.equal(nodes['condition-readiness'].textContent,testCase.effectiveReadiness==='not_ready'?'Nicht fahrbereit':'Fahrbereit',testCase.name);
     const cardIndicators=nodes.vehicles.children[0].children[0].children.find(child=>child.className==='card-indicators');
@@ -82,18 +86,9 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
       assert.equal(cardBattery.children.findIndex(cell=>cell.className.includes('filled')),24-testCase.visualLevel,testCase.name);
     }
     if (testCase.inspection.state==='unknown') {
-      assert.equal(nodes['inspection-meter-wrap'].hidden,false);
       assert.doesNotMatch(nodes['inspection-message'].textContent,/überfällig/);
       assert.doesNotMatch(nodes.vehicles.children[0].attributes['aria-label'],/INOP/);
       assert.equal(cardBattery.className,'card-inspection-progress unknown');
-      assert.match(nodes['inspection-meter'].attributes['aria-label'],/unbekannt/);
-    } else {
-      assert.equal(nodes['inspection-meter-wrap'].hidden,false);
-      assert.equal(nodes['inspection-meter'].children.length,24);
-      assert.match(nodes['inspection-meter'].attributes['aria-label'],/visuelle Darstellung auf 24 Monate/);
-      const detailLevel=Math.max(0,Math.min(24,testCase.inspection.monthsUntilDue||0));
-      assert.equal(nodes['inspection-meter'].children.filter(cell=>cell.className.includes('filled')).length,detailLevel);
-      assert.equal(nodes['inspection-meter'].children.findIndex(cell=>cell.className.includes('filled')),detailLevel?24-detailLevel:-1);
     }
     if (testCase.inspection.state==='blocking') {
       assert.match(nodes.vehicles.children[0].textContent,/INOP/);
@@ -111,7 +106,36 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.equal(invalidCardBar.className,'card-inspection-progress unavailable');
   assert.equal(invalidCardBar.children.filter(cell=>cell.className.includes('filled')).length,24);
   assert.equal(invalidCardBar.children.find(cell=>cell.className==='card-inspection-marker').textContent,'!');
-  assert.match(nodes['inspection-message'].textContent,/HU-Status momentan nicht verfügbar/);
+  assert.match(nodes['inspection-message'].textContent,/HU \/ TÜV: Status momentan nicht verfügbar/);
+
+  // Initial selection never scrolls; only the latest explicit card click navigates to its action bar.
+  const navVehicles=[1,2].map(id=>({id,name:`Navigation ${id}`,status:{readiness:'ready',issues:[],revision:0}}));
+  let releaseStaleSummary, signalStaleSummary; const staleSummaryStarted=new Promise(resolve=>{signalStaleSummary=resolve;});
+  nodes=await run(async path=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:navVehicles})};
+    const id=Number(path.split('/')[3]), vehicle=navVehicles.find(item=>item.id===id);
+    if(id===2) return new Promise(resolve=>{releaseStaleSummary=resolve;signalStaleSummary();});
+    return {ok:true,json:async()=>({vehicle,reminders:[],services:[]})};
+  },{standalone:true});
+  const actionBar=nodes['own-detail-actions'];
+  assert.equal(actionBar.scrollCount,undefined,'initial vehicle load does not navigate to detail actions');
+  assert.equal(actionBar.focused,undefined);
+  const staleCard=nodes.vehicles.children.find(card=>card.attributes['aria-label'].startsWith('Navigation 2'));
+  const staleClick=staleCard.listeners.click(); await staleSummaryStarted;
+  assert.equal(actionBar.scrollCount,undefined,'navigation waits for the selected vehicle summary');
+  const currentCard=nodes.vehicles.children.find(card=>card.attributes['aria-label'].startsWith('Navigation 1'));
+  await currentCard.listeners.click();
+  assert.equal(actionBar.scrollCount,1); assert.equal(actionBar.scrollOptions.behavior,'smooth'); assert.equal(actionBar.scrollOptions.block,'start');
+  assert.equal(actionBar.focused,true); assert.equal(actionBar.focusOptions.preventScroll,true);
+  releaseStaleSummary({ok:true,json:async()=>({vehicle:navVehicles[1],reminders:[],services:[]})}); await staleClick;
+  assert.equal(actionBar.scrollCount,1,'a stale A→B→A selection cannot scroll or steal focus');
+  assert.equal(nodes.vehicles.children.find(card=>card.attributes['aria-label'].startsWith('Navigation 1')).attributes['aria-pressed'],'true');
+  nodes=await run(async path=>path==='/garage-api/vehicles'
+    ? {ok:true,json:async()=>({vehicles:[navVehicles[0]]})}
+    : {ok:true,json:async()=>({vehicle:navVehicles[0],reminders:[],services:[]})},{standalone:true,reducedMotion:true});
+  await nodes.vehicles.children[0].listeners.click();
+  assert.equal(nodes['own-detail-actions'].scrollOptions.behavior,'auto','reduced motion avoids smooth scrolling');
+
   const legacyHuNodes=await run(async path=>({ok:true,json:async()=>path.endsWith('/summary')?{vehicle:{status:{readiness:'ready',issues:[],revision:1}},reminders:[],services:[]}:{vehicles:[{id:1,name:'Legacy',status:{readiness:'ready',issues:[],revision:1}}]}}),{standalone:true});
   assert.equal(legacyHuNodes['inspection-panel'].hidden,true);
   legacyHuNodes['vehicle-edit'].listeners.click();
@@ -161,7 +185,7 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.equal(huWrites[1].body.inspectionDueMonth,null,'blank month explicitly clears the date');
   assert.equal(editableVehicle.status.readiness,'not_ready','vehicle edits retain manual readiness');
   assert.equal(nodes['condition-readiness'].textContent,'Nicht fahrbereit');
-  assert.match(nodes['inspection-message'].textContent,/nicht erfasst/);
+  assert.match(nodes['inspection-message'].textContent,/nicht eingetragen/);
   nodes['vehicle-add'].listeners.click();
   const createdInput=id=>nodes['own-fields'].querySelectorAll('input').find(input=>input.id==='entry-'+id);
   createdInput('make').value='Neu'; createdInput('model').value='Fahrzeug';
@@ -187,7 +211,7 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.equal(summaryReads,2,'status write forces a fresh vehicle summary');
   assert.equal(nodes['condition-readiness'].textContent,'Nicht fahrbereit','new server projection can override manual ready');
   assert.equal(changingVehicle.status.readiness,'ready');
-  assert.equal(nodes['inspection-asof'].textContent,'Stand: 01.10.2026 (Europe/Berlin).');
+  assert.match(nodes['inspection-message'].textContent,/31\.08\.2026 · überfällig seit circa 2 Monaten · automatisch INOP ab 01\.10\.2026/);
 
   // On tab return, refresh the server month only when no entry form is being edited.
   const visibilityVehicle=huVehicle({dueMonth:'2026-12',inspection:beforeInspection});
@@ -210,11 +234,11 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   visibilityVehicle.inspection=huProjection({asOf:'2026-10-29',dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'});
   await nodes.__visibilityChanged('hidden'); await nodes.__visibilityChanged('visible');
   assert.equal(vehicleReads,readsBeforeForm+1);
-  assert.match(nodes['inspection-asof'].textContent,/29\.10\.2026/);
+  assert.match(nodes['inspection-message'].textContent,/31\.12\.2026 · fällig in circa 2 Monaten/);
   visibilityVehicle.inspection=huProjection({asOf:'2026-10-30',dueMonth:'2026-12',state:'upcoming',monthsUntilDue:2,batteryLevel:2,validUntil:'2026-12-31',blockingFrom:'2027-02-01'});
   await nodes.__inspectionTick();
   assert.equal(vehicleReads,readsBeforeForm+2);
-  assert.match(nodes['inspection-asof'].textContent,/30\.10\.2026/);
+  assert.match(nodes['inspection-message'].textContent,/31\.12\.2026 · fällig in circa 2 Monaten/);
   assert.equal(nodes['history-panel'].hidden,false,'periodic projection refresh preserves history visibility');
   assert.equal(nodes['logbook-panel'].hidden,false,'periodic projection refresh preserves logbook visibility');
   assert.equal(nodes.vehicles.children[0].attributes['aria-pressed'],'true','periodic projection refresh preserves selection');

@@ -40,7 +40,7 @@ For a different local port, set `GARAGE_PORT` in a private environment file and 
 
 The current app supports vehicle create/edit, readiness (`ready`, `not_ready`, or `unknown`) and open issues, dated odometer readings, service/repair records with optional decimal-string cost and currency, HTTPS document references, and an append-only application history. A repair can close an explicitly selected open issue in the same transaction. Odometer and record create commands accept a `commandId` for idempotent retries.
 
-To enter the HU month, select a vehicle, choose **Fahrzeug bearbeiten**, and use **HU / TÜV gültig bis**. The adjacent information control explains where to read the month and year on the rear plate; the last HU report is an alternative source. The help links to the [TÜV NORD HU information page](https://www.tuev-nord.de/de/dienstleistungen/pruefung-und-gutachten/hauptuntersuchung/).
+To enter the HU month, select a vehicle, choose **Fahrzeug bearbeiten**, and use **HU / TÜV gültig bis**. The adjacent information control explains where to read the month and year on the rear plate; the last HU report is an alternative source. The help links to the [TÜV NORD HU information page](https://www.tuev-nord.de/de/dienstleistungen/pruefung-und-gutachten/hauptuntersuchung/). Vehicle detail presents the recorded due date and approximate remaining time in one compact line, with clear text for due this month, overdue/blocking, unknown and unavailable; it has no separate HU meter or repeated projection-as-of date. The existing compact card bar continues to show the state across the 24-month display range.
 
 Document references are stored as URLs only; the app does not fetch or upload documents. Do not use them as a substitute for document access control.
 
