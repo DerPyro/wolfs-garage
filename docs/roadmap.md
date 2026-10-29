@@ -12,7 +12,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Atomic work-record creation and explicit issue closure; readable change history.
 - [x] Revision checks and idempotent reading/record submissions.
 - [x] Bounded completed-record metadata corrections with a reason, revision check, retry handling and before/after history; measurement corrections use their separate linked schema-5 workflow.
-- [x] Safe date/odometer corrections with explicit reading provenance, revision checks, idempotent retries and atomic before/after history ([contract](planning/measurement-corrections.md)); local acceptance passed, while live schema migration remains pending separate authorization.
+- [x] Safe date/odometer corrections with explicit reading provenance, revision checks, idempotent retries and atomic before/after history ([contract](planning/measurement-corrections.md)); local acceptance and the separately authorized reference-instance schema-4-to-5 migration completed 2026-10-29.
 - [x] Explicit schema-1/2/3/4-to-5 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
 - [x] Download a consistent full SQLite backup and restore it to a new validated database file; preserve command replay data and rehearse in isolation.
 - [x] Portable owner-data JSON export for inspection and transfer; full SQLite backup remains the restore format and JSON import is not supported.
@@ -50,14 +50,14 @@ User decision — 2026-10-29: maintenance planning and reliable 1.0 operation ta
 
 ## Reliable 1.0 operation
 
-- [x] Explicit schema-1/2/3/4-to-5 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates. The reference-instance migration is not included in this feature work.
+- [x] Explicit schema-1/2/3/4-to-5 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates. The reference-instance migration was separately authorized, rehearsed and completed 2026-10-29.
 - [x] Document the separate portable JSON export and complete SQLite backup/restore paths; test a synthetic isolated restore including retry state.
 - [ ] Establish an independent recurring off-host backup schedule and runbook for the chosen operator storage.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
 - [ ] Establish release notes, upgrade instructions and repeatable independent backups.
 - [ ] Validate and enable pinned multi-architecture container releases; publish only from an explicitly published GitHub Release, with manual builds remaining push-free. The prepared [release Compose file](../deploy/compose.release.yaml) does not imply a published image.
 - [ ] Prepare a dry-run LubeLogger import with identity, unit, amount and document comparisons.
-- [ ] Decide and explicitly authorize any productive cutover; preserve the original data and account for new writes during rollback.
+- [ ] Decide and explicitly authorize any future LubeLogger data import/cutover; preserve the original data and account for new writes during rollback. The separate reference-instance schema-4-to-5 migration is complete.
 
 ## Vehicle photos and invoice uploads — later
 
