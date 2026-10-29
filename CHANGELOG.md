@@ -6,6 +6,8 @@ This file tracks changes for a future release. Entries under **Unreleased** do n
 
 ### Added
 
+- Download a consistent complete SQLite backup through the protected UI/API, separately from portable owner-data JSON; restore a validated backup into a new database file without overwriting the configured database or automatically migrating it.
+- Document the explicit off-host backup, isolated restore, schema-upgrade and compatible-image rollback workflow. No live database replacement or automatic migration is introduced.
 - Browse complete odometer and completed-work histories through date-filtered, keyset-paginated views with safe cursor restart after vehicle changes.
 - Schedule existing open work with optional due dates, a user-assigned nullable severity, and `open`/`observed` lifecycle. A read-only dashboard derives due status using `Europe/Berlin` and keeps vehicle readiness independent.
 - Record a nullable HU due month and derive inspection state plus an effective-readiness projection using the documented owner policy. Manual readiness and issue data remain unchanged; this is not a legal deadline calculation.

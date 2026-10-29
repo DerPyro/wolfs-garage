@@ -4,10 +4,11 @@ import json
 import os
 from pathlib import Path
 import re
+import tempfile
 import sqlite3
 from urllib.parse import urlsplit
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import __version__
@@ -140,7 +141,7 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "inspectionStatus"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "databaseBackup", "inspectionStatus"])
 
     @app.get("/garage-api/export")
     def export_data():
@@ -149,6 +150,33 @@ def create_app(config=None):
         body = json.dumps(store.export_data(), ensure_ascii=False, allow_nan=False, indent=2)
         return Response(body, mimetype="application/json",
                         headers={"Content-Disposition": 'attachment; filename="wolfs-garage-export.json"'})
+
+    @app.get("/garage-api/backup")
+    def download_backup():
+        if request.query_string:
+            raise ValidationError("This endpoint does not accept query parameters.")
+        temporary = tempfile.TemporaryDirectory(
+            prefix="wolfs-garage-backup-", dir=app.config.get("GARAGE_BACKUP_TEMP_DIR"),
+        )
+        try:
+            os.chmod(temporary.name, 0o700)
+            backup_path = Path(temporary.name) / "wolfs-garage-backup.sqlite3"
+            store.backup(backup_path)
+            response = send_file(
+                backup_path, mimetype="application/octet-stream", as_attachment=True,
+                download_name="wolfs-garage-backup.sqlite3", conditional=False, etag=False,
+            )
+            response.headers["Content-Disposition"] = (
+                'attachment; filename="wolfs-garage-backup.sqlite3"'
+            )
+            # Flask's direct-passthrough file wrapper does not guarantee that
+            # Response.close() runs when a WSGI server closes its iterable.
+            response.direct_passthrough = False
+        except BaseException:
+            temporary.cleanup()
+            raise
+        response.call_on_close(temporary.cleanup)
+        return response
 
     @app.get("/garage-api/work")
     def work():

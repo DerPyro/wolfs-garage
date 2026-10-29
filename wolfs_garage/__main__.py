@@ -9,9 +9,14 @@ from .store import Store
 
 def main():
     parser = argparse.ArgumentParser(description="Wolfs Garage database administration")
-    parser.add_argument("command", choices=["init-db", "backup", "check-db", "upgrade-db", "export"])
+    parser.add_argument("command", choices=["init-db", "backup", "check-db", "upgrade-db", "export", "restore-backup"])
     parser.add_argument("destination", nargs="?")
+    parser.add_argument("restore_destination", nargs="?")
     args = parser.parse_args()
+    if args.restore_destination and args.command != "restore-backup":
+        parser.error(f"{args.command} accepts only one destination path")
+    if args.command in {"init-db", "check-db"} and args.destination:
+        parser.error(f"{args.command} does not accept a destination path")
     path = Path(os.environ.get("GARAGE_DB", "data/garage.sqlite3"))
     store = Store(path)
     try:
@@ -29,7 +34,14 @@ def main():
                 parser.error("export requires a new destination filename")
             store.export_to_file(args.destination)
             print("Owner data export created.")
+        elif args.command == "restore-backup":
+            if not args.destination or not args.restore_destination:
+                parser.error("restore-backup requires SOURCE and NEW_DB_PATH")
+            store.restore_backup(args.destination, args.restore_destination)
+            print("Checked backup restored to a new database path; no schema upgrade was performed.")
         elif args.command == "upgrade-db":
+            if args.restore_destination:
+                parser.error("upgrade-db accepts only one destination filename")
             if not args.destination:
                 parser.error("upgrade-db requires a new backup destination filename")
             print("Explicit schema upgrade requested. Stop the application first and test recovery on a separate database copy.")
@@ -39,6 +51,8 @@ def main():
             else:
                 print("Database is already schema 4; no upgrade or backup file was written.")
         else:
+            if args.destination or args.restore_destination:
+                parser.error(f"{args.command} does not accept destination paths")
             vehicles = store.list_vehicles()
             print(f"Garage database readable; vehicles: {len(vehicles)}.")
     except (OSError, sqlite3.Error, ValueError) as exc:

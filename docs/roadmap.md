@@ -13,7 +13,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Revision checks and idempotent reading/record submissions.
 - [x] Bounded completed-record corrections with a reason, revision check, retry handling and before/after history; date, odometer, unit and issue-closure changes remain out of scope.
 - [x] Explicit schema-1/2/3-to-4 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
-- [x] Consistent SQLite backup and synthetic isolated restore evidence.
+- [x] Download a consistent full SQLite backup and restore it to a new validated database file; preserve command replay data and rehearse in isolation.
 - [x] Portable owner-data JSON export for inspection and transfer; full SQLite backup remains the restore format and JSON import is not supported.
 - [x] Record an inspection due month and display a Berlin-date status/readiness projection under the documented owner policy; unknown dates remain unknown.
 - [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
@@ -49,7 +49,8 @@ User decision — 2026-10-29: maintenance planning and reliable 1.0 operation ta
 ## Reliable 1.0 operation
 
 - [x] Explicit schema-1/2/3-to-4 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates.
-- [ ] Complete export and documented isolated restore for all supported data and files.
+- [x] Document the separate portable JSON export and complete SQLite backup/restore paths; test a synthetic isolated restore including retry state.
+- [ ] Establish an independent recurring off-host backup schedule and runbook for the chosen operator storage.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
 - [ ] Establish release notes, upgrade instructions and repeatable independent backups.
 - [ ] Validate and enable pinned multi-architecture container releases; publish only from an explicitly published GitHub Release, with manual builds remaining push-free. The prepared [release Compose file](../deploy/compose.release.yaml) does not imply a published image.
@@ -76,3 +77,5 @@ Each instance initially serves a trusted owner; a public multi-tenant service, a
 ## Decisions and historical evidence
 
 The decision to build an independent core is accepted in [ADR-0009](adr/0009-backend-ownership-challenge.md), and MIT/reuse in [ADR-0010](adr/0010-open-source-mit.md). LubeLogger remains the data source for the separately running legacy installation until an authorized migration. The earlier [challenge](planning/lubelogger-vs-own.md) and [historical implementation log](discovery/roadmap-history.md) document how this direction was chosen; their old pending items do not reverse these decisions.
+
+The [backup/update runbook](planning/backup-update-workflow.md) separates the full SQLite recovery image from the portable JSON export and documents source/image pinning, isolated restoration and same-schema rollback.

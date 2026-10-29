@@ -14,23 +14,31 @@ class Element {
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
   focus(options) { this.focused = true; this.focusOptions = options; }
   scrollIntoView(options) { this.scrollCount = (this.scrollCount || 0) + 1; this.scrollOptions = options; }
+  click() { this.clicked = true; if (this.listeners.click) return this.listeners.click(); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tagName === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, inspectionStatus = false, reducedMotion = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, reducedMotion = false} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
   nodes['inspection-panel'].append(nodes['inspection-message']);
   nodes['own-detail-actions'].setAttribute('tabindex','-1');
-  nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json';
-  nodes['data-export-wrap'].append(nodes['data-export'], new Element('p'));
-  nodes['data-export-wrap'].children[1].textContent='JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.';
+  nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json'; nodes['data-export'].textContent='Portabler JSON-Export';
+  nodes['data-export-hint'].textContent='JSON-Datei mit Fahrzeugdaten und Verlauf zur Ansicht oder Übertragung. Sie dient nicht zur Wiederherstellung.';
+  nodes['database-backup-hint'].textContent='Die Sicherung enthält alle Garage-Anwendungsdaten einschließlich Verlauf. Konfiguration und externe Dokumente sind nicht enthalten.';
+  nodes['backup-restore-help'].append(new Element('summary'), new Element('div'));
+  nodes['backup-restore-help'].children[0].textContent='Import / Wiederherstellen'; nodes['backup-restore-help'].children[1].textContent='Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank: python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3 Es gibt keinen Upload oder Import im Browser.';
   for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const documentListeners = {};
   let inspectionInterval;
-  const document = { visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window:{matchMedia:()=>({matches:reducedMotion})}, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  const downloads = []; const body = new Element('body');
+  const objectUrls = {created:[],revoked:[],createObjectURL(blob){this.created.push(blob);return `blob:test-${this.created.length}`;},revokeObjectURL(url){this.revoked.push(url);}};
+  const URLMock = class extends URL {};
+  URLMock.createObjectURL = blob => objectUrls.createObjectURL(blob); URLMock.revokeObjectURL = url => objectUrls.revokeObjectURL(url);
+  const document = { body, visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => {const element=new Element(tag); if(tag==='a')downloads.push(element); return element;}, createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window:{matchMedia:()=>({matches:reducedMotion})}, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  Object.defineProperty(nodes,'__downloads',{value:downloads}); Object.defineProperty(nodes,'__objectUrls',{value:objectUrls});
   Object.defineProperty(nodes,'__visibilityChanged',{value:async visibilityState=>{document.visibilityState=visibilityState;return documentListeners.visibilitychange&&documentListeners.visibilitychange();}});
   Object.defineProperty(nodes,'__inspectionTick',{value:async()=>inspectionInterval&&inspectionInterval.callback()});
   Object.defineProperty(nodes,'__inspectionInterval',{value:()=>inspectionInterval&&inspectionInterval.delay});
@@ -254,11 +262,57 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.equal(nodes['data-export-wrap'].hidden,false);
   assert.equal(nodes['data-export'].href,'/garage-api/export');
   assert.equal(nodes['data-export'].download,'wolfs-garage-export.json');
-  assert.match(nodes['data-export-wrap'].textContent,/JSON-Datei mit Fahrzeugdaten und Verlauf/);
-  assert.match(nodes['data-export-wrap'].textContent,/Zur Wiederherstellung ein Datenbank-Backup verwenden/);
+  assert.equal(nodes['data-export'].textContent,'Portabler JSON-Export');
+  assert.match(nodes['data-export-hint'].textContent,/dient nicht zur Wiederherstellung/);
   assert.equal(exportCalls,0,'normal anchor download avoids loading the complete export in app memory');
   const exportMarkup=fs.readFileSync(require('node:path').join(__dirname,'index.html'),'utf8');
   assert.match(exportMarkup,/<a id="data-export"[^>]*href="\/garage-api\/export"[^>]*download="wolfs-garage-export\.json"/);
+  assert.match(exportMarkup,/Vollständige Sicherung herunterladen/);
+  assert.match(exportMarkup,/restore-backup BACKUP\.sqlite3 NEUE_DATENBANK\.sqlite3/);
+  assert.match(nodes['backup-restore-help'].textContent,/offline auf dem Server/);
+  nodes = await run(async path => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:true,dataExport:true,databaseBackup:true});
+  assert.equal(nodes['database-backup'].hidden,false);
+  assert.equal(nodes['database-backup-hint'].hidden,false);
+  assert.match(nodes['database-backup-hint'].textContent,/alle Garage-Anwendungsdaten einschließlich Verlauf/);
+  assert.match(nodes['database-backup-hint'].textContent,/Konfiguration und externe Dokumente sind nicht enthalten/);
+  let backupFetches=0, finishBackup;
+  const pendingBackup = new Promise(resolve=>{finishBackup=resolve;});
+  nodes = await run(async path => {
+    if(path==='/garage-api/backup') { backupFetches++; return pendingBackup; }
+    return {ok:true,json:async()=>({vehicles:[]})};
+  }, {standalone:true,databaseBackup:true});
+  const backupRequest=nodes['database-backup'].listeners.click();
+  assert.equal(nodes['database-backup'].disabled,true,'download button disables while the backup is being fetched');
+  assert.equal(nodes['database-backup'].attributes['aria-busy'],'true');
+  const duplicate=nodes['database-backup'].listeners.click(); await duplicate;
+  assert.equal(backupFetches,1,'a second click cannot start a concurrent download');
+  finishBackup({ok:true,status:200,blob:async()=>new Blob(['SQLite format 3\u0000synthetic backup'],{type:'application/vnd.sqlite3'})});
+  await backupRequest;
+  assert.equal(backupFetches,1);
+  assert.match(nodes['__downloads'][0].download,/^wolfs-garage-backup-.*\.sqlite3$/);
+  assert.equal(nodes['__downloads'][0].clicked,true);
+  assert.equal(nodes['__objectUrls'].created.length,1);
+  assert.equal(nodes['__objectUrls'].revoked.length,1);
+  assert.match(nodes['database-backup-message'].textContent,/Sicherung erstellt\. Der Download wurde gestartet/);
+  assert.equal(nodes['database-backup'].disabled,false);
+  let backupAttempts=0;
+  nodes = await run(async path => {
+    if(path==='/garage-api/backup') { backupAttempts++; return {ok:false,status:503}; }
+    return {ok:true,json:async()=>({vehicles:[]})};
+  }, {standalone:true,databaseBackup:true});
+  await nodes['database-backup'].listeners.click();
+  assert.equal(backupAttempts,1);
+  assert.match(nodes['database-backup-message'].textContent,/konnte nicht heruntergeladen werden/);
+  assert.equal(nodes['__downloads'].length,0,'failed backup response never reports or triggers a download');
+  assert.equal(nodes['database-backup'].disabled,false,'retry is available after failure');
+  nodes = await run(async path => path==='/garage-api/backup' ? {ok:true,status:200,blob:async()=>new Blob(['not a database'],{type:'application/octet-stream'})} : {ok:true,json:async()=>({vehicles:[]})}, {standalone:true,databaseBackup:true});
+  await nodes['database-backup'].listeners.click();
+  assert.match(nodes['database-backup-message'].textContent,/konnte nicht heruntergeladen werden/);
+  assert.equal(nodes['__downloads'].length,0,'a non-SQLite success response is not presented as a backup');
+  nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:true,dataExport:true});
+  assert.equal(nodes['data-export-wrap'].hidden,false);
+  assert.equal(nodes['database-backup'].hidden,true,'older standalone capability sets hide the backup download');
+  assert.equal(nodes['backup-restore-help'].hidden,true);
   nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:false,dataExport:true});
   assert.equal(nodes['data-export-wrap'].hidden,true,'legacy mode never shows the standalone export');
 

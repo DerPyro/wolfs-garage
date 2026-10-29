@@ -245,6 +245,78 @@ class Store:
         return rows[0][0]
 
     @staticmethod
+    def _validate_backup(db):
+        if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise sqlite3.DatabaseError("Backup integrity check failed.")
+        if db.execute("PRAGMA foreign_key_check").fetchall():
+            raise sqlite3.DatabaseError("Backup foreign key check failed.")
+        schema = Store._schema(db)
+        if schema not in (1, 2, 3, 4):
+            raise sqlite3.DatabaseError("Backup schema is unsupported.")
+        return schema
+
+    @staticmethod
+    def _validate_restore_backup(db):
+        schema = Store._validate_backup(db)
+        expected_columns = {
+            "meta": ["schema"],
+            "vehicles": ["id", "make", "model", "name", "year", "license_plate",
+                         "vehicle_type", "unit", "revision"] + (["inspection_due_month"] if schema == 4 else []),
+            "states": ["vehicle_id", "readiness", "issues", "revision"],
+            "odometer_readings": ["id", "vehicle_id", "day", "value", "unit", "note"],
+            "records": ["id", "vehicle_id", "description", "kind", "day", "odometer", "unit",
+                        "cost", "currency", "document_url", "closed_issue_id"] + ([] if schema == 1 else ["revision"]),
+            "commands": ["vehicle_id", "action", "command_id", "payload_hash", "response"],
+            "history": ["sequence", "vehicle_id", "action", "occurred_at", "before_json", "after_json"],
+        }
+        tables = {row[0] for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+        if tables != set(expected_columns):
+            raise sqlite3.DatabaseError("Backup table layout is unsupported.")
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='view' LIMIT 1").fetchone():
+            raise sqlite3.DatabaseError("Backup view layout is unsupported.")
+        for table, expected in expected_columns.items():
+            actual = [row[1] for row in db.execute(f'PRAGMA table_info("{table}")')]
+            if actual != expected:
+                raise sqlite3.DatabaseError("Backup table layout is unsupported.")
+
+        expected_foreign_keys = {
+            "states": {("vehicle_id", "vehicles", "id")},
+            "odometer_readings": {("vehicle_id", "vehicles", "id")},
+            "records": {("vehicle_id", "vehicles", "id")},
+            "commands": {("vehicle_id", "vehicles", "id")},
+            "history": {("vehicle_id", "vehicles", "id")},
+            "meta": set(), "vehicles": set(),
+        }
+        for table, expected in expected_foreign_keys.items():
+            actual = {(row[3], row[2], row[4]) for row in db.execute(f'PRAGMA foreign_key_list("{table}")')}
+            if actual != expected:
+                raise sqlite3.DatabaseError("Backup foreign-key layout is unsupported.")
+
+        expected_indexes = {
+            "odometer_vehicle_date": ("odometer_readings", ["vehicle_id", "day", "id"]),
+            "records_vehicle_date": ("records", ["vehicle_id", "day", "id"]),
+        }
+        indexes = {row[0]: row[1] for row in db.execute(
+            "SELECT name, tbl_name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'")}
+        if indexes != {name: table for name, (table, _) in expected_indexes.items()}:
+            raise sqlite3.DatabaseError("Backup index layout is unsupported.")
+        for name, (table, columns) in expected_indexes.items():
+            actual = [row[2] for row in db.execute(f'PRAGMA index_info("{name}")')]
+            if actual != columns:
+                raise sqlite3.DatabaseError("Backup index layout is unsupported.")
+
+        expected_triggers = {"history_no_update": "before update on history",
+                             "history_no_delete": "before delete on history"}
+        triggers = {row[0]: " ".join(row[1].lower().split()) for row in db.execute(
+            "SELECT name, sql FROM sqlite_master WHERE type='trigger'")}
+        if set(triggers) != set(expected_triggers):
+            raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
+        if any(fragment not in triggers[name] for name, fragment in expected_triggers.items()):
+            raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
+        return schema
+
+    @staticmethod
     def _new_backup(source, destination):
         destination = Path(destination)
         fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
@@ -252,12 +324,7 @@ class Store:
         try:
             with closing(sqlite3.connect(destination)) as target:
                 source.backup(target)
-                if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
-                    raise sqlite3.DatabaseError("Backup integrity check failed.")
-                if target.execute("PRAGMA foreign_key_check").fetchall():
-                    raise sqlite3.DatabaseError("Backup foreign key check failed.")
-                if Store._schema(target) not in (1, 2, 3, 4):
-                    raise sqlite3.DatabaseError("Backup schema is unsupported.")
+                Store._validate_backup(target)
             with open(destination, "rb") as saved:
                 os.fsync(saved.fileno())
         except BaseException:
@@ -946,6 +1013,85 @@ class Store:
         """Create a new consistent full-store backup with restrictive permissions."""
         source_uri = self.path.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(source_uri, uri=True, timeout=5)) as source:
-            if self._schema(source) not in (1, 2, 3, 4):
-                raise sqlite3.DatabaseError("Unsupported standalone schema.")
+            self._validate_restore_backup(source)
             self._new_backup(source, destination)
+
+    def restore_backup(self, source_path, destination):
+        """Restore a checked SQLite backup only to a new, non-live path.
+
+        The destination is never replaced and no schema migration is performed.
+        """
+        source_path = Path(source_path)
+        destination = Path(destination)
+        if source_path.is_symlink() or not source_path.is_file():
+            raise ValueError("Backup source must be an existing regular file.")
+        if destination.is_symlink():
+            raise FileExistsError("Restore destination must not be a symlink.")
+        if source_path.resolve(strict=True) == destination.resolve(strict=False):
+            raise ValueError("Restore source and destination must differ.")
+        if destination.resolve(strict=False) == self.path.resolve(strict=False):
+            raise ValueError("Restore destination must not be the live database path.")
+        if not destination.parent.is_dir():
+            raise FileNotFoundError("Restore destination directory does not exist.")
+        sidecars = [Path(os.fspath(destination) + suffix) for suffix in ("-wal", "-shm", "-journal")]
+        if any(path.exists() or path.is_symlink() for path in sidecars):
+            raise FileExistsError("Restore destination has existing SQLite sidecar files.")
+
+        source_uri = source_path.resolve(strict=True).as_uri() + "?mode=ro"
+        destination_created = False
+        destination_identity = None
+        try:
+            with closing(sqlite3.connect(source_uri, uri=True, timeout=5)) as source:
+                schema = self._validate_restore_backup(source)
+                fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY |
+                             getattr(os, "O_NOFOLLOW", 0), 0o600)
+                destination_created = True
+                try:
+                    os.fchmod(fd, 0o600)
+                    stat = os.fstat(fd)
+                    destination_identity = (stat.st_dev, stat.st_ino)
+                finally:
+                    os.close(fd)
+
+                with closing(sqlite3.connect(destination, timeout=5)) as target:
+                    source.backup(target)
+                    if self._validate_restore_backup(target) != schema:
+                        raise sqlite3.DatabaseError("Restored backup schema changed.")
+
+            saved_fd = os.open(destination, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                saved_stat = os.fstat(saved_fd)
+                if (saved_stat.st_dev, saved_stat.st_ino) != destination_identity:
+                    raise OSError("Restore destination changed while being written.")
+                os.fsync(saved_fd)
+            finally:
+                os.close(saved_fd)
+            directory_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except BaseException:
+            if destination_created:
+                try:
+                    current = os.stat(destination, follow_symlinks=False)
+                    if (current.st_dev, current.st_ino) == destination_identity:
+                        os.unlink(destination)
+                except FileNotFoundError:
+                    pass
+                for sidecar in sidecars:
+                    try:
+                        if sidecar.is_file() and not sidecar.is_symlink():
+                            sidecar.unlink()
+                    except FileNotFoundError:
+                        pass
+                try:
+                    directory_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+                    try:
+                        os.fsync(directory_fd)
+                    finally:
+                        os.close(directory_fd)
+                except OSError:
+                    pass
+            raise
+        return destination

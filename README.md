@@ -20,7 +20,7 @@ Available now:
 - Edit an active issue from its detail row, or start a completed-work record from that issue. The record form drafts the issue description and defaults the date to today; saving explicitly creates the record and closes only that issue in one operation. Other open work and manually stored readiness remain unchanged.
 - Record an inspection due month and view its Europe/Berlin status and separate effective-readiness projection under the owner's policy; unknown dates remain unknown.
 - Download a portable owner-data JSON export, separate from the restorable SQLite backup.
-- Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
+- Download a consistent full SQLite backup separately from the portable JSON export; restore it only to a new database path with the explicit restore command.
 
 Recurring maintenance rules, corrections to record dates or odometer readings, photo and invoice uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Following the user decision of 2026-10-29, maintenance planning and reliable 1.0 operation take priority over photo and invoice uploads; existing HTTPS document references remain available. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.
 
@@ -42,7 +42,7 @@ Open **http://localhost:8080**. Initialize a new database once only. The data vo
 
 The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
 
-See the [standalone guide](docs/standalone.md) for configuration, backup, isolated restore and development commands.
+See the [standalone guide](docs/standalone.md) for configuration, full database backups, isolated restore and development commands. The [backup/update workflow](docs/planning/backup-update-workflow.md) describes source/image pinning, restore rehearsal and rollback.
 
 The private reference installation uses the [tested-main updater](docs/live-updates.md). This updater is specific to that installation; other self-hosters opt in separately and can keep using the Compose workflow above.
 
