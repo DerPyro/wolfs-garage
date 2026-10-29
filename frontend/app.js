@@ -102,10 +102,17 @@ function inspectionBarCells(level, className) {
   });
 }
 function cardInspectionProgress(vehicle) {
-  const level = inspectionVisualLevel(vehicle);
-  const bar = el("span", `card-inspection-progress ${level === null ? "unknown" : `level-${level}`}`);
+  const valid = validInspection(vehicle), value = valid ? vehicle.inspection : null;
+  let level = inspectionVisualLevel(vehicle), stateClass = level === null ? "unavailable" : `level-${level}`, marker = "";
+  if (!valid) { level = 24; stateClass = "unavailable"; marker = "!"; }
+  else if (value.state === "unknown") { level = 24; stateClass = "unknown"; marker = "?"; }
+  else if (value.state === "overdue" || value.state === "blocking") { level = 24; stateClass = "expired"; marker = "!"; }
+  else if (value.state === "due") { level = 24; stateClass = "due"; }
+  const bar = el("span", `card-inspection-progress ${stateClass}`);
   bar.setAttribute("title", inspectionSummary(vehicle)); bar.setAttribute("aria-hidden", "true");
-  bar.replaceChildren(...inspectionBarCells(level, "card-inspection")); return bar;
+  const cells = inspectionBarCells(level, "card-inspection");
+  if (marker) { const badge = el("span", "card-inspection-marker", marker); badge.setAttribute("aria-hidden", "true"); cells.push(badge); }
+  bar.replaceChildren(...cells); return bar;
 }
 // These indicators share the existing header row; the detailed state remains in the accessible card name and detail panel.
 function cardIndicators(condition, issues, vehicleId, vehicle) {
