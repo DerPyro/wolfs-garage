@@ -1,4 +1,4 @@
-// Synthetic real-Chromium acceptance. Serve a fresh schema-5 test database
+// Synthetic real-Chromium acceptance. Serve a fresh schema-6 test database
 // with tests/inspection_preview.py on loopback port 18988.
 const {spawn} = require('child_process');
 const {setTimeout: delay} = require('timers/promises');

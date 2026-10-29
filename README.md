@@ -21,6 +21,7 @@ Available now:
 - Set an optional due date, severity and open/observed lifecycle on existing open work; view active work in a Europe/Berlin date-aware dashboard.
 - Edit an active issue from its detail row, or start a completed-work record from that issue. The record form drafts the issue description and defaults the date to today; saving explicitly creates the record and closes only that issue in one operation. Other open work and manually stored readiness remain unchanged.
 - Record an inspection due month and view its Europe/Berlin status and separate effective-readiness projection under the owner's policy; unknown dates remain unknown.
+- Set optional annual usage and view a clearly labeled Berlin-date estimate from the latest actual reading; a configurable Garage prompt asks for a real odometer reading after 30 days by default, or can be disabled. Estimates never become readings automatically.
 - Download a portable owner-data JSON export, separate from the restorable SQLite backup.
 - Download a consistent full SQLite backup separately from the portable JSON export; restore it only to a new database path with the explicit restore command.
 - Choose system motion or reduced motion in local settings; the system choice respects the operating-system preference.
@@ -41,7 +42,7 @@ docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 
 Open **http://localhost:8080**. Initialize a new database once only. The data volume persists across container recreation. Never reinitialize or remove it to repair an existing installation.
 
-**Updating an existing standalone installation:** this release uses schema 5. If your database is schema 1–4, follow the [explicit backed-up upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database. Schema-3/4 images cannot open schema 5.
+**Updating an existing standalone installation:** this source uses schema 6. If your database is schema 1–5, follow the [explicit backed-up upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database. Schema-1–5 images cannot open schema 6. The private reference database remains schema 5 until its separately approved schema-6 migration.
 
 The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
 
@@ -59,6 +60,7 @@ Wolfs Garage is an independent application usable by other self-hosters. Each in
 
 - [Requirements](docs/requirements.md), [architecture](docs/architecture.md), [roadmap](docs/roadmap.md)
 - [Date/odometer correction and measurement provenance contract](docs/planning/measurement-corrections.md)
+- [Annual usage estimate and actual-reading prompt contract](docs/planning/mileage-forecast.md)
 - [Active issue editing and completion workflow](docs/planning/work-completion.md)
 - [Backend comparison](docs/planning/lubelogger-vs-own.md) and [decision to build an independent core](docs/adr/0009-backend-ownership-challenge.md)
 - [Open-source preparation](docs/open-source-release.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)

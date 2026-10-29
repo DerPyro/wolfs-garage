@@ -1,6 +1,6 @@
 # Standalone alpha: operator and developer guide
 
-Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. The private reference instance now runs schema 5 after the explicitly authorized and rehearsed 2026-10-29 migration; this did not replace or import the separate LubeLogger installation. Other operators must plan and rehearse their own migrations.
+Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. The current source uses schema 6. The private reference instance remains on application version `0.1.0a8` and schema 5 pending separate migration approval; no schema-6 migration has been performed there. This is separate from the LubeLogger installation. Other operators must plan and rehearse their own migrations.
 
 ## Run locally with Docker Compose
 
@@ -68,23 +68,23 @@ The toolbar exposes two distinct downloads: a portable owner-data JSON export fo
 
 ## Explicit schema upgrade (standalone only)
 
-Fresh initialization creates schema version 5. The current application accepts schema 5; backup and restore support schemas 1–5. Existing schema-1, schema-2, schema-3 and schema-4 standalone databases are upgraded only by an explicit command after an isolated restore rehearsal and an independent backup. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
+Fresh initialization creates schema version 6. The current application accepts schema 6; backup and restore support schemas 1–6. Existing schema-1 through schema-5 standalone databases are upgraded only by an explicit command after an isolated restore rehearsal and an independent backup. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
 
 Before upgrading, stop the Compose service and build the new application image. Run the upgrade once with a new, unused backup filename inside the persistent volume:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml stop garage
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml build garage
-docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema5-upgrade-UNIQUE.sqlite3
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema6-upgrade-UNIQUE.sqlite3
 ```
 
-Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. Schema 1 also gains the existing record `revision` column. Schemas 1–3 gain the nullable inspection due-month field; schema 4 already has it. Existing readings are rebuilt with `revision=1`, `legacy_unknown` provenance and no source link. Their IDs, exact values, dates, units and notes remain unchanged; no association is inferred from a `Record <id>` note, date or matching value. Existing records, commands, status JSON and audit history are preserved. Copy the checked backup to independent protected storage before restarting the service:
+Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. When upgrading schemas 1–4, schema 1 also gains the existing record `revision` column, schemas 1–3 gain the inspection due-month field, and all older readings retain their unknown provenance unless already introduced in schema 5. The schema-5-to-6 step adds optional `annual_usage` and `reading_prompt_days` fields; existing vehicles receive no annual-usage estimate and the prompt interval defaults to 30 days. Existing readings, records, commands, status JSON and audit history are preserved. No mileage links or vehicle use are inferred. Copy the checked backup to independent protected storage before restarting the service:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 ```
 
-If the command reports that the database is already schema 5, it is a no-op and does not write a backup. Keep the schema-1–4 backup until the upgraded application data has been checked. Older schema-3 or schema-4 application images reject schema 5. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. The reference-instance schema-4-to-5 migration completed after an isolated recovery rehearsal and independent backup; see the [measurement-correction rollout record](planning/measurement-corrections.md). Other installations still require their own authorization and recovery rehearsal before migration.
+If the command reports that the database is already schema 6, it is a no-op and does not write a backup. Keep the pre-upgrade backup until the upgraded application data has been checked. Older schema-1–5 application images reject schema 6. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. The private reference database remains schema 5 pending separate schema-6 migration approval.
 
 ## Backup and isolated restore
 
@@ -96,9 +96,9 @@ The CLI can also create a checked SQLite backup at a new, unused destination pat
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml exec garage python -m wolfs_garage backup /var/lib/wolfs-garage/backup-UNIQUE.sqlite3
 ```
 
-Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1–5 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup. Both download paths preserve the database schema and include command replay state; neither performs an upgrade.
+Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1–6 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup. Both download paths preserve the database schema and include command replay state; neither performs an upgrade.
 
-Restore only into a new database file in a separate Compose project and volume. The command validates SQLite integrity, foreign keys and supported schema 1–5, then makes a restricted-permission copy. It rejects a corrupt or unsupported source, an existing or symlink destination, the source path itself and the configured live database. It does not upgrade the source or destination schema.
+Restore only into a new database file in a separate Compose project and volume. The command validates SQLite integrity, foreign keys and supported schema 1–6, then makes a restricted-permission copy. It rejects a corrupt or unsupported source, an existing or symlink destination, the source path itself and the configured live database. It does not upgrade the source or destination schema.
 
 Example restore rehearsal after placing the backup in a local `recovery/` directory:
 
@@ -111,7 +111,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   sh -c 'python -m wolfs_garage restore-backup /recovery/wolfs-garage-backup.sqlite3 /var/lib/wolfs-garage/garage.sqlite3 && chown 65532:65532 /var/lib/wolfs-garage/garage.sqlite3'
 ```
 
-The restored copy keeps the source schema. For a schema-5 backup, validate and start the isolated instance:
+The restored copy keeps the source schema. For a schema-6 backup, validate and start the isolated instance:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -128,7 +128,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   -f deploy/compose.standalone.yaml down
 ```
 
-The host backup remains private; do not make it world-readable to fit the container UID. The one-off restore helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to hand the new `0600` destination back to the application's UID 65532. Other app runs remain unprivileged. Use a unique project name so Compose creates a separate volume, and choose an unused loopback port for the temporary health check. The current runtime only opens schema 5. If the backup is schema 1, 2, 3 or 4, do not run `check-db` or start the schema-5 app yet. In the isolated project, explicitly upgrade that restored copy and create a new checked backup first:
+The host backup remains private; do not make it world-readable to fit the container UID. The one-off restore helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to hand the new `0600` destination back to the application's UID 65532. Other app runs remain unprivileged. Use a unique project name so Compose creates a separate volume, and choose an unused loopback port for the temporary health check. The current runtime opens schema 6. If the backup is schema 1–5, do not run `check-db` or start the schema-6 app yet. In the isolated project, explicitly upgrade that restored copy and create a new checked backup first:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -138,7 +138,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   /var/lib/wolfs-garage/schema-before-upgrade-UNIQUE.sqlite3
 ```
 
-Run that upgrade only for a schema-1/2/3/4 restore. Then use the schema-5 validation/start commands above. The operation upgrades only the new rehearsal volume; the original source backup and live volume remain untouched. Keep the restore private, verify representative vehicles, records, readings (including unresolved legacy provenance), history and retry behavior, then stop it with `down` (without `-v`). Rollback uses a separate database copy and an image compatible with that database schema. See the [backup/update workflow](planning/backup-update-workflow.md) for the update sequence.
+Run that upgrade only for a schema-1 through schema-5 restore. Then use the schema-6 validation/start commands above. The operation upgrades only the new rehearsal volume; the original source backup and live volume remain untouched. Keep the restore private, verify representative vehicles, records, readings (including unresolved legacy provenance), history and retry behavior, then stop it with `down` (without `-v`). Rollback uses a separate database copy and an image compatible with that database schema. See the [backup/update workflow](planning/backup-update-workflow.md) for the update sequence.
 
 ## Develop and run the focused tests
 

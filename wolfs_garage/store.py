@@ -6,8 +6,8 @@ database administrator. Money stays an exact decimal string throughout storage.
 """
 from contextlib import closing, contextmanager
 import calendar
-from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import hashlib
 import base64
 import json
@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from . import __version__
 
 
-SCHEMA = 5
+SCHEMA = 6
 UNITS = {"km", "mi", "h"}
 READINESS = {"ready", "not_ready", "unknown"}
 SEVERITIES = {"observation", "repair", "critical"}
@@ -142,6 +142,22 @@ def _distance_string(value):
     return _distance(value)
 
 
+def _annual_usage(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,3})?", value):
+        raise ValidationError("annualUsage must be a plain decimal string with at most three fractional digits.")
+    return _distance(value)
+
+
+def _reading_prompt_days(value):
+    if value is None:
+        return None
+    if type(value) is not int or not 1 <= value <= 3650:
+        raise ValidationError("readingPromptDays must be null or an integer from 1 to 3650.")
+    return value
+
+
 def _number(value):
     if value is None:
         return None
@@ -202,13 +218,16 @@ class Store:
                 PRAGMA synchronous=FULL;
                 BEGIN IMMEDIATE;
                 CREATE TABLE meta(schema INTEGER NOT NULL);
-                INSERT INTO meta VALUES(5);
+                INSERT INTO meta VALUES(6);
                 CREATE TABLE vehicles(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     make TEXT NOT NULL, model TEXT NOT NULL, name TEXT NOT NULL,
                     year INTEGER, license_plate TEXT NOT NULL, vehicle_type TEXT NOT NULL,
                     unit TEXT NOT NULL, revision INTEGER NOT NULL,
-                    inspection_due_month TEXT);
+                    inspection_due_month TEXT,
+                    annual_usage TEXT CHECK(annual_usage IS NULL OR typeof(annual_usage)='text'),
+                    reading_prompt_days INTEGER DEFAULT 30 CHECK(reading_prompt_days IS NULL OR
+                        (typeof(reading_prompt_days)='integer' AND reading_prompt_days BETWEEN 1 AND 3650)));
                 CREATE TABLE states(
                     vehicle_id INTEGER PRIMARY KEY REFERENCES vehicles(id),
                     readiness TEXT NOT NULL, issues TEXT NOT NULL, revision INTEGER NOT NULL);
@@ -256,7 +275,7 @@ class Store:
             rows = db.execute("SELECT schema FROM meta").fetchall()
         except sqlite3.Error as exc:
             raise sqlite3.DatabaseError("Unsupported standalone schema.") from exc
-        if len(rows) != 1 or rows[0][0] not in (1, 2, 3, 4, 5):
+        if len(rows) != 1 or rows[0][0] not in (1, 2, 3, 4, 5, 6):
             raise sqlite3.DatabaseError("Unsupported standalone schema.")
         return rows[0][0]
 
@@ -267,7 +286,7 @@ class Store:
         if db.execute("PRAGMA foreign_key_check").fetchall():
             raise sqlite3.DatabaseError("Backup foreign key check failed.")
         schema = Store._schema(db)
-        if schema not in (1, 2, 3, 4, 5):
+        if schema not in (1, 2, 3, 4, 5, 6):
             raise sqlite3.DatabaseError("Backup schema is unsupported.")
         return schema
 
@@ -277,10 +296,12 @@ class Store:
         expected_columns = {
             "meta": ["schema"],
             "vehicles": ["id", "make", "model", "name", "year", "license_plate",
-                         "vehicle_type", "unit", "revision"] + (["inspection_due_month"] if schema >= 4 else []),
+                         "vehicle_type", "unit", "revision"] +
+                        (["inspection_due_month"] if schema >= 4 else []) +
+                        (["annual_usage", "reading_prompt_days"] if schema >= 6 else []),
             "states": ["vehicle_id", "readiness", "issues", "revision"],
             "odometer_readings": ["id", "vehicle_id", "day", "value", "unit", "note"] +
-                                 (["revision", "provenance", "source_record_id"] if schema == 5 else []),
+                                 (["revision", "provenance", "source_record_id"] if schema >= 5 else []),
             "records": ["id", "vehicle_id", "description", "kind", "day", "odometer", "unit",
                         "cost", "currency", "document_url", "closed_issue_id"] + ([] if schema == 1 else ["revision"]),
             "commands": ["vehicle_id", "action", "command_id", "payload_hash", "response"],
@@ -305,7 +326,7 @@ class Store:
             "history": {("vehicle_id", "vehicles", "id")},
             "meta": set(), "vehicles": set(),
         }
-        if schema == 5:
+        if schema >= 5:
             expected_foreign_keys["odometer_readings"].update({
                 ("source_record_id", "records", "id"),
                 ("vehicle_id", "records", "vehicle_id"),
@@ -319,7 +340,7 @@ class Store:
             "odometer_vehicle_date": ("odometer_readings", ["vehicle_id", "day", "id"]),
             "records_vehicle_date": ("records", ["vehicle_id", "day", "id"]),
         }
-        if schema == 5:
+        if schema >= 5:
             expected_indexes.update({
                 "records_id_vehicle_unique": ("records", ["id", "vehicle_id"]),
                 "odometer_source_record_unique": ("odometer_readings", ["source_record_id"]),
@@ -332,7 +353,7 @@ class Store:
             actual = [row[2] for row in db.execute(f'PRAGMA index_info("{name}")')]
             if actual != columns:
                 raise sqlite3.DatabaseError("Backup index layout is unsupported.")
-        if schema == 5:
+        if schema >= 5:
             index_properties = {}
             for table in ("records", "odometer_readings"):
                 for row in db.execute(f'PRAGMA index_list("{table}")'):
@@ -350,7 +371,7 @@ class Store:
             raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
         if any(fragment not in triggers[name] for name, fragment in expected_triggers.items()):
             raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
-        if schema == 5:
+        if schema >= 5:
             table_sql = db.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='odometer_readings'").fetchone()[0]
             normalized = " ".join(table_sql.lower().split())
@@ -373,6 +394,26 @@ class Store:
                 LIMIT 1""").fetchone()
             if invalid_reading is not None:
                 raise sqlite3.DatabaseError("Backup contains inconsistent record-reading provenance.")
+        if schema == 6:
+            vehicle_sql = db.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='vehicles'").fetchone()[0]
+            normalized = " ".join(vehicle_sql.lower().split())
+            if ("check(annual_usage is null or typeof(annual_usage)='text')" not in normalized
+                    or "check(reading_prompt_days is null or (typeof(reading_prompt_days)='integer' and reading_prompt_days between 1 and 3650))" not in normalized):
+                raise sqlite3.DatabaseError("Backup vehicle forecast constraints are unsupported.")
+            vehicle_columns = {row[1]: row for row in db.execute('PRAGMA table_info("vehicles")')}
+            if (vehicle_columns["annual_usage"][3] != 0
+                    or vehicle_columns["annual_usage"][4] is not None
+                    or vehicle_columns["reading_prompt_days"][3] != 0
+                    or vehicle_columns["reading_prompt_days"][4] != "30"):
+                raise sqlite3.DatabaseError("Backup vehicle forecast defaults are unsupported.")
+            for row in db.execute("SELECT annual_usage,reading_prompt_days FROM vehicles"):
+                try:
+                    if row[0] is not None and _annual_usage(row[0]) != row[0]:
+                        raise ValidationError("Noncanonical annual usage.")
+                    _reading_prompt_days(row[1])
+                except (ValidationError, TypeError) as exc:
+                    raise sqlite3.DatabaseError("Backup contains invalid vehicle forecast settings.") from exc
         return schema
 
     @staticmethod
@@ -427,7 +468,7 @@ class Store:
                 db.execute("INSERT INTO sqlite_sequence(name,seq) VALUES('odometer_readings',?)", (old_sequence,))
 
     def upgrade(self, backup_destination):
-        """Explicitly upgrade schema 1–4 after a checked full backup.
+        """Explicitly upgrade schema 1–5 after a checked full backup.
         The reserved migration lock prevents writers. A separate read connection
         supplies the backup snapshot, avoiding sqlite3.Connection.backup() from
         a connection holding its own write transaction.
@@ -437,14 +478,14 @@ class Store:
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA busy_timeout=5000")
             schema = self._schema(db)
-            if schema == 5:
+            if schema == 6:
                 return False
             db.execute("BEGIN IMMEDIATE")
             try:
                 # Recheck under the write reservation in case another operator
                 # completed the upgrade between the initial read and lock.
                 schema = self._schema(db)
-                if schema == 5:
+                if schema == 6:
                     db.execute("ROLLBACK")
                     return False
                 reader_uri = self.path.resolve().as_uri() + "?mode=ro"
@@ -454,8 +495,11 @@ class Store:
                     db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
                 if schema <= 3:
                     db.execute("ALTER TABLE vehicles ADD COLUMN inspection_due_month TEXT")
-                self._upgrade_readings_to_schema5(db)
-                db.execute("UPDATE meta SET schema=5")
+                if schema <= 4:
+                    self._upgrade_readings_to_schema5(db)
+                db.execute("ALTER TABLE vehicles ADD COLUMN annual_usage TEXT CHECK(annual_usage IS NULL OR typeof(annual_usage)='text')")
+                db.execute("ALTER TABLE vehicles ADD COLUMN reading_prompt_days INTEGER DEFAULT 30 CHECK(reading_prompt_days IS NULL OR (typeof(reading_prompt_days)='integer' AND reading_prompt_days BETWEEN 1 AND 3650))")
+                db.execute("UPDATE meta SET schema=6")
                 if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise sqlite3.DatabaseError("Integrity check failed after upgrade.")
                 if db.execute("PRAGMA foreign_key_check").fetchall():
@@ -536,6 +580,12 @@ class Store:
             _inspection_month(row["inspection_due_month"])
         except ValidationError as exc:
             raise sqlite3.DatabaseError("Invalid stored inspection due month.") from exc
+        try:
+            if row["annual_usage"] is not None and _annual_usage(row["annual_usage"]) != row["annual_usage"]:
+                raise ValidationError("Noncanonical annual usage.")
+            _reading_prompt_days(row["reading_prompt_days"])
+        except ValidationError as exc:
+            raise sqlite3.DatabaseError("Invalid stored mileage forecast settings.") from exc
         # The latest dated explicit reading is the current stand. Historical
         # backdated readings remain stored and never silently replace it.
         latest = db.execute("SELECT value FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC LIMIT 1", (vehicle_id,)).fetchone()
@@ -545,6 +595,8 @@ class Store:
                 "odometer": _number(latest["value"]) if latest else None,
                 "odometerUnit": row["unit"], "revision": row["revision"],
                 "inspectionDueMonth": row["inspection_due_month"],
+                "annualUsage": row["annual_usage"],
+                "readingPromptDays": row["reading_prompt_days"],
                 "status": Store._status(db, vehicle_id)}
 
     def _today(self):
@@ -596,15 +648,87 @@ class Store:
         return response
 
     @staticmethod
+    def _with_mileage_projection(db, vehicle, today):
+        projected = Store._with_inspection(vehicle, today)
+        annual_usage = vehicle["annualUsage"]
+        unit = vehicle["odometerUnit"]
+        prompt_days = vehicle["readingPromptDays"]
+        row = db.execute("""SELECT id,day,value,unit FROM odometer_readings
+            WHERE vehicle_id=? ORDER BY day DESC,id DESC LIMIT 1""", (vehicle["id"],)).fetchone()
+        anchor = None
+        anchor_day = None
+        elapsed_days = None
+        if row is not None:
+            try:
+                anchor_day = date.fromisoformat(row["day"])
+                if anchor_day.isoformat() != row["day"]:
+                    raise ValueError("Noncanonical date")
+            except ValueError as exc:
+                raise sqlite3.DatabaseError("Invalid stored odometer date.") from exc
+            anchor = {"id": row["id"], "date": row["day"],
+                      "odometer": row["value"], "unit": row["unit"]}
+            elapsed_days = (today - anchor_day).days
+
+        estimate_state = "estimated"
+        estimated_value = None
+        if row is None:
+            estimate_state = "anchor_missing"
+        elif elapsed_days < 0:
+            estimate_state = "future_anchor"
+        elif row["unit"] != unit:
+            estimate_state = "unit_mismatch"
+        elif annual_usage is None:
+            estimate_state = "annual_usage_missing"
+        else:
+            raw_value = Decimal(row["value"]) + Decimal(annual_usage) * Decimal(elapsed_days) / Decimal(365)
+            if raw_value < 0 or raw_value > Decimal("1000000000"):
+                estimate_state = "out_of_range"
+            else:
+                rounded = raw_value.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+                estimated_value = format(rounded.normalize(), "f")
+        projected["mileageEstimate"] = {
+            "asOf": today.isoformat(), "timeZone": "Europe/Berlin", "state": estimate_state,
+            "annualUsage": annual_usage, "unit": unit, "anchor": anchor,
+            "elapsedDays": elapsed_days, "estimatedOdometer": estimated_value,
+        }
+
+        prompt_state = "not_due"
+        prompt_date = None
+        prompt_reason = None
+        if prompt_days is None:
+            prompt_state = "disabled"
+        elif row is None:
+            prompt_state = "needs_reading"
+        elif elapsed_days < 0:
+            prompt_state, prompt_reason = "needs_review", "future_anchor"
+        elif row["unit"] != unit:
+            prompt_state, prompt_reason = "needs_review", "unit_mismatch"
+        else:
+            try:
+                prompt_date = (anchor_day + timedelta(days=prompt_days)).isoformat()
+            except (OverflowError, ValueError):
+                prompt_state, prompt_reason = "needs_review", "date_out_of_range"
+            else:
+                prompt_state = "due" if today.isoformat() >= prompt_date else "not_due"
+        projected["readingPrompt"] = {
+            "asOf": today.isoformat(), "timeZone": "Europe/Berlin", "state": prompt_state,
+            "intervalDays": prompt_days, "dueDate": prompt_date, "reason": prompt_reason,
+        }
+        return projected
+
+    @staticmethod
     def _audit(db, vehicle_id, action, before, after):
         db.execute("INSERT INTO history(vehicle_id,action,occurred_at,before_json,after_json) VALUES(?,?,?,?,?)",
                    (vehicle_id, action, datetime.now(timezone.utc).isoformat(), _json(before), _json(after)))
 
     @staticmethod
     def _vehicle_values(payload, old=None):
-        allowed = {"make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth"}
+        allowed = {"make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit",
+                   "inspectionDueMonth", "annualUsage", "readingPromptDays"}
         _fields(payload, allowed | ({"revision"} if old else set()), {"revision"} if old else {"make", "model"})
-        result = {"make": "", "model": "", "name": "", "year": None, "licensePlate": "", "vehicleType": "", "odometerUnit": "km", "inspectionDueMonth": None}
+        result = {"make": "", "model": "", "name": "", "year": None, "licensePlate": "", "vehicleType": "",
+                  "odometerUnit": "km", "inspectionDueMonth": None, "annualUsage": None,
+                  "readingPromptDays": 30}
         if old:
             result.update({key: old[key] for key in result})
         result.update({key: value for key, value in payload.items() if key in allowed})
@@ -616,32 +740,37 @@ class Store:
         if not isinstance(result["odometerUnit"], str) or result["odometerUnit"] not in UNITS:
             raise ValidationError("Invalid odometerUnit.")
         result["inspectionDueMonth"] = _inspection_month(result["inspectionDueMonth"])
+        result["annualUsage"] = _annual_usage(result["annualUsage"])
+        result["readingPromptDays"] = _reading_prompt_days(result["readingPromptDays"])
         return result
 
     def create_vehicle(self, payload):
         values = self._vehicle_values(payload)
         today = self._today()
         with self._transaction() as db:
-            cursor = db.execute("INSERT INTO vehicles(make,model,name,year,license_plate,vehicle_type,unit,revision,inspection_due_month) VALUES(?,?,?,?,?,?,?,1,?)",
-                                tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth")))
+            cursor = db.execute("""INSERT INTO vehicles
+                (make,model,name,year,license_plate,vehicle_type,unit,revision,inspection_due_month,annual_usage,reading_prompt_days)
+                VALUES(?,?,?,?,?,?,?,1,?,?,?)""",
+                tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType",
+                                          "odometerUnit", "inspectionDueMonth", "annualUsage", "readingPromptDays")))
             vehicle_id = cursor.lastrowid
             db.execute("INSERT INTO states VALUES(?,'unknown','[]',0)", (vehicle_id,))
             result = self._vehicle(db, vehicle_id)
             self._audit(db, vehicle_id, "vehicle.created", None, result)
-            return self._with_inspection(result, today)
+            return self._with_mileage_projection(db, result, today)
 
     def list_vehicles(self):
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             today = self._today()
-            return [self._with_inspection(self._vehicle(db, row[0]), today)
+            return [self._with_mileage_projection(db, self._vehicle(db, row[0]), today)
                     for row in db.execute("SELECT id FROM vehicles ORDER BY id")]
 
     def get_vehicle(self, vehicle_id):
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             today = self._today()
-            return self._with_inspection(self._vehicle(db, vehicle_id), today)
+            return self._with_mileage_projection(db, self._vehicle(db, vehicle_id), today)
 
     def update_vehicle(self, vehicle_id, payload):
         today = self._today()
@@ -654,11 +783,17 @@ class Store:
                 raise Conflict("Vehicle revision changed.")
             if values["odometerUnit"] != before["odometerUnit"] and db.execute("SELECT 1 FROM odometer_readings WHERE vehicle_id=? LIMIT 1", (vehicle_id,)).fetchone():
                 raise Conflict("A unit with recorded readings cannot be relabelled; conversion is a separate operation.")
-            db.execute("UPDATE vehicles SET make=?,model=?,name=?,year=?,license_plate=?,vehicle_type=?,unit=?,inspection_due_month=?,revision=revision+1 WHERE id=?",
-                       tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType", "odometerUnit", "inspectionDueMonth")) + (vehicle_id,))
+            if (values["odometerUnit"] != before["odometerUnit"] and before["annualUsage"] is not None
+                    and "annualUsage" not in payload):
+                raise Conflict("Changing the unit requires explicitly resetting or setting annualUsage.")
+            db.execute("""UPDATE vehicles SET make=?,model=?,name=?,year=?,license_plate=?,vehicle_type=?,unit=?,
+                inspection_due_month=?,annual_usage=?,reading_prompt_days=?,revision=revision+1 WHERE id=?""",
+                tuple(values[k] for k in ("make", "model", "name", "year", "licensePlate", "vehicleType",
+                                          "odometerUnit", "inspectionDueMonth", "annualUsage", "readingPromptDays"))
+                + (vehicle_id,))
             result = self._vehicle(db, vehicle_id)
             self._audit(db, vehicle_id, "vehicle.updated", before, result)
-            return self._with_inspection(result, today)
+            return self._with_mileage_projection(db, result, today)
 
     def get_status(self, vehicle_id):
         with closing(self._connect()) as db:
@@ -1280,7 +1415,7 @@ class Store:
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             vehicle = self._vehicle(db, vehicle_id)
-            projected_vehicle = self._with_inspection(vehicle, self._today())
+            projected_vehicle = self._with_mileage_projection(db, vehicle, self._today())
             records = [self._record(row) for row in db.execute("SELECT * FROM records WHERE vehicle_id=? ORDER BY day DESC,id DESC", (vehicle_id,))]
             return {"vehicle": projected_vehicle, "status": vehicle["status"], "reminders": [], "services": records}
 
@@ -1311,6 +1446,8 @@ class Store:
                         "licensePlate": row["license_plate"], "vehicleType": row["vehicle_type"],
                         "odometerUnit": row["unit"], "revision": row["revision"],
                         "inspectionDueMonth": row["inspection_due_month"],
+                        "annualUsage": row["annual_usage"],
+                        "readingPromptDays": row["reading_prompt_days"],
                     })
                     status = self._status(db, vehicle_id)
                     statuses.append({"vehicleId": vehicle_id, **status})
@@ -1338,7 +1475,7 @@ class Store:
                     for row in db.execute("SELECT * FROM history ORDER BY sequence")
                 ]
                 result = {
-                    "format": "wolfs-garage-owner-export", "formatVersion": 3,
+                    "format": "wolfs-garage-owner-export", "formatVersion": 4,
                     "applicationVersion": __version__, "databaseSchema": SCHEMA,
                     "exportedAt": exported_at, "vehicles": vehicles, "statuses": statuses,
                     "odometerReadings": readings, "records": records, "history": history,

@@ -52,6 +52,11 @@
         <p id="work-status" class="status" role="status" aria-live="polite"></p>
         <div id="work-items" class="work-items"></div>
       </section>
+      <section id="mileage-prompts" class="mileage-prompts" aria-labelledby="mileage-prompts-title" hidden>
+        <div class="work-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> STÄNDE</p><h2 id="mileage-prompts-title">Stände abgleichen</h2></div></div>
+        <p id="mileage-prompt-status" class="status" role="status" aria-live="polite"></p>
+        <div id="mileage-prompt-items" class="mileage-prompt-items"></div>
+      </section>
     </section>
     <section id="own-panel" class="own-panel" aria-labelledby="own-title" hidden>
       <h2 id="own-title" tabindex="-1"></h2>
@@ -61,6 +66,7 @@
       <div class="section-heading detail-title"><div><p class="eyebrow"><span class="eyebrow-line"></span> IM DETAIL</p><h2 id="detail-heading">Fahrzeugübersicht</h2></div><span class="detail-meta" id="detail-meta"></span></div>
       <div id="detail-status" class="status" role="status" aria-live="polite"></div>
       <div id="own-detail-actions" class="own-toolbar" role="group" aria-label="Aktionen zum ausgewählten Fahrzeug" tabindex="-1" hidden><button id="vehicle-edit" class="condition-edit" type="button">Fahrzeug bearbeiten</button><button id="odometer-add" class="condition-edit" type="button">Stand erfassen</button><button id="record-add" class="condition-edit" type="button">Arbeit dokumentieren</button><button id="history-toggle" class="condition-edit" type="button" aria-controls="history-panel" aria-expanded="false">Verlauf anzeigen</button><button id="logbook-toggle" class="condition-edit" type="button" aria-controls="logbook-panel" aria-expanded="false" hidden>Logbuch anzeigen</button></div>
+      <div id="mileage-forecast" class="mileage-forecast" role="status" aria-live="polite" hidden></div>
       <article id="condition-panel" class="condition-panel" aria-labelledby="condition-title">
         <div class="condition-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> AKTUELLER ZUSTAND</p><h3 id="condition-title">Fahrbereitschaft &amp; offene Punkte</h3></div><button id="condition-edit" class="condition-edit" type="button" aria-controls="condition-form" aria-expanded="false">Bearbeiten</button></div>
         <div id="condition-view"><div id="condition-readiness"></div><p id="condition-work-asof" class="condition-work-asof" role="status" aria-live="polite" hidden></p><div id="inspection-panel" class="inspection-summary" hidden><p id="inspection-message" class="inspection-message" role="status" aria-live="polite"></p></div><div id="issue-filter-wrap" class="issue-filter-wrap" hidden><label for="issue-filter">Punkte filtern</label><select id="issue-filter"><option value="all">Alle</option><option value="overdue">Überfällig</option><option value="today">Heute</option><option value="critical">Kritisch</option><option value="observed">Beobachtet</option></select></div><div id="condition-issues" class="condition-issues"></div></div>
