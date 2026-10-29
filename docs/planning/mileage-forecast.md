@@ -1,6 +1,6 @@
 # Annual usage estimate and reading prompt
 
-**Status:** Schema-6 implementation and local synthetic acceptance are complete. A schema-5-to-6 migration and compatible-image recovery rehearsal passed on isolated copies. The private reference database remains schema 5 (`0.1.0a8`) pending separate migration approval. No production migration is authorized by this feature work.
+**Status:** Schema-6 implementation and local synthetic acceptance are complete. A schema-5-to-6 migration and compatible-image recovery rehearsal passed on isolated copies. The separately authorized reference rollout is also complete; it runs `0.1.0a9` on schema 6. See the [rollout evidence](../live-updates.md#reference-installation-status-2026-10-29). This feature's implementation did not itself authorize a production migration.
 
 ## Stored vehicle settings
 
@@ -36,7 +36,7 @@ Portable owner export format 4 adds only raw `annualUsage` and `readingPromptDay
 
 ## Acceptance focus
 
-Acceptance covers exact canonical decimal limits and zero, nullable/default/disabled prompt intervals, `km`/`mi`/`h` labels, no-reading and missing-rate states, future and mismatched anchors, out-of-range estimates, Berlin midnight and fixed-365 rounding, same-date reading-ID selection, new readings and corrections reanchoring, and prompt boundaries. API and browser reads must leave reading/status/history/command counts unchanged. Migration coverage uses frozen schema 1–5 layouts and preserves prior rows, sequence high-water, record-reading revisions/provenance/links, audit and replay data; the schema-5 backup remains restorable with a compatible image. Format-4 exports contain raw settings only. Browser checks exercise the blank actual-reading prompt flow, explicit save, disablement and responsive Garage layout with synthetic data. The production database remains untouched until separately approved.
+Acceptance covers exact canonical decimal limits and zero, nullable/default/disabled prompt intervals, `km`/`mi`/`h` labels, no-reading and missing-rate states, future and mismatched anchors, out-of-range estimates, Berlin midnight and fixed-365 rounding, same-date reading-ID selection, new readings and corrections reanchoring, and prompt boundaries. API and browser reads must leave reading/status/history/command counts unchanged. Migration coverage uses frozen schema 1–5 layouts and preserves prior rows, sequence high-water, record-reading revisions/provenance/links, audit and replay data; the schema-5 backup remains restorable with a compatible image. Format-4 exports contain raw settings only. Browser checks exercise the blank actual-reading prompt flow, explicit save, disablement and responsive Garage layout with synthetic data. Those feature acceptance checks use synthetic fixtures; the separately authorized production rollout has its own [evidence](../live-updates.md#reference-installation-status-2026-10-29).
 
 The browser runner uses a test-only fixed Berlin date of 2026-10-29 and binds only
 to loopback port 18995. Initialize an isolated schema-6 database, then start its
