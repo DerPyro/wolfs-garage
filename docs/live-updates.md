@@ -96,26 +96,47 @@ available for manual installation and controlled maintenance. It does not
 perform data import, change external proxy configuration, or automatically
 upgrade the database schema.
 
+<a id="reference-installation-status-2026-10-29"></a>
+
 ## Reference installation status — 2026-10-29
 
 The privately operated reference installation was explicitly migrated from
-schema 4 to schema 5 using the reviewed main commit `0830971426c2`, after its
+schema 4 to schema 5 using reviewed main commit `0830971426c2`, after its
 checks passed. A fresh offline schema-4 backup was independently copied and
 hash-verified before migration. Integrity, foreign-key, schema, API, export,
 backup and health checks passed; the existing six data tables and sequence
 state were preserved, and prior readings remain unlinked with
-`legacy_unknown` provenance. The private reference installation remains at
-application version `0.1.0a8` and schema 5 pending separate approval for a
-schema-6 migration. The updater code in this repository accepts matching
-schemas 3–6. A schema-6 candidate is rejected while the reference database is
-schema 5. The installed application has not been updated to this source, and
-no schema-6 migration or deployment has been performed on the reference
-installation.
+`legacy_unknown` provenance. That rollout is historical; the current
+application version and schema are recorded below.
 
 An isolated rehearsal used a fresh copy of a schema-5 backup. The copy upgraded
 to schema 6, and a separate restore of the original backup opened successfully
 with the older `0.1.0a8` image. Shared columns across the six domain tables and
 `sqlite_sequence` matched; new fields held `annual_usage=NULL` and
 `reading_prompt_days=30`; integrity and foreign-key checks passed. The
-pre-upgrade backup and separate restore were byte-identical. This rehearsal did
-not change the reference database or deploy schema 6.
+pre-upgrade backup and separate restore were byte-identical. This was rehearsal
+evidence; the separately authorized rollout is recorded below.
+
+The separately authorized schema-5-to-6 rollout completed on 2026-10-29 using
+main commit `d7a17285203c37e146d31cfe1364ca5323da40a2` after the exact commit's
+push Checks workflow run `40929109313` succeeded. Before the in-place upgrade,
+a fresh offline schema-5 backup was checked, copied to independent protected
+storage and hash-verified. A fresh copy was upgraded to schema 6 and the
+original backup was restored with the compatible `0.1.0a8` image; the restore
+was byte-identical to the pre-upgrade backup.
+
+After writes were drained and the old application stopped, the explicit
+schema-5-to-6 command completed and the exact main image started healthy at
+application version `0.1.0a9` on schema 6. All shared columns in the six
+existing domain tables and `sqlite_sequence` matched the pre-upgrade data,
+including reading links and revisions, audit history and command replay data.
+New mileage fields were `annual_usage=NULL` and `reading_prompt_days=30`; no
+vehicle-use facts or reading links were inferred. Integrity, foreign-key and
+strict schema checks passed, along with API/read projections, owner export
+format 4, full database backup and frontend checks. Normal routing resumed
+behind the existing access boundary, and unauthenticated requests remained
+redirected. The installed updater uses schema 6, its timer is active, and a
+manual updater run verified that the exact green main commit was healthy and
+skipped it as already active. A post-upgrade full backup was also copied to
+independent protected storage and hash-verified. No LubeLogger import or access
+boundary change occurred.

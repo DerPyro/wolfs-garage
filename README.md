@@ -42,7 +42,7 @@ docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 
 Open **http://localhost:8080**. Initialize a new database once only. The data volume persists across container recreation. Never reinitialize or remove it to repair an existing installation.
 
-**Updating an existing standalone installation:** this source uses schema 6. If your database is schema 1–5, follow the [explicit backed-up upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database. Schema-1–5 images cannot open schema 6. The private reference database remains schema 5 until its separately approved schema-6 migration.
+**Updating an existing standalone installation:** this source uses schema 6. If your database is schema 1–5, follow the [explicit backed-up upgrade procedure](docs/standalone.md#explicit-schema-upgrade-standalone-only) before starting the updated image. Never run `init-db` again for an existing database. Schema-1–5 images cannot open schema 6. The private reference installation now runs application version `0.1.0a9` on schema 6; its migration and recovery evidence is summarized in the [tested-main updater record](docs/live-updates.md#reference-installation-status-2026-10-29).
 
 The default port is bound to loopback. There is no built-in login: access beyond the local machine requires an authenticated reverse proxy and the matching `GARAGE_PUBLIC_ORIGIN`. Origin checks prevent cross-site writes; they do not authenticate users. Cloudflare Access is one supported deployment approach, not a required external service.
 

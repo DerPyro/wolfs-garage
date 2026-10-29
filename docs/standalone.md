@@ -1,6 +1,6 @@
 # Standalone alpha: operator and developer guide
 
-Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. The current source uses schema 6. The private reference instance remains on application version `0.1.0a8` and schema 5 pending separate migration approval; no schema-6 migration has been performed there. This is separate from the LubeLogger installation. Other operators must plan and rehearse their own migrations.
+Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. The current source and private reference installation use schema 6; the reference runs application version `0.1.0a9`. Its checked migration and recovery evidence is summarized in the [tested-main updater record](live-updates.md#reference-installation-status-2026-10-29). This is separate from the LubeLogger installation. Other operators must plan and rehearse their own migrations.
 
 ## Run locally with Docker Compose
 
@@ -84,7 +84,7 @@ Choose a unique destination; the command refuses to overwrite an existing backup
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 ```
 
-If the command reports that the database is already schema 6, it is a no-op and does not write a backup. Keep the pre-upgrade backup until the upgraded application data has been checked. Older schema-1–5 application images reject schema 6. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. The private reference database remains schema 5 pending separate schema-6 migration approval.
+If the command reports that the database is already schema 6, it is a no-op and does not write a backup. Keep the pre-upgrade backup until the upgraded application data has been checked. Older schema-1–5 application images reject schema 6. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. The private reference installation has completed its separate schema-5-to-6 migration; see the [rollout record](live-updates.md#reference-installation-status-2026-10-29).
 
 ## Backup and isolated restore
 

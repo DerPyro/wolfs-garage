@@ -1,6 +1,6 @@
 # Record date and odometer corrections
 
-**Status:** Schema-5 implementation, acceptance and the separately authorized reference-instance migration completed on 2026-10-29. The reference instance is running schema 5. No measurement facts or historical links were inferred or edited during migration.
+**Status:** Schema-5 implementation, acceptance and the separately authorized reference-instance migration completed on 2026-10-29. The reference installation was later migrated to schema 6; the schema-5 measurements, links and revisions were preserved. No measurement facts or historical links were inferred or edited during either migration. See the [schema-6 rollout evidence](../live-updates.md#reference-installation-status-2026-10-29).
 
 ## Provenance model
 
@@ -21,7 +21,7 @@ The API advertises `measurementCorrections`. Readings expose `odometerExact`, `r
 
 ## Upgrade and data boundaries
 
-Explicit `upgrade-db` supports schemas 1–4 to 5 after a checked backup. Schema-1 record revision handling is reused; schema 4 inspection data is preserved. Migration preserves old reading IDs, exact values, notes, commands and history, sets old rows to `legacy_unknown`, and invents no links. Startup never migrates. Backup and isolated restore support schemas 1–5; restore itself never migrates. Same-schema automatic updates may use schema 3, 4 or 5; cross-schema updates fail closed.
+Explicit `upgrade-db` introduced schema 5 from schemas 1–4 after a checked backup. Schema-1 record revision handling is reused; schema 4 inspection data is preserved. Migration preserves old reading IDs, exact values, notes, commands and history, sets old rows to `legacy_unknown`, and invents no links. The current upgrade path continues through schema 6; startup never migrates. Backups and isolated restore support schemas 1–6; restore itself never migrates. Same-schema automatic updates may use schemas 3–6; cross-schema updates fail closed.
 
 Portable owner export format 3 includes reading revision/provenance/source record ID and exact reading values. Historical audit JSON remains as originally recorded. JSON remains export-only; SQLite backup is the complete restore format. See [data export](../data-export.md), the [backup/update runbook](backup-update-workflow.md) and [ADR 0011](../adr/0011-reading-provenance.md).
 
