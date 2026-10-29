@@ -1,6 +1,6 @@
 # Standalone alpha: operator and developer guide
 
-Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. Treat it as a separate alpha instance; this guide does not authorize a production deployment or data migration.
+Wolfs Garage standalone is an early, independent vehicle record application. It uses its own SQLite database and does not read or write the existing LubeLogger installation. The private reference instance now runs schema 5 after the explicitly authorized and rehearsed 2026-10-29 migration; this did not replace or import the separate LubeLogger installation. Other operators must plan and rehearse their own migrations.
 
 ## Run locally with Docker Compose
 
@@ -84,7 +84,7 @@ Choose a unique destination; the command refuses to overwrite an existing backup
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 ```
 
-If the command reports that the database is already schema 5, it is a no-op and does not write a backup. Keep the schema-1–4 backup until the upgraded application data has been checked. Older schema-3 or schema-4 application images reject schema 5. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. This procedure documents the command only; a live migration requires its separately approved, isolated recovery rehearsal.
+If the command reports that the database is already schema 5, it is a no-op and does not write a backup. Keep the schema-1–4 backup until the upgraded application data has been checked. Older schema-3 or schema-4 application images reject schema 5. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. The reference-instance schema-4-to-5 migration completed after an isolated recovery rehearsal and independent backup; see the [measurement-correction rollout record](planning/measurement-corrections.md). Other installations still require their own authorization and recovery rehearsal before migration.
 
 ## Backup and isolated restore
 

@@ -1,11 +1,11 @@
 # ADR-0011: Link record odometers to their readings
 
-- **Status:** Accepted, 2026-10-29; implementation and local acceptance passed, CI/review and production migration remain pending
+- **Status:** Accepted, 2026-10-29; implemented and locally accepted, with the separately authorized reference-instance schema-4-to-5 migration completed on 2026-10-29
 - **Date:** 2026-10-28; accepted 2026-10-29
 
 ## Context
 
-Creating a completed record with an odometer value currently creates a separate odometer reading in the same transaction. The reading note may say `Record <id>`, but that text is not provenance: there is no foreign key and consumers must not infer a relationship from the note, date, or matching value. The current schema is version 4, which adds an optional inspection due month; record date, odometer value and unit remain locked by the bounded correction workflow.
+Creating a completed record with an odometer value currently creates a separate odometer reading in the same transaction. The reading note may say `Record <id>`, but that text is not provenance: there is no foreign key and consumers must not infer a relationship from the note, date, or matching value. At proposal time the current schema was version 4, which adds an optional inspection due month; record date, odometer value and unit remained locked by the bounded correction workflow.
 
 Safe date/odometer correction therefore needs a durable link to the exact reading the record created. Existing data must not acquire invented links during an upgrade.
 
@@ -25,4 +25,4 @@ The record, reading, link, and audit event must commit or roll back together. Ac
 
 ## Consequences and open decision
 
-The implementation uses schema 5, the composite same-vehicle relation, explicit owner-confirmed legacy resolution, and export format 3. It does not infer old links. Local acceptance passed on 2026-10-29 (148 Python tests and Chromium at four widths, using synthetic data). Production data has not been migrated; a production-copy recovery rehearsal and separate migration authorization remain required. Detailed current behavior and acceptance coverage are in [measurement corrections](../planning/measurement-corrections.md). Historical schema-3 and export-format-1/2 evidence remains historical and is not restated as schema-5/format-3 verification.
+The implementation uses schema 5, the composite same-vehicle relation, explicit owner-confirmed legacy resolution, and export format 3. It does not infer old links. Local acceptance passed on 2026-10-29 (148 Python tests and Chromium at four widths, using synthetic data). The separately authorized reference-instance migration and verification completed on 2026-10-29; existing measurement facts were preserved without inferred links. Detailed current behavior and rollout evidence are in [measurement corrections](../planning/measurement-corrections.md). Historical schema-3 and export-format-1/2 evidence remains historical and is not restated as schema-5/format-3 verification.

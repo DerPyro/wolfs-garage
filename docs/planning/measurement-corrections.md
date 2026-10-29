@@ -1,6 +1,6 @@
 # Record date and odometer corrections
 
-**Status:** Schema-5 implementation and acceptance passed on 2026-10-29. CI/review and the separately authorized reference-data migration remain pending. No production database has been migrated.
+**Status:** Schema-5 implementation, acceptance and the separately authorized reference-instance migration completed on 2026-10-29. The reference instance is running schema 5. No measurement facts or historical links were inferred or edited during migration.
 
 ## Provenance model
 
@@ -27,9 +27,13 @@ Portable owner export format 3 includes reading revision/provenance/source recor
 
 ## Verification
 
-On 2026-10-29 the full Python suite passed (148 tests). Frozen synthetic schema-1/2/3/4 fixtures covered explicit backup upgrades, rollback, legacy-row preservation/no inferred links and sequence high-water; API tests covered linked/manual/date-only corrections, explicit legacy resolution, stale revisions, idempotency, exact decimals and audit history. Real Chromium passed both legacy-resolution flows, linked/manual edits, exact values, audit display, reload persistence and 320/390/768/1280 px. The browser used a synthetic schema-4 fixture explicitly upgraded to schema 5. Review the [linked correction form](../discovery/evidence/measurement-correction-form-mobile.png) and [measurement audit history](../discovery/evidence/measurement-correction-history-mobile.png). Production-data copy/recovery rehearsal and migration remain separate operator steps; no live database has been migrated.
+On 2026-10-29 the full Python suite passed (148 tests). Frozen synthetic schema-1/2/3/4 fixtures covered explicit backup upgrades, rollback, legacy-row preservation/no inferred links and sequence high-water; API tests covered linked/manual/date-only corrections, explicit legacy resolution, stale revisions, idempotency, exact decimals and audit history. Real Chromium passed both legacy-resolution flows, linked/manual edits, exact values, audit display, reload persistence and 320/390/768/1280 px. The browser used a synthetic schema-4 fixture explicitly upgraded to schema 5. Review the [linked correction form](../discovery/evidence/measurement-correction-form-mobile.png) and [measurement audit history](../discovery/evidence/measurement-correction-history-mobile.png). Those local acceptance checks used synthetic data; the separate private recovery rehearsal and later live rollout are documented below.
 
-A separate private copy-only recovery rehearsal used a fresh schema-4 backup from the reference installation in isolated staging. The schema-5 candidate preserved all six existing data tables and `sqlite_sequence`; all old readings became `legacy_unknown`, unlinked, revision 1. The original backup hash stayed unchanged. A separate pre-upgrade restore opened successfully with the older schema-4 image; the candidate passed schema check, format-3 export and strict-backup validation. No source/live database was migrated and no deployment occurred; a live migration still requires its separate authorization.
+A separate private copy-only recovery rehearsal used a fresh schema-4 backup from the reference installation in isolated staging. The schema-5 candidate preserved all six existing data tables and `sqlite_sequence`; all old readings became `legacy_unknown`, unlinked, revision 1. The original backup hash stayed unchanged. A separate pre-upgrade restore opened successfully with the older schema-4 image; the candidate passed schema check, format-3 export and strict-backup validation. This was rehearsal evidence only; the subsequent authorized live migration is recorded below.
+
+## Authorized reference-instance rollout — 2026-10-29
+
+Main commit `0830971426c2` (application version `0.1.0a8`) passed CI and was built for the rollout. With writes drained and the service stopped, a fresh offline schema-4 backup was checked, copied to independent protected storage and hash-verified before the explicit live upgrade. After migration, the six pre-existing data tables matched exactly on their shared columns, as did `sqlite_sequence`; existing readings have revision 1, `legacy_unknown` provenance and no source links. Integrity, foreign-key and strict schema checks passed. The schema-5 API and `measurementCorrections` capability, exact reading fields, format-3 export, full SQLite backup and health endpoint were verified. Normal routing resumed behind the existing access boundary; unauthenticated access remained redirected. The updater now accepts matching schemas 3, 4 and 5 and its timer was resumed. No vehicle facts were changed, and no historical link was guessed.
 
 To recreate the browser fixture locally, choose new temporary paths each run:
 

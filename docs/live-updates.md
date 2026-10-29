@@ -22,11 +22,11 @@ then builds a local candidate image.
 
 Before changing the running service, it validates the candidate against an
 isolated copy of the current database and makes a checked backup. Automatic
-updates support schema 3 or 4 only when the running database, candidate image,
-and checked copy all report the same schema. A schema 3/4 mismatch or any
-unsupported schema leaves the live application and database untouched; the
-schema change requires a separate explicit checked-backup upgrade. Startup
-never performs an implicit schema migration.
+updates support schemas 3, 4 and 5 only when the running database, candidate
+image and checked copy all report the same schema. Any mismatch or unsupported
+schema leaves the live application and database untouched; a schema change
+requires a separate explicit checked-backup upgrade. Startup never performs an
+implicit schema migration.
 
 The configured maintenance-prepare hook must route requests to a maintenance
 response and allow active writes to drain before the live database is copied
@@ -95,3 +95,16 @@ This updater is optional. The existing source-build Compose workflow remains
 available for manual installation and controlled maintenance. It does not
 perform data import, change external proxy configuration, or automatically
 upgrade the database schema.
+
+## Reference installation status — 2026-10-29
+
+The privately operated reference installation was explicitly migrated from
+schema 4 to schema 5 using the reviewed main commit `0830971426c2`, after its
+checks passed. A fresh offline schema-4 backup was independently copied and
+hash-verified before migration. Integrity, foreign-key, schema, API, export,
+backup and health checks passed; the existing six data tables and sequence
+state were preserved, and prior readings remain unlinked with
+`legacy_unknown` provenance. The application is serving normally behind its
+existing access boundary. The installed updater now accepts same-schema
+updates for 3, 4 or 5, and its timer has resumed. No vehicle facts or historical
+measurement links were changed or inferred.
