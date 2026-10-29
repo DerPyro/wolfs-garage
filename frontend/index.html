@@ -30,26 +30,21 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="/" aria-label="Wolfs Garage Startseite"><span class="brand-mark"><svg><use href="#i-garage"/></svg></span><span><strong>WOLFS</strong><small>GARAGE</small></span></a>
-      <span class="topbar-label">DEINE FAHRZEUGE. DEIN ÜBERBLICK.</span>
       <a id="legacy-manage" class="manage-link" href="/Home" hidden>Verwalten <svg><use href="#i-external"/></svg></a>
+      <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Navigation öffnen" aria-expanded="false" aria-controls="site-navigation"><span></span><span></span><span></span></button>
+      <nav id="site-navigation" class="site-navigation" aria-label="Hauptnavigation" hidden>
+        <a id="nav-garage" href="#garage">Garage</a>
+        <a id="nav-backups" href="#sicherungen" hidden>Sicherungen</a>
+        <a id="nav-settings" href="#einstellungen">Einstellungen</a>
+      </nav>
     </div>
   </header>
   <main class="page">
-    <section class="intro" aria-labelledby="page-title">
-      <div class="intro-copy"><p class="eyebrow"><span class="eyebrow-line"></span> WILLKOMMEN IN DEINER GARAGE</p><h1 id="page-title">Alles im <em>Blick.</em></h1><p class="intro-description">Deine Fahrzeuge, anstehende Aufgaben und die letzten Arbeiten – übersichtlich an einem Ort.</p></div>
-      <div class="intro-art" aria-hidden="true"><span class="art-ring ring-one"></span><span class="art-ring ring-two"></span><span class="art-dial"></span><span class="art-center"><svg><use href="#i-car"/></svg></span><span class="art-index">WOLFS<br><strong>GARAGE</strong></span></div>
-    </section>
-    <section class="garage-section" aria-labelledby="vehicles-heading">
-      <div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> DEINE SAMMLUNG</p><h2 id="vehicles-heading">Meine Fahrzeuge <span id="vehicle-count" class="count" hidden></span></h2></div><button id="refresh" class="icon-button" type="button" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren"><svg><use href="#i-refresh"/></svg></button></div>
+    <section id="garage-view" class="app-view" aria-labelledby="garage-title">
+    <section class="garage-section" aria-labelledby="garage-title">
+      <div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> DEINE SAMMLUNG</p><h1 id="garage-title" tabindex="-1">Meine Fahrzeuge <span id="vehicle-count" class="count" hidden></span></h1></div><button id="refresh" class="icon-button" type="button" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren"><svg><use href="#i-refresh"/></svg></button></div>
       <div id="status" class="status" role="status" aria-live="polite">Fahrzeuge werden geladen …</div>
-      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button><div id="data-export-wrap" class="data-export" hidden>
-        <button id="database-backup" class="condition-save" type="button" hidden>Vollständige Sicherung herunterladen</button>
-        <p id="database-backup-hint" class="form-hint" hidden>Die Sicherung enthält alle Garage-Anwendungsdaten einschließlich Verlauf. Konfiguration und externe Dokumente sind nicht enthalten.</p>
-        <p id="database-backup-message" class="condition-message" role="status" aria-live="polite"></p>
-        <a id="data-export" class="condition-edit" href="/garage-api/export" download="wolfs-garage-export.json" hidden>Portabler JSON-Export</a>
-        <p id="data-export-hint" class="form-hint" hidden>JSON-Datei mit Fahrzeugdaten und Verlauf zur Ansicht oder Übertragung. Sie dient nicht zur Wiederherstellung.</p>
-        <details id="backup-restore-help" class="backup-restore-help" hidden><summary>Import / Wiederherstellen</summary><div class="backup-restore-content"><p>Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank:</p><pre><code>python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3</code></pre><p>Es gibt keinen Upload oder Import im Browser.</p></div></details>
-      </div></div>
+      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button></div>
       <p id="own-notice" class="own-notice" role="status" aria-live="polite"></p>
       <div id="vehicles" class="vehicle-grid" aria-label="Fahrzeuge"></div>
       <section id="work-dashboard" class="work-dashboard" aria-labelledby="work-title" hidden>
@@ -99,6 +94,23 @@
       </article>
     </section>
     <aside id="legacy-banner" class="manage-banner" hidden><div class="manage-banner-icon"><svg><use href="#i-tool"/></svg></div><div><h2>Etwas eintragen?</h2><p>Fahrzeuge und Einträge verwaltest du derzeit in LubeLogger.</p></div><a href="/Home">Zur Verwaltung <svg><use href="#i-arrow"/></svg></a></aside>
+    </section>
+    <section id="backups-view" class="app-view settings-view" aria-labelledby="backups-title" hidden>
+      <p class="eyebrow"><span class="eyebrow-line"></span> DATEN DER GARAGE</p><h1 id="backups-title" tabindex="-1">Sicherungen</h1>
+      <div id="data-export-wrap" class="data-export backup-content" hidden>
+        <button id="database-backup" class="condition-save" type="button" hidden>Vollständige Sicherung herunterladen</button>
+        <p id="database-backup-hint" class="form-hint" hidden>Die Sicherung enthält alle Garage-Anwendungsdaten einschließlich Verlauf. Konfiguration und externe Dokumente sind nicht enthalten.</p>
+        <p id="database-backup-message" class="condition-message" role="status" aria-live="polite"></p>
+        <a id="data-export" class="condition-edit" href="/garage-api/export" download="wolfs-garage-export.json" hidden>Portabler JSON-Export</a>
+        <p id="data-export-hint" class="form-hint" hidden>JSON-Datei mit Fahrzeugdaten und Verlauf zur Ansicht oder Übertragung. Sie dient nicht zur Wiederherstellung.</p>
+        <details id="backup-restore-help" class="backup-restore-help" hidden><summary>Import / Wiederherstellen</summary><div class="backup-restore-content"><p>Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank:</p><pre><code>python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3</code></pre><p>Es gibt keinen Upload oder Import im Browser.</p></div></details>
+      </div>
+    </section>
+    <section id="settings-view" class="app-view settings-view" aria-labelledby="settings-title" hidden>
+      <p class="eyebrow"><span class="eyebrow-line"></span> DEINE ANWENDUNG</p><h1 id="settings-title" tabindex="-1">Einstellungen</h1>
+      <p id="app-version" class="settings-version" role="status">Versionsangabe wird geladen …</p>
+      <div class="settings-field"><label for="motion-preference">Bewegung</label><select id="motion-preference"><option value="system">Systemeinstellung</option><option value="reduce">Animationen reduzieren</option></select><p id="motion-message" class="form-hint" role="status" aria-live="polite">Scroll-Animationen berücksichtigen diese Einstellung.</p></div>
+    </section>
   </main>
   <footer><span>WOLFS GARAGE</span><span>MIT LIEBE ZUM FAHRZEUG.</span></footer>
 </body>

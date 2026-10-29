@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -33,6 +33,46 @@ function distance(value, unit) { const n = number(value); if (!n) return ""; con
 function cost(value, currency) { const n = number(value); if (!n) return ""; const c = display(currency); return c ? `${n} ${c}` : `Kosten: ${n} (Währung unbekannt)`; }
 function setStatus(id, message, error = false) { const node = $(id); node.textContent = message; node.classList.toggle("error", error); }
 async function getJson(url) { const response = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; } return response.json(); }
+const motionPreferenceKey = "wolfs-garage-motion-preference";
+function systemPrefersReducedMotion() { return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+function shouldReduceMotion() { return state.motionPreference === "reduce" || (state.motionPreference === "system" && systemPrefersReducedMotion()); }
+function restoreMotionPreference() {
+  try { const stored = localStorage.getItem(motionPreferenceKey); state.motionPreference = stored === "reduce" || stored === "system" ? stored : "system"; } catch (_) { state.motionPreference = "system"; }
+  $("motion-preference").value = state.motionPreference;
+}
+function saveMotionPreference() {
+  const value = $("motion-preference").value;
+  state.motionPreference = value === "reduce" ? "reduce" : "system";
+  try { localStorage.setItem(motionPreferenceKey, state.motionPreference); setStatus("motion-message", "Einstellung gespeichert."); }
+  catch (_) { setStatus("motion-message", "Die Einstellung gilt bis zum Neuladen dieser Seite.", true); }
+}
+function canOpenView(view) { return view !== "sicherungen" || (state.standalone && (state.dataExport || state.databaseBackup)); }
+function showAppView(view, focusHeading = false) {
+  const next = canOpenView(view) && ["garage", "sicherungen", "einstellungen"].includes(view) ? view : "garage";
+  state.view = next;
+  $("garage-view").hidden = next !== "garage";
+  $("backups-view").hidden = next !== "sicherungen";
+  $("settings-view").hidden = next !== "einstellungen";
+  for (const [id, value] of [["nav-garage","garage"],["nav-backups","sicherungen"],["nav-settings","einstellungen"]]) {
+    if (value === next) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
+  }
+  if (focusHeading) {
+    const heading = $(next === "garage" ? "garage-title" : next === "sicherungen" ? "backups-title" : "settings-title");
+    heading.focus({preventScroll:true}); window.scrollTo({top:0,behavior:"auto"});
+  }
+}
+function applyCurrentHash() { showAppView(typeof window !== "undefined" ? String(window.location.hash || "").slice(1) : "garage"); }
+function setNavigationOpen(open, returnFocus = false) {
+  const toggle = $("nav-toggle"), panel = $("site-navigation"); panel.hidden = !open; toggle.setAttribute("aria-expanded", String(open)); toggle.setAttribute("aria-label", open ? "Navigation schließen" : "Navigation öffnen");
+  if (returnFocus) toggle.focus();
+}
+function navigateHash(event) {
+  const link = event.currentTarget; const view = link.getAttribute("href").slice(1);
+  event.preventDefault(); if (!canOpenView(view)) return;
+  if (window.location.hash !== `#${view}`) window.location.hash = view;
+  showAppView(view, true);
+  setNavigationOpen(false);
+}
 async function downloadDatabaseBackup() {
   if (!state.databaseBackup || state.backupBusy) return;
   state.backupBusy = true; $("database-backup").disabled = true; $("database-backup").setAttribute("aria-busy", "true");
@@ -363,9 +403,8 @@ async function refreshVehicleSummaryProjection(id) {
 }
 function navigateToVehicleActions() {
   const toolbar = $("own-detail-actions");
-  if (toolbar.hidden) return;
-  const reducedMotion = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  toolbar.scrollIntoView({behavior:reducedMotion ? "auto" : "smooth", block:"start"});
+  if (toolbar.hidden || state.view !== "garage") return;
+  toolbar.scrollIntoView({behavior:shouldReduceMotion() ? "auto" : "smooth", block:"start"});
   toolbar.focus({preventScroll:true});
 }
 async function selectVehicle(id, refreshProjection = true, options = {}) {
@@ -381,7 +420,7 @@ async function selectVehicle(id, refreshProjection = true, options = {}) {
   catch (error) { if (generation === state.generation) setStatus("detail-status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeugdaten konnten nicht geladen werden. Bitte versuche es erneut.", true); }
   finally { if (generation === state.generation) state.detailLoading = false; }
   if (refreshProjection && state.standalone && state.scheduledWork && generation === state.generation) await refreshWork();
-  if (options.navigateToActions && generation === state.generation && state.selected === id) navigateToVehicleActions();
+  if (options.navigateToActions && generation === state.generation && state.selected === id && state.view === "garage") navigateToVehicleActions();
 }
 async function load(preferredId = null) {
   const loadGeneration = ++state.loadGeneration; state.loading = true;
@@ -754,8 +793,12 @@ async function initialize() {
     state.dataExport = capabilities.features.includes("dataExport");
     state.databaseBackup = capabilities.features.includes("databaseBackup");
     state.inspectionStatus = capabilities.features.includes("inspectionStatus");
-  } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
+    state.capabilitiesVersion = typeof capabilities.version === "string" && capabilities.version.trim() ? capabilities.version.trim() : null;
+  } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); setStatus("app-version", "Versionsangabe momentan nicht verfügbar.", true); return; } }
   state.capabilitiesReady = true;
+  $("app-version").textContent = state.capabilitiesVersion ? `Version ${state.capabilitiesVersion}` : state.standalone ? "Versionsangabe nicht verfügbar." : "Versionsangabe in diesem Modus nicht verfügbar.";
+  $("nav-backups").hidden = !state.standalone || (!state.dataExport && !state.databaseBackup);
+  applyCurrentHash();
   $("legacy-manage").hidden = state.standalone; $("legacy-banner").hidden = state.standalone;
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
   $("logbook-toggle").hidden = !state.historyBrowsing;
@@ -770,7 +813,17 @@ async function initialize() {
 document.addEventListener("visibilitychange", () => {
   if (state.inspectionStatus && document.visibilityState === "visible") return refreshInspectionVehicles();
 });
+document.addEventListener("keydown", event => { if (event.key === "Escape" && !$("site-navigation").hidden) { event.preventDefault(); setNavigationOpen(false, true); } });
+document.addEventListener("click", event => {
+  if ($("site-navigation").hidden) return;
+  if ($("site-navigation").contains(event.target) || $("nav-toggle").contains(event.target)) return;
+  setNavigationOpen(false);
+});
+window.addEventListener("hashchange", applyCurrentHash); window.addEventListener("popstate", applyCurrentHash);
 if (typeof setInterval === "function") setInterval(() => refreshInspectionVehicles(), 60000);
+$("nav-toggle").addEventListener("click", () => setNavigationOpen($("site-navigation").hidden));
+$("nav-garage").addEventListener("click", navigateHash); $("nav-backups").addEventListener("click", navigateHash); $("nav-settings").addEventListener("click", navigateHash);
+$("motion-preference").addEventListener("change", saveMotionPreference);
 $("vehicle-add").addEventListener("click", () => openEntry("vehicle-new"));
 $("vehicle-edit").addEventListener("click", () => openEntry("vehicle-edit"));
 $("odometer-add").addEventListener("click", () => openEntry("odometer"));
@@ -784,4 +837,4 @@ $("logbook-more").addEventListener("click", () => loadLogbookPage(true, state.lo
 $("logbook-reload").addEventListener("click", () => openLogbook(true));
 $("own-cancel").addEventListener("click", () => closeEntry(true));
 $("own-form").addEventListener("submit", saveEntry);
-initialize();
+restoreMotionPreference(); applyCurrentHash(); initialize();
