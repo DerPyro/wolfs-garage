@@ -12,7 +12,7 @@ class Element {
   append(...children) { for (const child of children) child.parent = this; this.children.push(...children); }
   prepend(...children) { for (const child of children) child.parent = this; this.children.unshift(...children); }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
-  focus() {}
+  focus() { this.focused = true; }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tagName === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
@@ -304,6 +304,7 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.match(nodes.vehicles.children[0].attributes['aria-label'], /Fahrbereit, Offen: Reifen wechseln/);
   assert.match(nodes.vehicles.children[1].attributes['aria-label'], /Nicht fahrbereit, Offen: Reparatur/);
   assert.match(nodes['condition-issues'].textContent, /Reifen wechseln/);
+  assert.equal(nodes['condition-issues'].querySelectorAll('button').length,0,'legacy mode does not expose standalone issue actions');
   nodes['condition-edit'].listeners.click();
   assert.equal(nodes['condition-form'].hidden, false);
   assert.equal(nodes['issue-editor'].querySelectorAll('input')[0].value, 'Reifen wechseln');
@@ -430,6 +431,85 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.doesNotMatch(nodes['history-events'].textContent,/cccccccccccccccccccccccccccccccc/);
   assert.match(nodes['history-events'].textContent,/49,9 EUR|49,90 EUR/);
   assert.match(nodes.services.textContent,/Ölwechsel und Filter/);
+
+  // Point actions edit the existing status form or atomically complete exactly one point with a record.
+  const directIssues=[{id:'direct/a',text:'Bremsbeläge prüfen'},{id:'direct-b',text:'Licht kontrollieren'}];
+  const directOriginalStatus={readiness:'not_ready',issues:directIssues,revision:6};
+  let directStatus={...directOriginalStatus}; const directWrites=[]; const directRecords=[]; let directPostAttempts=0;
+  const directVehicle={id:35,name:'Direktabschluss',make:'Test',model:'Auto',vehicleType:'Limousine',odometerUnit:'km',revision:1,status:directStatus};
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[directVehicle]})};
+    if(path==='/garage-api/vehicles/35/summary') return {ok:true,json:async()=>({vehicle:{...directVehicle,status:directStatus},reminders:[],services:directRecords})};
+    if(path==='/garage-api/vehicles/35/records' && options.method==='POST') {
+      const payload=JSON.parse(options.body); directWrites.push(payload);
+      if(++directPostAttempts===1) return {ok:false,status:409};
+      directStatus={...directStatus,issues:directStatus.issues.filter(issue=>String(issue.id)!==String(payload.closeIssueId)),revision:directStatus.revision+1};
+      const record={id:90,...payload,odometerUnit:'km'}; directRecords.push(record);
+      return {ok:true,json:async()=>({record,status:directStatus})};
+    }
+    if(path==='/garage-api/vehicles/35/history') return {ok:true,json:async()=>({events:[{action:'issue.completed',occurredAt:'2026-10-29T12:00:00Z',before:{issues:directIssues},after:{record:directRecords[0],status:directStatus}}]})};
+    throw new Error(`Unexpected direct-completion request: ${path}`);
+  },{standalone:true});
+  const issueRows=()=>nodes['condition-issues'].children.filter(child=>child.className==='condition-issue-row');
+  const firstIssueRow=issueRows().find(row=>row.textContent.includes('Bremsbeläge prüfen'));
+  const firstEdit=firstIssueRow.querySelectorAll('button').find(button=>button.id==='issue-edit-direct%2Fa');
+  const firstDone=firstIssueRow.querySelectorAll('button').find(button=>button.id==='issue-complete-direct%2Fa');
+  assert.ok(firstEdit); assert.ok(firstDone);
+  assert.match(firstEdit.attributes['aria-label'],/Bremsbeläge prüfen/); assert.match(firstDone.attributes['aria-label'],/Bremsbeläge prüfen/);
+  assert.equal(directWrites.length,0,'opening either action makes no API write');
+  await firstEdit.listeners.click();
+  const focusedIssueField=nodes['issue-editor'].querySelectorAll('input')[0];
+  assert.equal(focusedIssueField.id,'issue-edit-direct%2Fa-text'); assert.equal(focusedIssueField.focused,true);
+  assert.equal(focusedIssueField.parent.children.find(child=>child.tagName==='label').attributes.for,focusedIssueField.id,'the stable editor ID remains connected to its label');
+  assert.equal(nodes['condition-form'].hidden,false);
+  await nodes['condition-cancel'].listeners.click();
+  assert.equal(firstEdit.focused,true,'cancel returns focus to the issue edit button');
+  assert.equal(directWrites.length,0);
+
+  const secondDone=issueRows().find(row=>row.textContent.includes('Licht kontrollieren')).querySelectorAll('button').find(button=>button.id==='issue-complete-direct-b');
+  await secondDone.listeners.click();
+  const directField=name=>nodes['own-fields'].querySelectorAll('input').concat(nodes['own-fields'].querySelectorAll('select')).find(field=>field.id==='entry-'+name);
+  assert.equal(nodes['own-title'].textContent,'Punkt abschließen');
+  assert.equal(nodes['own-save'].textContent,'Arbeit speichern & Punkt abschließen');
+  assert.equal(directField('description').value,'Licht kontrollieren');
+  assert.equal(directField('kind').value,''); assert.equal(directField('kind').required,true);
+  assert.equal(directField('closeIssueId').type,'hidden'); assert.equal(directField('closeIssueId').value,'direct-b');
+  assert.notEqual(directField('date').value,''); assert.equal(directField('odometer').required,false);
+  assert.match(nodes['own-hint'].textContent,/Entwurf.*tatsächlich durchgeführte Arbeit/);
+  firstDone.listeners.click();
+  assert.equal(directField('closeIssueId').value,'direct-b','a second issue action cannot replace an open form');
+  await nodes['own-cancel'].listeners.click();
+  assert.equal(secondDone.focused,true,'cancel returns focus to the selected issue action');
+  assert.equal(directWrites.length,0,'cancel makes no write');
+
+  await firstDone.listeners.click();
+  directField('description').value='Bremsbeläge erneuert';
+  directField('cost').value='35,50'; directField('currency').value='eur';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(directWrites.length,0,'direct completion requires a deliberate work kind');
+  assert.match(nodes['own-message'].textContent,/Arbeitsart aus/);
+  directField('kind').value='service';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(directWrites.length,1);
+  const firstDirectWrite=directWrites[0];
+  assert.equal(firstDirectWrite.closeIssueId,'direct/a'); assert.equal(firstDirectWrite.statusRevision,6);
+  assert.equal(firstDirectWrite.description,'Bremsbeläge erneuert'); assert.equal(firstDirectWrite.kind,'service');
+  assert.equal(firstDirectWrite.cost,'35.50'); assert.equal(firstDirectWrite.currency,'EUR');
+  assert.equal(typeof firstDirectWrite.commandId,'string');
+  assert.match(nodes['own-message'].textContent,/inzwischen geändert/);
+  assert.equal(nodes['own-panel'].hidden,false,'a conflict leaves the draft available for retry');
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(directWrites.length,2);
+  assert.equal(directWrites[1].commandId,firstDirectWrite.commandId,'retry preserves its idempotency key');
+  assert.equal(directWrites[1].closeIssueId,'direct/a','retry retains the originally selected point');
+  assert.deepEqual(directStatus.issues.map(issue=>issue.id),['direct-b']);
+  assert.equal(directStatus.readiness,'not_ready','closing work leaves manual readiness unchanged');
+  assert.match(nodes['own-notice'].textContent,/Arbeit gespeichert und Punkt abgeschlossen/);
+  assert.equal(nodes['history-panel'].hidden,false,'success exposes the audit history');
+  assert.equal(nodes['history-toggle'].focused,true,'success moves focus to the visible history control');
+  assert.match(nodes['history-events'].textContent,/Offenen Punkt abgeschlossen/);
+  assert.equal(nodes['condition-issues'].textContent.includes('Licht kontrollieren'),true);
+  assert.equal(nodes['condition-issues'].textContent.includes('Bremsbeläge prüfen'),false);
 
   // The optional full logbook keeps filters across pages and leaves the separate audit panel intact.
   const pageCalls=[]; let moreFailures=0; let reloads=0;

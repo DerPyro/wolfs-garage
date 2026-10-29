@@ -17,11 +17,12 @@ Available now:
 - Correct the description, service/repair kind, cost, currency and HTTPS document reference of a completed record, with a reason and before/after history. Record date, odometer reading, unit and issue closure remain fixed.
 - Browse complete service/repair and odometer histories in date-sorted pages with date filters; work records can also be filtered by kind.
 - Set an optional due date, severity and open/observed lifecycle on existing open work; view active work in a Europe/Berlin date-aware dashboard.
+- Edit an active issue from its detail row, or start a completed-work record from that issue. The record form drafts the issue description and defaults the date to today; saving explicitly creates the record and closes only that issue in one operation. Other open work and manually stored readiness remain unchanged.
 - Record an inspection due month and view its Europe/Berlin status and separate effective-readiness projection under the owner's policy; unknown dates remain unknown.
 - Download a portable owner-data JSON export, separate from the restorable SQLite backup.
 - Create consistent SQLite backups; the standalone tests include isolated restore and retry/concurrency cases.
 
-Recurring maintenance rules, corrections to record dates or odometer readings, file uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.
+Recurring maintenance rules, corrections to record dates or odometer readings, photo and invoice uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Following the user decision of 2026-10-29, maintenance planning and reliable 1.0 operation take priority over photo and invoice uploads; existing HTTPS document references remain available. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.
 
 ## Run locally
 
@@ -54,6 +55,7 @@ Wolfs Garage is an independent application usable by other self-hosters. Each in
 <img src="docs/discovery/evidence/standalone-preview-mobile.png" width="390" alt="Mobile standalone preview using synthetic vehicle data">
 
 - [Requirements](docs/requirements.md), [architecture](docs/architecture.md), [roadmap](docs/roadmap.md)
+- [Active issue editing and completion workflow](docs/planning/work-completion.md)
 - [Backend comparison](docs/planning/lubelogger-vs-own.md) and [decision to build an independent core](docs/adr/0009-backend-ownership-challenge.md)
 - [Open-source preparation](docs/open-source-release.md), [contributing](CONTRIBUTING.md), [third-party notices](THIRD_PARTY_NOTICES.md)
 
