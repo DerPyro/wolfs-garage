@@ -1,4 +1,4 @@
-// Synthetic real-Chromium check. The caller serves a fresh schema-4 database at
+// Synthetic real-Chromium check. The caller serves a fresh schema-5 database at
 // http://127.0.0.1:18984 with an empty vehicle list.
 const fs = require('fs');
 const {spawn} = require('child_process');

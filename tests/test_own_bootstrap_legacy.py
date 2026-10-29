@@ -58,7 +58,7 @@ class LegacyBootstrapTests(unittest.TestCase):
         self.database = self.root / "new" / "garage.sqlite3"
         self.id_map = self.root / "private" / "source-id-map.json"
 
-    def test_creates_only_empty_schema4_vehicles_and_explicit_unit(self):
+    def test_creates_only_empty_current_schema_vehicles_and_explicit_unit(self):
         original = self.snapshot_path.read_bytes()
         mapping = create_database(self.snapshot, self.database, self.id_map, "km")
 
@@ -71,7 +71,7 @@ class LegacyBootstrapTests(unittest.TestCase):
         self.assertTrue(all(v["odometer"] is None and v["odometerUnit"] == "km" for v in vehicles))
         self.assertTrue(all(v["status"]["readiness"] == "unknown" for v in vehicles))
         with closing(sqlite3.connect(self.database)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
             for table in ("records", "odometer_readings", "commands"):
                 self.assertEqual(db.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0)
             self.assertEqual(db.execute("SELECT count(*) FROM history WHERE action='vehicle.created'").fetchone()[0], 5)

@@ -91,7 +91,7 @@ class BackupRoundtripTests(unittest.TestCase):
         with closing(sqlite3.connect(backup_path)) as db:
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
             self.assertEqual(db.execute("SELECT count(*) FROM commands").fetchone()[0], 2)
             self.assertEqual(db.execute("SELECT cost FROM records WHERE id=?", (record["record"]["id"],)).fetchone()[0], "42.50")
             self.assertEqual(db.execute("SELECT value FROM odometer_readings WHERE id=?", (reading["id"],)).fetchone()[0], "1235.875")

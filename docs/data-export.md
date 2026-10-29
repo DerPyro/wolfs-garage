@@ -4,14 +4,14 @@ Wolfs Garage provides a portable JSON owner-data export for inspection and migra
 
 ## Contents and limits
 
-Current format version 2 uses this root shape:
+Current format version 3 uses this root shape:
 
 ```json
 {
   "format": "wolfs-garage-owner-export",
-  "formatVersion": 2,
-  "applicationVersion": "0.1.0a6",
-  "databaseSchema": 4,
+  "formatVersion": 3,
+  "applicationVersion": "0.1.0a8",
+  "databaseSchema": 5,
   "exportedAt": "2026-10-28T12:00:00+00:00",
   "vehicles": [],
   "statuses": [],
@@ -21,7 +21,7 @@ Current format version 2 uses this root shape:
 }
 ```
 
-It includes stored vehicle metadata, including raw `inspectionDueMonth`; each vehicle's readiness, issues and revision; all odometer readings; completed records; and decoded before/after audit history. Arrays sort by their stable primary key ascending. Every reading and record includes its `vehicleId`. Stored text odometer values and costs remain decimal strings in the business-data arrays. Audit `before` and `after` values preserve the JSON types that were recorded, including numeric odometer values in older history entries.
+It includes stored vehicle metadata, including raw `inspectionDueMonth`; each vehicle's readiness, issues and revision; all odometer readings; completed records; and decoded before/after audit history. Arrays sort by their stable primary key ascending. Every reading and record includes its `vehicleId`. Reading rows include `revision`, `provenance` and nullable `sourceRecordId`; exact odometer values and costs remain decimal strings in the business-data arrays. Audit `before` and `after` values preserve the JSON types that were recorded, including numeric odometer values in older history entries.
 
 The export deliberately excludes command-idempotency/replay rows, application secrets and configuration, computed dashboard projections, and external document bytes. `documentUrl` remains only a stored link. Nothing is fetched. There is no API or CLI operation that imports this JSON back into the application. A SQLite backup is the supported way to preserve and restore the complete application database, including command replay state.
 
@@ -31,7 +31,7 @@ The array objects have these field sets:
 | --- | --- |
 | `vehicles` | `id`, `make`, `model`, `name`, `year`, `licensePlate`, `vehicleType`, `odometerUnit`, `revision`, `inspectionDueMonth` (stored metadata; no derived name, current reading, status, inspection, effective readiness, or summary projection) |
 | `statuses` | `vehicleId`, `readiness`, `issues`, `revision`; each issue has canonical `id`, `text`, `dueDate`, `severity`, and `lifecycle` fields |
-| `odometerReadings` | `id`, `vehicleId`, `date`, `odometer` (exact stored string), `unit`, `note` |
+| `odometerReadings` | `id`, `vehicleId`, `date`, `odometer` (exact stored string), `unit`, `note`, `revision`, `provenance`, `sourceRecordId` |
 | `records` | `id`, `vehicleId`, `description`, `kind`, `date`, `odometer`, `odometerUnit`, `cost`, `currency`, `documentUrl`, `closedIssueId`, `revision`; `odometer` is the exact stored string or `null`, and costs remain decimal strings or `null` |
 | `history` | `sequence`, `vehicleId`, `action`, `occurredAt`, `before`, `after` |
 
@@ -60,9 +60,9 @@ The explicit CLI syntax is `python -m wolfs_garage export NEW_PATH`. It reads th
 
 ## Historical format 1 evidence
 
-On 2026-10-28, format version 1 was checked against schema 3: 82 tests matching `test_own_*.py` passed. Real Chromium passed on a fresh schema-3 database. Its synthetic export included two vehicles, a corrected record, three readings with exact string values, and closure/correction audit events; command replay data and JavaScript errors were absent. The CLI checks covered mode `0600`, overwrite and symlink/database-path refusal, and partial-file cleanup. These checks remain historical evidence for format 1 and used synthetic data only. Current application export is format 2 on schema 4.
+On 2026-10-28, format version 1 was checked against schema 3: 82 tests matching `test_own_*.py` passed. Real Chromium passed on a fresh schema-3 database. Its synthetic export included two vehicles, a corrected record, three readings with exact string values, and closure/correction audit events; command replay data and JavaScript errors were absent. The CLI checks covered mode `0600`, overwrite and symlink/database-path refusal, and partial-file cleanup. This remains historical evidence for format 1. Format 2 was later checked on schema 4 and is also historical; current application export is format 3 on schema 5. Historical evidence is not represented as a format-3 test run.
 
-To reproduce the current browser acceptance with an isolated local Compose volume, initialize and start a fresh schema-4 instance on loopback port 18987:
+To reproduce the current browser acceptance with an isolated local Compose volume, initialize and start a fresh schema-5 instance on loopback port 18987:
 
 ```sh
 GARAGE_PORT=18987 GARAGE_PUBLIC_ORIGIN=http://127.0.0.1:18987 \

@@ -141,7 +141,7 @@ def create_app(config=None):
     @app.get("/garage-api/capabilities")
     def capabilities():
         return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "databaseBackup", "inspectionStatus"])
+                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "measurementCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "databaseBackup", "inspectionStatus"])
 
     @app.get("/garage-api/export")
     def export_data():
@@ -224,6 +224,18 @@ def create_app(config=None):
     def add_reading(vehicle_id):
         return jsonify(store.add_odometer(vehicle_id, payload())), 201
 
+    @app.get("/garage-api/vehicles/<int:vehicle_id>/odometer/<int:reading_id>")
+    def get_reading(vehicle_id, reading_id):
+        return jsonify(store.get_odometer_reading(vehicle_id, reading_id))
+
+    @app.put("/garage-api/vehicles/<int:vehicle_id>/odometer/<int:reading_id>")
+    def correct_reading(vehicle_id, reading_id):
+        return jsonify(store.correct_odometer_reading(vehicle_id, reading_id, payload()))
+
+    @app.put("/garage-api/vehicles/<int:vehicle_id>/odometer/<int:reading_id>/provenance")
+    def confirm_reading_provenance(vehicle_id, reading_id):
+        return jsonify(store.confirm_odometer_provenance(vehicle_id, reading_id, payload()))
+
     @app.get("/garage-api/vehicles/<int:vehicle_id>/records")
     def records(vehicle_id):
         return jsonify(records=store.get_summary(vehicle_id)["services"])
@@ -235,6 +247,14 @@ def create_app(config=None):
     @app.get("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>")
     def record(vehicle_id, record_id):
         return jsonify(store.get_record(vehicle_id, record_id))
+
+    @app.get("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>/measurement")
+    def get_record_measurement(vehicle_id, record_id):
+        return jsonify(store.get_record_measurement(vehicle_id, record_id))
+
+    @app.put("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>/measurement")
+    def correct_record_measurement(vehicle_id, record_id):
+        return jsonify(store.correct_record_measurement(vehicle_id, record_id, payload()))
 
     @app.put("/garage-api/vehicles/<int:vehicle_id>/records/<int:record_id>")
     def correct_record(vehicle_id, record_id):

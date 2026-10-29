@@ -20,12 +20,12 @@ The version above is a placeholder example only. Before a real release, replace 
 
 ## Existing standalone installation
 
-The source-build Compose target remains available. To switch image sources while preserving an installation, use both Compose files with the same project name so `garage_data` remains the same volume. Before updating, make an independent backup and rehearse a restore against an isolated copy. If the database is schema 1, 2 or 3, perform the explicit checked-backup schema-4 upgrade before normal operation. With a future published image selected in `GARAGE_IMAGE`, the upgrade command would use the release image while the existing project volume is mounted:
+The source-build Compose target remains available. To switch image sources while preserving an installation, use both Compose files with the same project name so `garage_data` remains the same volume. Before updating, make an independent backup and rehearse a restore against an isolated copy. If the database is schema 1–4, perform the explicit checked-backup schema-5 upgrade before normal operation. With a future published image selected in `GARAGE_IMAGE`, the upgrade command would use the release image while the existing project volume is mounted:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.release.yaml stop garage
 docker compose --env-file .env.example -f deploy/compose.release.yaml pull
-docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema4-upgrade-UNIQUE.sqlite3
+docker compose --env-file .env.example -f deploy/compose.release.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema5-upgrade-UNIQUE.sqlite3
 ```
 
 Copy the checked pre-upgrade backup to independent protected storage before restarting the service. Only after that copy has been verified should you restart the service:
@@ -36,7 +36,7 @@ docker compose --env-file .env.example -f deploy/compose.release.yaml up -d
 
 If the installation uses a custom Compose project name, pass that same `-p` value to every command so the existing `garage_data` volume remains selected. Never rerun `init-db` for an existing volume.
 
-An upgrade changes the database in place only after writing and checking the designated pre-upgrade backup. Schema-3 binaries reject schema 4: do not start an older image against the upgraded database. A rollback needs a separate restored copy of the pre-upgrade database with a compatible image; keep the upgraded database untouched until recovery is understood. These instructions do not import LubeLogger data or change proxy/access configuration.
+An upgrade changes the database in place only after writing and checking the designated pre-upgrade backup. Schema-3/4 binaries reject schema 5: do not start an older image against the upgraded database. A rollback needs a separate restored copy of the pre-upgrade database with a compatible image; keep the upgraded database untouched until recovery is understood. These instructions do not import LubeLogger data or change proxy/access configuration. The production-data migration remains separate and has not been approved or performed as part of this feature work.
 
 ## Prepared publishing workflow
 

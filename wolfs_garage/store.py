@@ -22,11 +22,12 @@ from zoneinfo import ZoneInfo
 from . import __version__
 
 
-SCHEMA = 4
+SCHEMA = 5
 UNITS = {"km", "mi", "h"}
 READINESS = {"ready", "not_ready", "unknown"}
 SEVERITIES = {"observation", "repair", "critical"}
 LIFECYCLES = {"open", "observed"}
+READING_PROVENANCE = {"legacy_unknown", "manual", "record"}
 
 
 class ValidationError(ValueError):
@@ -134,6 +135,13 @@ def _distance(value):
     return format(number.normalize(), "f")
 
 
+def _distance_string(value):
+    """Parse a correction value from plain decimal text, never JSON float."""
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,3})?", value):
+        raise ValidationError("Odometer correction must be a plain decimal string with at most three fractional digits.")
+    return _distance(value)
+
+
 def _number(value):
     if value is None:
         return None
@@ -194,7 +202,7 @@ class Store:
                 PRAGMA synchronous=FULL;
                 BEGIN IMMEDIATE;
                 CREATE TABLE meta(schema INTEGER NOT NULL);
-                INSERT INTO meta VALUES(4);
+                INSERT INTO meta VALUES(5);
                 CREATE TABLE vehicles(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     make TEXT NOT NULL, model TEXT NOT NULL, name TEXT NOT NULL,
@@ -204,10 +212,6 @@ class Store:
                 CREATE TABLE states(
                     vehicle_id INTEGER PRIMARY KEY REFERENCES vehicles(id),
                     readiness TEXT NOT NULL, issues TEXT NOT NULL, revision INTEGER NOT NULL);
-                CREATE TABLE odometer_readings(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
-                    day TEXT NOT NULL, value TEXT NOT NULL, unit TEXT NOT NULL, note TEXT NOT NULL);
                 CREATE TABLE records(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
@@ -215,6 +219,7 @@ class Store:
                     odometer TEXT, unit TEXT NOT NULL, cost TEXT, currency TEXT,
                     document_url TEXT, closed_issue_id TEXT,
                     revision INTEGER NOT NULL DEFAULT 1);
+                CREATE UNIQUE INDEX records_id_vehicle_unique ON records(id,vehicle_id);
                 CREATE TABLE commands(
                     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
                     action TEXT NOT NULL, command_id TEXT NOT NULL,
@@ -225,6 +230,17 @@ class Store:
                     vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
                     action TEXT NOT NULL, occurred_at TEXT NOT NULL,
                     before_json TEXT NOT NULL, after_json TEXT NOT NULL);
+                CREATE TABLE odometer_readings(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+                    day TEXT NOT NULL, value TEXT NOT NULL, unit TEXT NOT NULL, note TEXT NOT NULL,
+                    revision INTEGER NOT NULL DEFAULT 1 CHECK(typeof(revision)='integer' AND revision>=1),
+                    provenance TEXT NOT NULL CHECK(provenance IN ('legacy_unknown','manual','record')),
+                    source_record_id INTEGER,
+                    CHECK((provenance='record' AND source_record_id IS NOT NULL) OR
+                          (provenance IN ('legacy_unknown','manual') AND source_record_id IS NULL)),
+                    FOREIGN KEY(source_record_id,vehicle_id) REFERENCES records(id,vehicle_id));
+                CREATE UNIQUE INDEX odometer_source_record_unique ON odometer_readings(source_record_id) WHERE source_record_id IS NOT NULL;
                 CREATE TRIGGER history_no_update BEFORE UPDATE ON history
                     BEGIN SELECT RAISE(ABORT, 'history is append-only'); END;
                 CREATE TRIGGER history_no_delete BEFORE DELETE ON history
@@ -240,7 +256,7 @@ class Store:
             rows = db.execute("SELECT schema FROM meta").fetchall()
         except sqlite3.Error as exc:
             raise sqlite3.DatabaseError("Unsupported standalone schema.") from exc
-        if len(rows) != 1 or rows[0][0] not in (1, 2, 3, 4):
+        if len(rows) != 1 or rows[0][0] not in (1, 2, 3, 4, 5):
             raise sqlite3.DatabaseError("Unsupported standalone schema.")
         return rows[0][0]
 
@@ -251,7 +267,7 @@ class Store:
         if db.execute("PRAGMA foreign_key_check").fetchall():
             raise sqlite3.DatabaseError("Backup foreign key check failed.")
         schema = Store._schema(db)
-        if schema not in (1, 2, 3, 4):
+        if schema not in (1, 2, 3, 4, 5):
             raise sqlite3.DatabaseError("Backup schema is unsupported.")
         return schema
 
@@ -261,9 +277,10 @@ class Store:
         expected_columns = {
             "meta": ["schema"],
             "vehicles": ["id", "make", "model", "name", "year", "license_plate",
-                         "vehicle_type", "unit", "revision"] + (["inspection_due_month"] if schema == 4 else []),
+                         "vehicle_type", "unit", "revision"] + (["inspection_due_month"] if schema >= 4 else []),
             "states": ["vehicle_id", "readiness", "issues", "revision"],
-            "odometer_readings": ["id", "vehicle_id", "day", "value", "unit", "note"],
+            "odometer_readings": ["id", "vehicle_id", "day", "value", "unit", "note"] +
+                                 (["revision", "provenance", "source_record_id"] if schema == 5 else []),
             "records": ["id", "vehicle_id", "description", "kind", "day", "odometer", "unit",
                         "cost", "currency", "document_url", "closed_issue_id"] + ([] if schema == 1 else ["revision"]),
             "commands": ["vehicle_id", "action", "command_id", "payload_hash", "response"],
@@ -288,6 +305,11 @@ class Store:
             "history": {("vehicle_id", "vehicles", "id")},
             "meta": set(), "vehicles": set(),
         }
+        if schema == 5:
+            expected_foreign_keys["odometer_readings"].update({
+                ("source_record_id", "records", "id"),
+                ("vehicle_id", "records", "vehicle_id"),
+            })
         for table, expected in expected_foreign_keys.items():
             actual = {(row[3], row[2], row[4]) for row in db.execute(f'PRAGMA foreign_key_list("{table}")')}
             if actual != expected:
@@ -297,6 +319,11 @@ class Store:
             "odometer_vehicle_date": ("odometer_readings", ["vehicle_id", "day", "id"]),
             "records_vehicle_date": ("records", ["vehicle_id", "day", "id"]),
         }
+        if schema == 5:
+            expected_indexes.update({
+                "records_id_vehicle_unique": ("records", ["id", "vehicle_id"]),
+                "odometer_source_record_unique": ("odometer_readings", ["source_record_id"]),
+            })
         indexes = {row[0]: row[1] for row in db.execute(
             "SELECT name, tbl_name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'")}
         if indexes != {name: table for name, (table, _) in expected_indexes.items()}:
@@ -304,6 +331,15 @@ class Store:
         for name, (table, columns) in expected_indexes.items():
             actual = [row[2] for row in db.execute(f'PRAGMA index_info("{name}")')]
             if actual != columns:
+                raise sqlite3.DatabaseError("Backup index layout is unsupported.")
+        if schema == 5:
+            index_properties = {}
+            for table in ("records", "odometer_readings"):
+                for row in db.execute(f'PRAGMA index_list("{table}")'):
+                    if not row[1].startswith("sqlite_"):
+                        index_properties[row[1]] = (row[2], row[4])
+            if (index_properties.get("records_id_vehicle_unique") != (1, 0)
+                    or index_properties.get("odometer_source_record_unique") != (1, 1)):
                 raise sqlite3.DatabaseError("Backup index layout is unsupported.")
 
         expected_triggers = {"history_no_update": "before update on history",
@@ -314,6 +350,29 @@ class Store:
             raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
         if any(fragment not in triggers[name] for name, fragment in expected_triggers.items()):
             raise sqlite3.DatabaseError("Backup trigger layout is unsupported.")
+        if schema == 5:
+            table_sql = db.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='odometer_readings'").fetchone()[0]
+            normalized = " ".join(table_sql.lower().split())
+            if ("check(typeof(revision)='integer' and revision>=1)" not in normalized
+                    or "check(provenance in ('legacy_unknown','manual','record'))" not in normalized
+                    or "check((provenance='record' and source_record_id is not null)" not in normalized
+                    or "foreign key(source_record_id,vehicle_id) references records(id,vehicle_id)" not in normalized):
+                raise sqlite3.DatabaseError("Backup reading provenance constraints are unsupported.")
+            invalid_reading = db.execute("""SELECT 1
+                FROM odometer_readings AS reading
+                LEFT JOIN records AS record
+                  ON record.id=reading.source_record_id AND record.vehicle_id=reading.vehicle_id
+                WHERE typeof(reading.revision)!='integer' OR reading.revision<1
+                   OR reading.provenance IS NULL
+                   OR reading.provenance NOT IN ('legacy_unknown','manual','record')
+                   OR (reading.provenance='record' AND
+                       (reading.source_record_id IS NULL OR record.id IS NULL OR record.odometer IS NULL
+                        OR reading.day<>record.day OR reading.value<>record.odometer OR reading.unit<>record.unit))
+                   OR (reading.provenance IN ('legacy_unknown','manual') AND reading.source_record_id IS NOT NULL)
+                LIMIT 1""").fetchone()
+            if invalid_reading is not None:
+                raise sqlite3.DatabaseError("Backup contains inconsistent record-reading provenance.")
         return schema
 
     @staticmethod
@@ -334,9 +393,41 @@ class Store:
                 pass
             raise
 
-    def upgrade(self, backup_destination):
-        """Explicitly upgrade schema 1, 2, or 3 after a checked full backup.
+    @staticmethod
+    def _upgrade_readings_to_schema5(db):
+        old_sequence = db.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='odometer_readings'").fetchone()
+        old_sequence = int(old_sequence[0]) if old_sequence else 0
+        db.execute("CREATE UNIQUE INDEX records_id_vehicle_unique ON records(id,vehicle_id)")
+        db.execute("""CREATE TABLE odometer_readings_v5(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+            day TEXT NOT NULL, value TEXT NOT NULL, unit TEXT NOT NULL, note TEXT NOT NULL,
+            revision INTEGER NOT NULL DEFAULT 1 CHECK(typeof(revision)='integer' AND revision>=1),
+            provenance TEXT NOT NULL CHECK(provenance IN ('legacy_unknown','manual','record')),
+            source_record_id INTEGER,
+            CHECK((provenance='record' AND source_record_id IS NOT NULL) OR
+                  (provenance IN ('legacy_unknown','manual') AND source_record_id IS NULL)),
+            FOREIGN KEY(source_record_id,vehicle_id) REFERENCES records(id,vehicle_id))""")
+        db.execute("""INSERT INTO odometer_readings_v5
+            (id,vehicle_id,day,value,unit,note,revision,provenance,source_record_id)
+            SELECT id,vehicle_id,day,value,unit,note,1,'legacy_unknown',NULL
+            FROM odometer_readings ORDER BY id""")
+        db.execute("DROP TABLE odometer_readings")
+        db.execute("ALTER TABLE odometer_readings_v5 RENAME TO odometer_readings")
+        db.execute("CREATE INDEX odometer_vehicle_date ON odometer_readings(vehicle_id,day,id)")
+        db.execute("CREATE UNIQUE INDEX odometer_source_record_unique ON odometer_readings(source_record_id) WHERE source_record_id IS NOT NULL")
+        sequence_row = db.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='odometer_readings'").fetchone()
+        sequence = int(sequence_row[0]) if sequence_row else 0
+        if sequence < old_sequence:
+            if sequence_row is not None:
+                db.execute("UPDATE sqlite_sequence SET seq=? WHERE name='odometer_readings'", (old_sequence,))
+            else:
+                db.execute("INSERT INTO sqlite_sequence(name,seq) VALUES('odometer_readings',?)", (old_sequence,))
 
+    def upgrade(self, backup_destination):
+        """Explicitly upgrade schema 1–4 after a checked full backup.
         The reserved migration lock prevents writers. A separate read connection
         supplies the backup snapshot, avoiding sqlite3.Connection.backup() from
         a connection holding its own write transaction.
@@ -346,14 +437,14 @@ class Store:
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA busy_timeout=5000")
             schema = self._schema(db)
-            if schema == 4:
+            if schema == 5:
                 return False
             db.execute("BEGIN IMMEDIATE")
             try:
                 # Recheck under the write reservation in case another operator
                 # completed the upgrade between the initial read and lock.
                 schema = self._schema(db)
-                if schema == 4:
+                if schema == 5:
                     db.execute("ROLLBACK")
                     return False
                 reader_uri = self.path.resolve().as_uri() + "?mode=ro"
@@ -361,8 +452,10 @@ class Store:
                     self._new_backup(reader, backup_destination)
                 if schema == 1:
                     db.execute("ALTER TABLE records ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
-                db.execute("ALTER TABLE vehicles ADD COLUMN inspection_due_month TEXT")
-                db.execute("UPDATE meta SET schema=4")
+                if schema <= 3:
+                    db.execute("ALTER TABLE vehicles ADD COLUMN inspection_due_month TEXT")
+                self._upgrade_readings_to_schema5(db)
+                db.execute("UPDATE meta SET schema=5")
                 if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise sqlite3.DatabaseError("Integrity check failed after upgrade.")
                 if db.execute("PRAGMA foreign_key_check").fetchall():
@@ -669,8 +762,11 @@ class Store:
                 return replay
             if payload["unit"] != vehicle["odometerUnit"]:
                 raise Conflict("Odometer unit does not match vehicle.")
-            cursor = db.execute("INSERT INTO odometer_readings(vehicle_id,day,value,unit,note) VALUES(?,?,?,?,?)", (vehicle_id, day, value, payload["unit"], note))
-            result = {"id": cursor.lastrowid, "date": day, "odometer": _number(value), "unit": payload["unit"], "note": note}
+            cursor = db.execute("""INSERT INTO odometer_readings
+                (vehicle_id,day,value,unit,note,revision,provenance,source_record_id)
+                VALUES(?,?,?,?,?,1,'manual',NULL)""", (vehicle_id, day, value, payload["unit"], note))
+            result = self._reading(db.execute(
+                "SELECT * FROM odometer_readings WHERE id=?", (cursor.lastrowid,)).fetchone())
             self._audit(db, vehicle_id, "odometer.created", None, result)
             self._remember(db, vehicle_id, "odometer", command_id, digest, result)
             return result
@@ -679,8 +775,168 @@ class Store:
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             self._vehicle(db, vehicle_id)
-            return [{"id": r["id"], "date": r["day"], "odometer": _number(r["value"]), "unit": r["unit"], "note": r["note"]}
-                    for r in db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC", (vehicle_id,))]
+            return [self._reading(r) for r in db.execute(
+                "SELECT * FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC", (vehicle_id,))]
+
+    @staticmethod
+    def _current_reading(db, vehicle_id):
+        row = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? ORDER BY day DESC,id DESC LIMIT 1",
+                         (vehicle_id,)).fetchone()
+        return Store._reading(row) if row is not None else None
+
+    @staticmethod
+    def _reading_revision(value):
+        if value is None:
+            return None
+        return _revision(value)
+
+    @staticmethod
+    def _correction_reason(value):
+        return _text(value, "correctionReason", 1600, required=True, multiline=True)
+
+    @staticmethod
+    def _corrected_value(value):
+        return None if value is None else _distance_string(value)
+
+    def get_odometer_reading(self, vehicle_id, reading_id):
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            self._vehicle(db, vehicle_id)
+            row = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? AND id=?",
+                             (vehicle_id, reading_id)).fetchone()
+            if row is None:
+                raise NotFound("Odometer reading not found.")
+            return {"reading": self._reading(row)}
+
+    def _manual_reading_values(self, payload):
+        allowed = {"revision", "date", "odometer", "note", "commandId", "correctionReason"}
+        _fields(payload, allowed, allowed)
+        return {
+            "revision": _revision(payload["revision"]),
+            "date": _day(payload["date"]),
+            "odometer": _distance_string(payload["odometer"]),
+            "note": _text(payload["note"], "note", 1600, multiline=True),
+            "commandId": _command(payload["commandId"]),
+            "correctionReason": self._correction_reason(payload["correctionReason"]),
+        }
+
+    def correct_odometer_reading(self, vehicle_id, reading_id, payload):
+        values = self._manual_reading_values(payload)
+        with self._transaction() as db:
+            self._vehicle(db, vehicle_id)
+            old_row = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? AND id=?",
+                                 (vehicle_id, reading_id)).fetchone()
+            if old_row is None:
+                raise NotFound("Odometer reading not found.")
+            action = f"odometer.correct:{reading_id}"
+            digest, replay = self._replay(db, vehicle_id, action, values["commandId"], payload)
+            if replay is not None:
+                return replay
+            if old_row["provenance"] == "record":
+                raise Conflict("This reading belongs to a completed record; correct it through that record.")
+            if old_row["provenance"] == "legacy_unknown":
+                raise Conflict("Confirm this legacy reading's provenance before correcting it.")
+            if old_row["revision"] != values["revision"]:
+                raise Conflict("Odometer reading revision changed.")
+            if (old_row["day"] == values["date"] and old_row["value"] == values["odometer"]
+                    and old_row["note"] == values["note"]):
+                raise ValidationError("Correction must change at least one reading value.")
+            if old_row["revision"] >= 2147483646:
+                raise Conflict("Odometer reading revision cannot be advanced.")
+            current_before = self._current_reading(db, vehicle_id)
+            before = self._reading(old_row)
+            db.execute("""UPDATE odometer_readings SET day=?,value=?,note=?,revision=revision+1
+                WHERE vehicle_id=? AND id=?""",
+                (values["date"], values["odometer"], values["note"], vehicle_id, reading_id))
+            updated = self._reading(db.execute("SELECT * FROM odometer_readings WHERE id=?", (reading_id,)).fetchone())
+            current_after = self._current_reading(db, vehicle_id)
+            self._audit(db, vehicle_id, "odometer.corrected", {"reading": before},
+                        {"reading": updated, "correctionReason": values["correctionReason"]})
+            response = {"reading": updated, "currentReadingBefore": current_before,
+                        "currentReadingAfter": current_after}
+            self._remember(db, vehicle_id, action, values["commandId"], digest, response)
+            return response
+
+    def _provenance_values(self, payload):
+        allowed = {"revision", "commandId", "provenance", "sourceRecordId", "recordRevision", "correctionReason"}
+        _fields(payload, allowed, allowed)
+        provenance = payload["provenance"]
+        if not isinstance(provenance, str) or provenance not in {"manual", "record"}:
+            raise ValidationError("Provenance must be manual or record.")
+        source_id = payload["sourceRecordId"]
+        record_revision = payload["recordRevision"]
+        if provenance == "manual":
+            if source_id is not None or record_revision is not None:
+                raise ValidationError("Manual provenance cannot include a source record.")
+        else:
+            if type(source_id) is not int or not 1 <= source_id <= 9223372036854775807:
+                raise ValidationError("Record provenance requires a source record ID.")
+            record_revision = _revision(record_revision)
+        return {"revision": _revision(payload["revision"]), "commandId": _command(payload["commandId"]),
+                "provenance": provenance, "sourceRecordId": source_id,
+                "recordRevision": record_revision,
+                "correctionReason": self._correction_reason(payload["correctionReason"])}
+
+    def confirm_odometer_provenance(self, vehicle_id, reading_id, payload):
+        values = self._provenance_values(payload)
+        with self._transaction() as db:
+            self._vehicle(db, vehicle_id)
+            old_row = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? AND id=?",
+                                 (vehicle_id, reading_id)).fetchone()
+            if old_row is None:
+                raise NotFound("Odometer reading not found.")
+            action = f"odometer.provenance:{reading_id}"
+            digest, replay = self._replay(db, vehicle_id, action, values["commandId"], payload)
+            if replay is not None:
+                return replay
+            if old_row["revision"] != values["revision"]:
+                raise Conflict("Odometer reading revision changed.")
+            if old_row["provenance"] != "legacy_unknown" or old_row["source_record_id"] is not None:
+                raise Conflict("Only unresolved legacy readings can have provenance confirmed.")
+            if old_row["revision"] >= 2147483646:
+                raise Conflict("Odometer reading revision cannot be advanced.")
+            record_before = None
+            record_after = None
+            record_before_row = None
+            if values["provenance"] == "record":
+                record_before_row = db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?",
+                                               (vehicle_id, values["sourceRecordId"])).fetchone()
+                if record_before_row is None:
+                    raise NotFound("Source record not found for this vehicle.")
+                if record_before_row["revision"] != values["recordRevision"]:
+                    raise Conflict("Source record revision changed.")
+                if record_before_row["revision"] >= 2147483646:
+                    raise Conflict("Source record revision cannot be advanced.")
+                if (record_before_row["odometer"] is None
+                        or record_before_row["day"] != old_row["day"]
+                        or record_before_row["odometer"] != old_row["value"]
+                        or record_before_row["unit"] != old_row["unit"]):
+                    raise Conflict("Selected record does not exactly match this reading's date, value, and unit.")
+                existing = db.execute("SELECT id FROM odometer_readings WHERE source_record_id=?",
+                                      (values["sourceRecordId"],)).fetchone()
+                if existing is not None:
+                    raise Conflict("Selected record already has a linked reading.")
+                record_before = self._record(record_before_row)
+            reading_before = self._reading(old_row)
+            db.execute("""UPDATE odometer_readings SET provenance=?,source_record_id=?,revision=revision+1
+                WHERE vehicle_id=? AND id=?""",
+                (values["provenance"], values["sourceRecordId"], vehicle_id, reading_id))
+            if record_before_row is not None:
+                db.execute("UPDATE records SET revision=revision+1 WHERE vehicle_id=? AND id=?",
+                           (vehicle_id, values["sourceRecordId"]))
+                record_after = self._record(db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?",
+                                                       (vehicle_id, values["sourceRecordId"])).fetchone())
+            reading_after = self._reading(db.execute("SELECT * FROM odometer_readings WHERE id=?",
+                                                      (reading_id,)).fetchone())
+            after = {"reading": reading_after, "record": record_after,
+                     "correctionReason": values["correctionReason"]}
+            before = {"reading": reading_before}
+            if record_before is not None:
+                before["record"] = record_before
+            self._audit(db, vehicle_id, "odometer.provenance-confirmed", before, after)
+            response = {"reading": reading_after, "record": record_after}
+            self._remember(db, vehicle_id, action, values["commandId"], digest, response)
+            return response
 
     @staticmethod
     def _page_cursor(cursor, *, vehicle_id, resource, from_date, to_date, kind, limit, sequence):
@@ -772,9 +1028,15 @@ class Store:
                 next_cursor = _encode_page_cursor({"v": 1, "vehicle": vehicle_id, "resource": "odometer",
                     "from": from_date, "to": to_date, "kind": None, "limit": limit,
                     "day": last["day"], "id": last["id"], "sequence": sequence})
-            return {"readings": [{"id": row["id"], "date": row["day"], "odometer": _number(row["value"]),
-                                  "unit": row["unit"], "note": row["note"]} for row in rows],
+            return {"readings": [self._reading(row) for row in rows],
                     "nextCursor": next_cursor}
+
+    @staticmethod
+    def _reading(row):
+        return {"id": row["id"], "date": row["day"], "odometer": _number(row["value"]),
+                "unit": row["unit"], "note": row["note"], "odometerExact": row["value"],
+                "revision": row["revision"], "provenance": row["provenance"],
+                "sourceRecordId": row["source_record_id"]}
 
     @staticmethod
     def _record(row):
@@ -791,6 +1053,112 @@ class Store:
             if row is None:
                 raise NotFound("Record not found.")
             return self._record(row)
+
+    @staticmethod
+    def _validate_record_reading_link(record_row, reading_row):
+        if (reading_row["provenance"] != "record"
+                or reading_row["source_record_id"] != record_row["id"]
+                or reading_row["vehicle_id"] != record_row["vehicle_id"]
+                or record_row["odometer"] is None
+                or reading_row["day"] != record_row["day"]
+                or reading_row["value"] != record_row["odometer"]
+                or reading_row["unit"] != record_row["unit"]):
+            raise sqlite3.DatabaseError("Linked record and odometer facts do not match.")
+
+    def get_record_measurement(self, vehicle_id, record_id):
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            self._vehicle(db, vehicle_id)
+            row = db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?", (vehicle_id, record_id)).fetchone()
+            if row is None:
+                raise NotFound("Record not found.")
+            linked = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? AND source_record_id=?",
+                                (vehicle_id, record_id)).fetchone()
+            mode = "linked" if linked is not None else ("date_only" if row["odometer"] is None else "legacy_unresolved")
+            if linked is not None:
+                self._validate_record_reading_link(row, linked)
+            return {"record": self._record(row), "odometerExact": row["odometer"],
+                    "sourceReading": self._reading(linked) if linked is not None else None,
+                    "correctionMode": mode, "currentReading": self._current_reading(db, vehicle_id)}
+
+    @staticmethod
+    def _record_measurement_values(payload):
+        allowed = {"revision", "readingRevision", "date", "odometer", "commandId", "correctionReason"}
+        _fields(payload, allowed, allowed)
+        odometer = None if payload["odometer"] is None else _distance_string(payload["odometer"])
+        return {"revision": _revision(payload["revision"]),
+                "readingRevision": Store._reading_revision(payload["readingRevision"]),
+                "date": _day(payload["date"]), "odometer": odometer,
+                "commandId": _command(payload["commandId"]),
+                "correctionReason": Store._correction_reason(payload["correctionReason"])}
+
+    def correct_record_measurement(self, vehicle_id, record_id, payload):
+        values = self._record_measurement_values(payload)
+        with self._transaction() as db:
+            self._vehicle(db, vehicle_id)
+            old_row = db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?",
+                                 (vehicle_id, record_id)).fetchone()
+            if old_row is None:
+                raise NotFound("Record not found.")
+            action = f"record.measurement:{record_id}"
+            digest, replay = self._replay(db, vehicle_id, action, values["commandId"], payload)
+            if replay is not None:
+                return replay
+            if old_row["revision"] != values["revision"]:
+                raise Conflict("Record revision changed.")
+            linked = db.execute("SELECT * FROM odometer_readings WHERE vehicle_id=? AND source_record_id=?",
+                                (vehicle_id, record_id)).fetchone()
+            if linked is None:
+                if old_row["odometer"] is not None:
+                    raise Conflict("This legacy record has no verified source reading; its measurements cannot be corrected.")
+                if values["odometer"] is not None or values["readingRevision"] is not None:
+                    raise ValidationError("A date-only record must keep odometer and readingRevision null.")
+                if old_row["day"] == values["date"]:
+                    raise ValidationError("Correction must change the record date.")
+                if old_row["revision"] >= 2147483646:
+                    raise Conflict("Record revision cannot be advanced.")
+                current_before = self._current_reading(db, vehicle_id)
+                before_record = self._record(old_row)
+                db.execute("UPDATE records SET day=?,revision=revision+1 WHERE vehicle_id=? AND id=?",
+                           (values["date"], vehicle_id, record_id))
+                updated_record = self._record(db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?",
+                                                         (vehicle_id, record_id)).fetchone())
+                current_after = self._current_reading(db, vehicle_id)
+                before = {"record": before_record, "reading": None}
+                after = {"record": updated_record, "reading": None,
+                         "correctionReason": values["correctionReason"]}
+                response = {"record": updated_record, "reading": None,
+                            "currentReadingBefore": current_before, "currentReadingAfter": current_after}
+            else:
+                self._validate_record_reading_link(old_row, linked)
+                if values["readingRevision"] is None or values["odometer"] is None:
+                    raise ValidationError("A linked record correction requires the source reading revision and decimal value.")
+                if linked["revision"] != values["readingRevision"]:
+                    raise Conflict("Source reading revision changed.")
+                if old_row["revision"] >= 2147483646 or linked["revision"] >= 2147483646:
+                    raise Conflict("Record or reading revision cannot be advanced.")
+                if old_row["day"] == values["date"] and old_row["odometer"] == values["odometer"]:
+                    raise ValidationError("Correction must change the record date or odometer value.")
+                current_before = self._current_reading(db, vehicle_id)
+                before_record, before_reading = self._record(old_row), self._reading(linked)
+                db.execute("UPDATE records SET day=?,odometer=?,revision=revision+1 WHERE vehicle_id=? AND id=?",
+                           (values["date"], values["odometer"], vehicle_id, record_id))
+                db.execute("""UPDATE odometer_readings SET day=?,value=?,revision=revision+1
+                    WHERE vehicle_id=? AND id=?""",
+                    (values["date"], values["odometer"], vehicle_id, linked["id"]))
+                updated_record = self._record(db.execute("SELECT * FROM records WHERE vehicle_id=? AND id=?",
+                                                         (vehicle_id, record_id)).fetchone())
+                updated_reading = self._reading(db.execute("SELECT * FROM odometer_readings WHERE id=?",
+                                                           (linked["id"],)).fetchone())
+                current_after = self._current_reading(db, vehicle_id)
+                before = {"record": before_record, "reading": before_reading}
+                after = {"record": updated_record, "reading": updated_reading,
+                         "correctionReason": values["correctionReason"]}
+                response = {"record": updated_record, "reading": updated_reading,
+                            "currentReadingBefore": current_before, "currentReadingAfter": current_after}
+            self._audit(db, vehicle_id, "record.measurement-corrected", before, after)
+            self._remember(db, vehicle_id, action, values["commandId"], digest, response)
+            return response
 
     @staticmethod
     def _correction_values(payload):
@@ -899,7 +1267,10 @@ class Store:
             record_id = cursor.lastrowid
             record = self._record(db.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone())
             if odometer is not None:
-                db.execute("INSERT INTO odometer_readings(vehicle_id,day,value,unit,note) VALUES(?,?,?,?,?)", (vehicle_id, day, odometer, vehicle["odometerUnit"], f"Record {record_id}"))
+                db.execute("""INSERT INTO odometer_readings
+                    (vehicle_id,day,value,unit,note,revision,provenance,source_record_id)
+                    VALUES(?,?,?,?,?,1,'record',?)""",
+                    (vehicle_id, day, odometer, vehicle["odometerUnit"], f"Record {record_id}", record_id))
             self._audit(db, vehicle_id, "record.created", None, record)
             result = {"record": record, "status": after}
             self._remember(db, vehicle_id, "record", command_id, digest, result)
@@ -946,7 +1317,9 @@ class Store:
 
                 readings = [
                     {"id": row["id"], "vehicleId": row["vehicle_id"], "date": row["day"],
-                     "odometer": row["value"], "unit": row["unit"], "note": row["note"]}
+                     "odometer": row["value"], "unit": row["unit"], "note": row["note"],
+                     "revision": row["revision"], "provenance": row["provenance"],
+                     "sourceRecordId": row["source_record_id"]}
                     for row in db.execute("SELECT * FROM odometer_readings ORDER BY id")
                 ]
                 records = [
@@ -965,7 +1338,7 @@ class Store:
                     for row in db.execute("SELECT * FROM history ORDER BY sequence")
                 ]
                 result = {
-                    "format": "wolfs-garage-owner-export", "formatVersion": 2,
+                    "format": "wolfs-garage-owner-export", "formatVersion": 3,
                     "applicationVersion": __version__, "databaseSchema": SCHEMA,
                     "exportedAt": exported_at, "vehicles": vehicles, "statuses": statuses,
                     "odometerReadings": readings, "records": records, "history": history,

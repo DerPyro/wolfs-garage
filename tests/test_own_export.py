@@ -110,9 +110,9 @@ class OwnerExportApiTests(unittest.TestCase):
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         exported = json.loads(response.data)
         self.assertEqual(exported["format"], "wolfs-garage-owner-export")
-        self.assertEqual(exported["formatVersion"], 2)
+        self.assertEqual(exported["formatVersion"], 3)
         self.assertEqual(exported["applicationVersion"], APPLICATION_VERSION)
-        self.assertEqual(exported["databaseSchema"], 4)
+        self.assertEqual(exported["databaseSchema"], 5)
         timestamp = datetime.fromisoformat(exported["exportedAt"].replace("Z", "+00:00"))
         self.assertIsNotNone(timestamp.utcoffset())
         self.assertEqual(timestamp.utcoffset().total_seconds(), 0)
@@ -135,7 +135,8 @@ class OwnerExportApiTests(unittest.TestCase):
         self.assertFalse({"currentReading", "odometer", "status", "summary"} & set(exported["vehicles"][0]))
         self.assertTrue(all(set(row) == {"vehicleId", "readiness", "issues", "revision"}
                             for row in exported["statuses"]))
-        self.assertTrue(all(set(row) == {"id", "vehicleId", "date", "odometer", "unit", "note"}
+        self.assertTrue(all(set(row) == {"id", "vehicleId", "date", "odometer", "unit", "note",
+                                         "revision", "provenance", "sourceRecordId"}
                             for row in exported["odometerReadings"]))
         status_by_id = {row["vehicleId"]: row for row in exported["statuses"]}
         self.assertEqual(status_by_id[first["id"]]["readiness"], "not_ready")
@@ -144,6 +145,8 @@ class OwnerExportApiTests(unittest.TestCase):
 
         first_readings = [row for row in exported["odometerReadings"] if row["vehicleId"] == first["id"]]
         self.assertEqual([row["odometer"] for row in first_readings], ["12345.125", "12345.875"])
+        self.assertEqual([(row["revision"], row["provenance"], row["sourceRecordId"]) for row in first_readings],
+                         [(1, "record", 1), (1, "manual", None)])
         record = next(row for row in exported["records"] if row["vehicleId"] == first["id"])
         self.assertEqual(set(record), {"id", "vehicleId", "description", "kind", "date", "odometer",
                                        "odometerUnit", "cost", "currency", "documentUrl", "closedIssueId", "revision"})
@@ -172,7 +175,7 @@ class OwnerExportApiTests(unittest.TestCase):
         self.assertEqual({vehicle_id: self.send("GET", f"/garage-api/vehicles/{vehicle_id}/history").json
                           for vehicle_id in (first["id"], second["id"])}, before_history)
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
 
     def test_query_parameters_host_and_unavailable_database_fail_closed(self):
         self.fixture()
@@ -282,7 +285,7 @@ class OwnerExportFileTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.store.export_to_file(self.path)
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
 
     def test_partial_write_failure_removes_only_the_export_file_it_created(self):
         destination = Path(self.temp.name) / "partial-export.json"
@@ -300,7 +303,7 @@ class OwnerExportFileTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-m", "wolfs_garage", "export", str(destination)],
                                 env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(destination.read_text(encoding="utf-8"))["databaseSchema"], 4)
+        self.assertEqual(json.loads(destination.read_text(encoding="utf-8"))["databaseSchema"], 5)
         if os.name == "posix":
             self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
         before = self.path.read_bytes()
