@@ -1,5 +1,7 @@
 # Bounded record corrections: contract and acceptance plan
 
+This document records the original metadata-only correction stage and its schema-2 acceptance evidence. The separate schema-5 date/odometer correction workflow is now described in [measurement corrections](measurement-corrections.md); the historical tests and screenshots below are not schema-5 verification.
+
 ## Scope decision
 
 The first correction workflow applies to a completed service or repair record. It can replace only `description`, `kind`, `cost`, `currency`, and the optional HTTPS `documentUrl`. The user must give a nonblank correction reason (maximum 1600 characters). A successful correction increments the record revision and appends a `record.corrected` event with `{record: oldRecord}` in `before` and `{record: newRecord, correctionReason}` in `after`.

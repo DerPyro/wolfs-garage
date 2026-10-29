@@ -68,7 +68,8 @@ class HistoryPageTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in page1["readings"]], [c["id"], b["id"]])
         page2 = self.store.page_odometer(self.vehicle_id, limit=2, cursor=page1["nextCursor"])
         self.assertEqual([row["id"] for row in page2["readings"]], [a["id"]])
-        self.assertEqual(set(page1["readings"][0]), {"id", "date", "odometer", "unit", "note"})
+        self.assertEqual(set(page1["readings"][0]), {"id", "date", "odometer", "unit", "note",
+                                                     "odometerExact", "revision", "provenance", "sourceRecordId"})
 
     def test_cursor_rejects_mismatch_and_mutation_requires_restart(self):
         self.add_record("2026-01-01", "one")

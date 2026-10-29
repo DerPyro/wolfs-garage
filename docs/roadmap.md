@@ -11,8 +11,9 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Dated odometer readings and service/repair records with explicit currency and optional HTTPS document references.
 - [x] Atomic work-record creation and explicit issue closure; readable change history.
 - [x] Revision checks and idempotent reading/record submissions.
-- [x] Bounded completed-record corrections with a reason, revision check, retry handling and before/after history; date, odometer, unit and issue-closure changes remain out of scope.
-- [x] Explicit schema-1/2/3-to-4 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
+- [x] Bounded completed-record metadata corrections with a reason, revision check, retry handling and before/after history; measurement corrections use their separate linked schema-5 workflow.
+- [x] Safe date/odometer corrections with explicit reading provenance, revision checks, idempotent retries and atomic before/after history ([contract](planning/measurement-corrections.md)); local acceptance passed, while live schema migration remains pending separate authorization.
+- [x] Explicit schema-1/2/3/4-to-5 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
 - [x] Download a consistent full SQLite backup and restore it to a new validated database file; preserve command replay data and rehearse in isolation.
 - [x] Portable owner-data JSON export for inspection and transfer; full SQLite backup remains the restore format and JSON import is not supported.
 - [x] Record an inspection due month and display a Berlin-date status/readiness projection under the documented owner policy; unknown dates remain unknown.
@@ -23,7 +24,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 
 ## Next: complete the daily maintenance workflow
 
-- [ ] Implement a safe date/odometer correction workflow with explicit links to measurement history ([proposal](adr/0011-reading-provenance.md)).
+- [x] Correct linked work dates and odometers, manually entered readings and owner-confirmed legacy measurement provenance; preserve the latest-date/ID current-reading rule ([ADR 0011](adr/0011-reading-provenance.md), [contract](planning/measurement-corrections.md)).
 - [x] Browse complete odometer and maintenance history in date-sorted pages, with inclusive date filters, record-kind filtering, safe cursor restart after changes, and correction access on later record pages.
 - [x] Give existing open work optional due dates, user-assigned nullable severity and an `open`/`observed` lifecycle; show an active-work dashboard with Europe/Berlin date boundaries.
 - [x] Add per-issue **Bearbeiten** and **Erledigt** actions to vehicle detail. Completion drafts an existing issue into the explicit-save work form and atomically closes only that issue with the new record.
@@ -49,7 +50,7 @@ User decision — 2026-10-29: maintenance planning and reliable 1.0 operation ta
 
 ## Reliable 1.0 operation
 
-- [x] Explicit schema-1/2/3-to-4 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates.
+- [x] Explicit schema-1/2/3/4-to-5 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates. The reference-instance migration is not included in this feature work.
 - [x] Document the separate portable JSON export and complete SQLite backup/restore paths; test a synthetic isolated restore including retry state.
 - [ ] Establish an independent recurring off-host backup schedule and runbook for the chosen operator storage.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.

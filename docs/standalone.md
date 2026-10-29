@@ -54,7 +54,9 @@ To enter the HU month, select a vehicle, choose **Fahrzeug bearbeiten**, and use
 
 Document references are stored as URLs only; the app does not fetch or upload documents. Do not use them as a substitute for document access control.
 
-Completed records support a bounded correction: description, service/repair kind, cost, currency and the optional HTTPS reference can be replaced with a required reason. Each correction keeps the previous values in history. Date, odometer value and unit, and issue closure are fixed in this correction flow; correcting those facts remains open work. Vehicle creation has no retry `commandId`: if a create request times out with an unknown result, inspect the vehicle list before submitting it again to avoid duplicates.
+Completed records support two bounded correction flows. The older operation changes description, service/repair kind, cost, currency and optional HTTPS reference. A separate measurement operation changes a record date and, only when its source reading is linked, the exact odometer value; it requires both revisions, a reason and an idempotency key, and updates both rows plus audit history atomically. A record without an odometer can have its date corrected only. Manually entered readings have a separate editor. Vehicle creation has no retry `commandId`: if a create request times out with an unknown result, inspect the vehicle list before submitting it again to avoid duplicates.
+
+Schema 5 readings carry revision and provenance (`manual`, `record` or `legacy_unknown`). Older rows stay unresolved after upgrade; a note such as `Record 123`, matching dates or equal values never creates a guessed association. An owner can explicitly confirm an unresolved reading as manual, or link it to a selected same-vehicle record only when date, exact value and unit match. Until confirmed, a legacy record with an odometer cannot be measurement-corrected. The UI warns when a correction may change the current reading; that projection is latest date and then descending reading ID, not the greatest value. Unit conversion, issue closure and readiness changes are outside these correction flows. See [measurement correction and provenance](planning/measurement-corrections.md).
 
 Vehicle detail provides separate paginated views for completed records and odometer readings. Both support inclusive date filters; records can also be filtered by service or repair. Pages sort by date and stable ID descending. A continuation cursor is bound to its vehicle, resource, filters, limit and audit sequence. If that vehicle changes during paging, restart from the first page. These read routes do not alter application history or require a schema upgrade. The original unpaged API routes remain available for existing callers. See the [history browsing contract](planning/history-browsing.md).
 
@@ -66,23 +68,23 @@ The toolbar exposes two distinct downloads: a portable owner-data JSON export fo
 
 ## Explicit schema upgrade (standalone only)
 
-Fresh initialization creates schema version 4. The current application accepts schema 4; the backup command can read schemas 1–4. Existing schema-1, schema-2 and schema-3 standalone databases are upgraded only by an explicit command after an isolated restore rehearsal and an independent backup. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
+Fresh initialization creates schema version 5. The current application accepts schema 5; backup and restore support schemas 1–5. Existing schema-1, schema-2, schema-3 and schema-4 standalone databases are upgraded only by an explicit command after an isolated restore rehearsal and an independent backup. There is no automatic upgrade at application startup. This command is for Wolfs Garage's own standalone database, not for importing or replacing a LubeLogger database.
 
 Before upgrading, stop the Compose service and build the new application image. Run the upgrade once with a new, unused backup filename inside the persistent volume:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml stop garage
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml build garage
-docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema4-upgrade-UNIQUE.sqlite3
+docker compose --env-file .env.example -f deploy/compose.standalone.yaml run --rm --no-deps garage python -m wolfs_garage upgrade-db /var/lib/wolfs-garage/garage-before-schema5-upgrade-UNIQUE.sqlite3
 ```
 
-Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. Schema 1 also gains the record `revision` column; schemas 2 and 3 keep their existing record fields. All three older schemas gain the nullable inspection due-month column. Existing status JSON, command responses, readings, records and history are preserved. Copy the checked backup to independent protected storage before restarting the service:
+Choose a unique destination; the command refuses to overwrite an existing backup. It creates and checks a consistent backup before altering the database, then verifies the upgraded database. Schema 1 also gains the existing record `revision` column. Schemas 1–3 gain the nullable inspection due-month field; schema 4 already has it. Existing readings are rebuilt with `revision=1`, `legacy_unknown` provenance and no source link. Their IDs, exact values, dates, units and notes remain unchanged; no association is inferred from a `Record <id>` note, date or matching value. Existing records, commands, status JSON and audit history are preserved. Copy the checked backup to independent protected storage before restarting the service:
 
 ```sh
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml up -d
 ```
 
-If the command reports that the database is already schema 4, it is a no-op and does not write a backup. Keep the schema-1, schema-2 or schema-3 backup until the upgraded application data has been checked. Do not start an older schema-3 application image against the upgraded schema-4 file: older binaries reject newer schemas and may not understand the data contract. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure.
+If the command reports that the database is already schema 5, it is a no-op and does not write a backup. Keep the schema-1–4 backup until the upgraded application data has been checked. Older schema-3 or schema-4 application images reject schema 5. A downgrade requires restoring the pre-upgrade backup to a separate stopped instance using a compatible image; never point an older image at the upgraded database. No LubeLogger import or data replacement is part of this procedure. This procedure documents the command only; a live migration requires its separately approved, isolated recovery rehearsal.
 
 ## Backup and isolated restore
 
@@ -94,9 +96,9 @@ The CLI can also create a checked SQLite backup at a new, unused destination pat
 docker compose --env-file .env.example -f deploy/compose.standalone.yaml exec garage python -m wolfs_garage backup /var/lib/wolfs-garage/backup-UNIQUE.sqlite3
 ```
 
-Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1–4 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup. Both download paths preserve the database schema and include command replay state; neither performs an upgrade.
+Replace `backup-UNIQUE.sqlite3` with a fresh filename each time; the command refuses to overwrite a destination. The backup is integrity-checked and created with restrictive file permissions. It can read supported schema 1–5 databases without upgrading them. Copy it off the host to your chosen protected backup storage. A backup kept only in the same volume is not an independent backup. Both download paths preserve the database schema and include command replay state; neither performs an upgrade.
 
-Restore only into a new database file in a separate Compose project and volume. The command validates SQLite integrity, foreign keys and supported schema 1–4, then makes a restricted-permission copy. It rejects a corrupt or unsupported source, an existing or symlink destination, the source path itself and the configured live database. It does not upgrade the source or destination schema.
+Restore only into a new database file in a separate Compose project and volume. The command validates SQLite integrity, foreign keys and supported schema 1–5, then makes a restricted-permission copy. It rejects a corrupt or unsupported source, an existing or symlink destination, the source path itself and the configured live database. It does not upgrade the source or destination schema.
 
 Example restore rehearsal after placing the backup in a local `recovery/` directory:
 
@@ -109,7 +111,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   sh -c 'python -m wolfs_garage restore-backup /recovery/wolfs-garage-backup.sqlite3 /var/lib/wolfs-garage/garage.sqlite3 && chown 65532:65532 /var/lib/wolfs-garage/garage.sqlite3'
 ```
 
-The restored copy keeps the source schema. For a schema-4 backup, validate and start the isolated instance:
+The restored copy keeps the source schema. For a schema-5 backup, validate and start the isolated instance:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -126,7 +128,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   -f deploy/compose.standalone.yaml down
 ```
 
-The host backup remains private; do not make it world-readable to fit the container UID. The one-off restore helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to hand the new `0600` destination back to the application's UID 65532. Other app runs remain unprivileged. Use a unique project name so Compose creates a separate volume, and choose an unused loopback port for the temporary health check. The current runtime only opens schema 4. If the backup is schema 1, 2 or 3, do not run `check-db` or start the schema-4 app yet. In the isolated project, explicitly upgrade that restored copy and create a new checked backup first:
+The host backup remains private; do not make it world-readable to fit the container UID. The one-off restore helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to hand the new `0600` destination back to the application's UID 65532. Other app runs remain unprivileged. Use a unique project name so Compose creates a separate volume, and choose an unused loopback port for the temporary health check. The current runtime only opens schema 5. If the backup is schema 1, 2, 3 or 4, do not run `check-db` or start the schema-5 app yet. In the isolated project, explicitly upgrade that restored copy and create a new checked backup first:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -136,7 +138,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   /var/lib/wolfs-garage/schema-before-upgrade-UNIQUE.sqlite3
 ```
 
-Run that upgrade only for a schema-1/2/3 restore. Then use the schema-4 validation/start commands above. The operation upgrades only the new rehearsal volume; the original source backup and live volume remain untouched. Keep the restore private, verify representative vehicles, records, readings, history and retry behavior, then stop it with `down` (without `-v`). Rollback uses a separate database copy and an image compatible with that database schema. See the [backup/update workflow](planning/backup-update-workflow.md) for the update sequence.
+Run that upgrade only for a schema-1/2/3/4 restore. Then use the schema-5 validation/start commands above. The operation upgrades only the new rehearsal volume; the original source backup and live volume remain untouched. Keep the restore private, verify representative vehicles, records, readings (including unresolved legacy provenance), history and retry behavior, then stop it with `down` (without `-v`). Rollback uses a separate database copy and an image compatible with that database schema. See the [backup/update workflow](planning/backup-update-workflow.md) for the update sequence.
 
 ## Develop and run the focused tests
 

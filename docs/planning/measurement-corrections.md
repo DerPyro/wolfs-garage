@@ -1,0 +1,42 @@
+# Record date and odometer corrections
+
+**Status:** Schema-5 implementation and acceptance passed on 2026-10-29. CI/review and the separately authorized reference-data migration remain pending. No production database has been migrated.
+
+## Provenance model
+
+Schema 5 adds `revision`, `provenance` and nullable `source_record_id` to odometer readings. Provenance is `legacy_unknown`, `manual` or `record`; old readings migrate as `legacy_unknown` with no link. Existing notes such as `Record 123` are not evidence of a relationship. A record may source at most one reading. The composite foreign key proves the linked record belongs to the same vehicle; creation/resolution also checks matching date, exact stored value and unit.
+
+New manually entered readings are `manual`. Readings created by a completed-work record are `record` and link to that exact record in the same transaction. A record with no reading can have its date corrected without creating one. A legacy record with an odometer but no verified link stays unresolved until the owner explicitly classifies its old reading or confirms a matching record.
+
+## Correction operations
+
+- A linked record correction requires expected record and reading revisions, `commandId`, reason, date and exact odometer decimal string. Odometer values accept at most three fractional digits, including `0`; date and odometer update the record and linked reading atomically. Unit, vehicle, costs, work type, issue closure and readiness are not editable here.
+- A date-only record correction requires the expected record revision and an explicit null reading revision/odometer. It changes no odometer row.
+- A manual reading correction requires that reading's revision and changes only its date, exact value and note. Linked and unresolved readings cannot use this route.
+- Legacy provenance confirmation is explicit, reasoned and revision-checked. Choosing `manual` creates no link. Choosing `record` requires an owner-selected same-vehicle record whose date/value/unit already match; it changes provenance/link metadata only, not those facts.
+
+Every successful change is idempotent by command ID, increments the applicable revisions and appends before/after audit history. A replay returns the original response. A stale revision or conflicting link returns `409`; validation failures roll back all rows and audit changes. The UI warns that changing date/value may change the current reading projection. “Current” means latest date, then descending reading ID, not maximum odometer value. The transaction response supplies before/after projection values; the warning is not a forecast or legal/diagnostic judgment.
+
+The API advertises `measurementCorrections`. Readings expose `odometerExact`, `revision`, `provenance` and `sourceRecordId`; the existing numeric `odometer` field remains for compatibility. See the [API contract](../api.md).
+
+## Upgrade and data boundaries
+
+Explicit `upgrade-db` supports schemas 1–4 to 5 after a checked backup. Schema-1 record revision handling is reused; schema 4 inspection data is preserved. Migration preserves old reading IDs, exact values, notes, commands and history, sets old rows to `legacy_unknown`, and invents no links. Startup never migrates. Backup and isolated restore support schemas 1–5; restore itself never migrates. Same-schema automatic updates may use schema 3, 4 or 5; cross-schema updates fail closed.
+
+Portable owner export format 3 includes reading revision/provenance/source record ID and exact reading values. Historical audit JSON remains as originally recorded. JSON remains export-only; SQLite backup is the complete restore format. See [data export](../data-export.md), the [backup/update runbook](backup-update-workflow.md) and [ADR 0011](../adr/0011-reading-provenance.md).
+
+## Verification
+
+On 2026-10-29 the full Python suite passed (148 tests). Frozen synthetic schema-1/2/3/4 fixtures covered explicit backup upgrades, rollback, legacy-row preservation/no inferred links and sequence high-water; API tests covered linked/manual/date-only corrections, explicit legacy resolution, stale revisions, idempotency, exact decimals and audit history. Real Chromium passed both legacy-resolution flows, linked/manual edits, exact values, audit display, reload persistence and 320/390/768/1280 px. The browser used a synthetic schema-4 fixture explicitly upgraded to schema 5. Review the [linked correction form](../discovery/evidence/measurement-correction-form-mobile.png) and [measurement audit history](../discovery/evidence/measurement-correction-history-mobile.png). Production-data copy/recovery rehearsal and migration remain separate operator steps; no live database has been migrated.
+
+A separate private copy-only recovery rehearsal used a fresh schema-4 backup from the reference installation in isolated staging. The schema-5 candidate preserved all six existing data tables and `sqlite_sequence`; all old readings became `legacy_unknown`, unlinked, revision 1. The original backup hash stayed unchanged. A separate pre-upgrade restore opened successfully with the older schema-4 image; the candidate passed schema check, format-3 export and strict-backup validation. No source/live database was migrated and no deployment occurred; a live migration still requires its separate authorization.
+
+To recreate the browser fixture locally, choose new temporary paths each run:
+
+```sh
+PYTHONPATH=. .venv/bin/python tests/prepare_measurement_preview.py /tmp/wg-measurement-preview.sqlite3 /tmp/wg-measurement-before-upgrade.sqlite3
+GARAGE_DB=/tmp/wg-measurement-preview.sqlite3 GARAGE_PUBLIC_ORIGIN=http://127.0.0.1:18994 \
+  .venv/bin/gunicorn --bind 127.0.0.1:18994 'wolfs_garage.api:create_app()'
+```
+
+In the Node.js/Chromium acceptance environment, run `node tests/measurement_corrections_browser.cjs` against that loopback server. The script uses only the synthetic preview database; never point it at a personal or production database.

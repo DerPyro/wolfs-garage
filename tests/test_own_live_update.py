@@ -186,7 +186,7 @@ class LiveUpdaterTests(unittest.TestCase):
         self.assertNotIn("GARAGE_TOKEN", kwargs.get("env") or {})
         self.assertIs(kwargs["stdin"], updater.subprocess.DEVNULL)
 
-    def test_candidate_preflight_accepts_only_matching_schema3_or_schema4(self):
+    def test_candidate_preflight_accepts_only_matching_schema3_schema4_or_schema5(self):
         state = Path(self.config["GARAGE_UPDATE_STATE_DIR"])
         state.mkdir(mode=0o700)
 
@@ -201,18 +201,18 @@ class LiveUpdaterTests(unittest.TestCase):
             with mock.patch.object(updater, "_backup_from_volume", side_effect=make_backup), \
                  mock.patch.object(updater, "_image_schema", return_value=candidate_schema), \
                  mock.patch.object(updater, "_run") as run:
-                if original_schema == candidate_schema and original_schema in {3, 4}:
+                if original_schema == candidate_schema and original_schema in {3, 4, 5}:
                     self.assertEqual(updater._candidate_preflight("old:sha", "new:sha", self.config), candidate_schema)
                     self.assertEqual(run.call_count, 2, "same-schema candidate check remains isolated")
                 else:
-                    with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3 or 4"):
+                    with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3, 4, or 5"):
                         updater._candidate_preflight("old:sha", "new:sha", self.config)
                     run.assert_not_called()
 
-        for schema in (3, 4):
+        for schema in (3, 4, 5):
             with self.subTest(live=schema, candidate=schema):
                 preflight(schema, schema)
-        for live, candidate in ((3, 4), (4, 3), (2, 2)):
+        for live, candidate in ((3, 4), (4, 3), (4, 5), (5, 4), (2, 2)):
             with self.subTest(live=live, candidate=candidate):
                 preflight(live, candidate)
 
@@ -251,7 +251,7 @@ class LiveUpdaterTests(unittest.TestCase):
              mock.patch.object(updater, "_run"), \
              mock.patch.object(updater, "github_main_sha", return_value=SHA), \
              mock.patch.object(updater, "checks_succeeded", return_value=True):
-            with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3 or 4"):
+            with self.assertRaisesRegex(updater.UpdateError, "schemas must match supported schema 3, 4, or 5"):
                 updater._deploy_candidate("new:sha", "old:sha", SHA, self.config, self.config, candidate_schema=3)
         self.assertNotIn(("new:sha", ("up", "-d", "--no-deps", "garage_live")), compose_calls)
         self.assertIn(("old:sha", ("up", "-d", "--no-deps", "garage_live")), compose_calls)

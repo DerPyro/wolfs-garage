@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, measurementCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -206,6 +206,13 @@ function renderCards() {
   }
 }
 function closeConditionEditor(restoreFocus = false) { const opener = state.conditionActionOpener && $(state.conditionActionOpener); $("condition-form").hidden = true; $("condition-view").hidden = false; $("condition-edit").setAttribute("aria-expanded", "false"); $("condition-message").textContent = ""; state.editingRevision = null; state.conditionActionOpener = null; if (restoreFocus) (opener || $("condition-edit")).focus(); }
+const measurementEntryModes = new Set(["record-measurement-edit", "odometer-edit", "odometer-provenance-manual", "odometer-provenance-record"]);
+function hasMeasurementDraft() { return Boolean(state.entry && measurementEntryModes.has(state.entry.mode)); }
+function protectMeasurementDraft() {
+  if (!hasMeasurementDraft()) return false;
+  $("own-message").textContent = "Bitte schließe die Messkorrektur mit Speichern oder Abbrechen, bevor du eine andere Aktion startest. Dein Entwurf bleibt erhalten.";
+  return true;
+}
 function conditionIssueRow(issue, vehicleId) {
   const row = el("div", "condition-issue-row"); row.append(el("p", "condition-issue-text", display(issue.text)));
   const projection = currentWorkProjection(vehicleId, issue);
@@ -292,6 +299,7 @@ function appendIssueEditor(issue = {}) {
   row.append(remove); editor.append(row); $("issue-add").disabled = editor.children.length >= 20;
 }
 function openConditionEditor(focusIssueId = null, actionOpenerId = null) {
+  if (protectMeasurementDraft()) return;
   if (state.entry || state.saving || !$("condition-form").hidden) return;
   const vehicle = state.vehicles.find(v => String(v.id) === state.selected); const condition = vehicle && vehicle.status;
   if (!validCondition(condition) || state.saving) return;
@@ -335,6 +343,7 @@ function renderRecords(target, items, kind) {
     if (kind === "reminders" && display(item.status)) { const label = el("span", "record-value", display(item.status)); if (item.status === "Überfällig") label.classList.add("overdue"); row.append(label); }
     if (kind === "services" && item.cost !== null && item.cost !== undefined && item.cost !== "") { const value = cost(item.cost, item.currency); if (value) row.append(el("span", "record-value", value)); }
     if (kind === "services" && state.recordCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-edit"); edit.type = "button"; edit.textContent = "Beleg korrigieren"; edit.id = `record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id, edit.id)); row.append(edit); }
+    if (kind === "services" && state.measurementCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-measurement-edit"); edit.type = "button"; edit.textContent = "Datum / Stand korrigieren"; edit.id = `record-measurement-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Datum oder Stand korrigieren: ${title}`); edit.addEventListener("click", () => openRecordMeasurementCorrection(item.id, edit.id)); row.append(edit); }
     container.append(row);
   }
 }
@@ -408,6 +417,7 @@ function navigateToVehicleActions() {
   toolbar.focus({preventScroll:true});
 }
 async function selectVehicle(id, refreshProjection = true, options = {}) {
+  if (protectMeasurementDraft()) return;
   if (state.entry && state.entry.busy) return;
   if (state.entry) closeEntry();
   $("history-panel").hidden = true; $("history-toggle").setAttribute("aria-expanded", "false"); closeLogbook(false);
@@ -423,6 +433,7 @@ async function selectVehicle(id, refreshProjection = true, options = {}) {
   if (options.navigateToActions && generation === state.generation && state.selected === id && state.view === "garage") navigateToVehicleActions();
 }
 async function load(preferredId = null) {
+  if (protectMeasurementDraft()) return;
   const loadGeneration = ++state.loadGeneration; state.loading = true;
   $("refresh").disabled = true; setStatus("status", "Fahrzeuge werden geladen …"); $("vehicle-count").hidden = true; $("detail").hidden = true; $("detail-content").hidden = true; state.selected = null; state.vehicles = []; ++state.generation; $("vehicles").replaceChildren(); invalidateWork();
   try { const result = await getJson("/garage-api/vehicles"); if (loadGeneration !== state.loadGeneration) return; if (!Array.isArray(result.vehicles)) throw new Error("invalid vehicles"); state.vehicles = result.vehicles.filter((v) => v && v.id !== null && v.id !== undefined); $("vehicle-count").textContent = state.vehicles.length; $("vehicle-count").hidden = false;
@@ -488,6 +499,7 @@ function readonlyRecordFacts(record) {
   $("record-edit-readonly-closed-issue").textContent = record.closedIssueId === null || record.closedIssueId === undefined || record.closedIssueId === "" ? "Kein Punkt wurde mit diesem Beleg abgeschlossen." : "Punktabschluss bei der Erfassung bleibt unverändert.";
 }
 async function openRecordCorrection(recordId, openerId = `record-edit-${String(recordId)}`) {
+  if (protectMeasurementDraft()) return;
   if (!state.standalone || !state.recordCorrections || state.saving || state.entry && state.entry.busy) return;
   const vehicle = selectedVehicle(); if (!vehicle || recordId === null || recordId === undefined) return;
   if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { $("own-notice").textContent = "Zum Korrigieren benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
@@ -516,19 +528,197 @@ async function openRecordCorrection(recordId, openerId = `record-edit-${String(r
   }
   if (state.entry === entry && !entry.busy) { $("own-save").disabled = !entry.record; $("own-cancel").disabled = false; }
 }
+function canOpenMeasurementEditor() {
+  return state.standalone && state.measurementCorrections && !state.saving && !state.entry && $("own-panel").hidden && $("condition-form").hidden && Boolean(selectedVehicle());
+}
+function startMeasurementEntry(mode, objectId, openerId, title) {
+  if (!canOpenMeasurementEditor() || objectId === null || objectId === undefined) return null;
+  if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { $("own-notice").textContent = "Zum Korrigieren benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return null; }
+  const entry = {mode, vehicleId:String(state.selected), objectId:String(objectId), opener:openerId, returnFocusId:openerId, fromLogbook:String(openerId).startsWith("log-"), busy:true, commandId:globalThis.crypto.randomUUID(), generation:state.generation};
+  state.entry = entry; $("own-notice").textContent = ""; $("own-fields").replaceChildren(); $("own-message").textContent = "Messdaten werden geladen …";
+  $("own-title").textContent = title; $("own-hint").textContent = ""; $("own-save").disabled = true; $("own-cancel").disabled = true;
+  $("own-save").textContent = "Änderungen speichern"; $("own-cancel").textContent = "Abbrechen";
+  $("record-edit-readonly").hidden = false; $("measurement-projection-warning").hidden = true;
+  $("record-edit-readonly-date").textContent = "Datum wird geladen …"; $("record-edit-readonly-odometer").textContent = "Stand wird geladen …"; $("record-edit-readonly-closed-issue").textContent = "Herkunft wird geprüft …";
+  $("own-panel").hidden = false; return entry;
+}
+function measurementAlive(entry) { return state.entry === entry && state.selected === entry.vehicleId && state.generation === entry.generation; }
+function exactDecimalText(value) {
+  if (typeof value !== "string" || !/^\d+(?:\.\d{1,3})?$/.test(value)) return "";
+  return value;
+}
+function decimalMatchKey(value) {
+  const text = typeof value === "string" ? value : "";
+  if (!/^\d+(?:\.\d{1,3})?$/.test(text)) return null;
+  const [whole, fraction = ""] = text.split(".");
+  return `${whole.replace(/^0+(?=\d)/, "")}.${fraction.replace(/0+$/, "")}`.replace(/\.$/, "");
+}
+function distanceExact(value, unit) {
+  const exact = exactDecimalText(value);
+  const u = display(unit);
+  return exact ? `${exact} ${u || "Einheit unbekannt"}` : u ? `Stand nicht verfügbar (${u})` : "Stand nicht verfügbar";
+}
+function measurementSummary(reading) {
+  if (!reading) return "Kein aktueller Stand";
+  return [readableDate(reading.date), exactDecimalText(reading.odometerExact) || (reading.odometer === null || reading.odometer === undefined ? "" : display(reading.odometer)), display(reading.unit)].filter(Boolean).join(" · ") || "Kein aktueller Stand";
+}
+function currentReadingChanged(before, after) {
+  if (!before || !after) return before !== after;
+  return String(before.id) !== String(after.id) || before.date !== after.date || exactDecimalText(before.odometerExact) !== exactDecimalText(after.odometerExact) || before.unit !== after.unit;
+}
+function showMeasurementProjectionWarning() {
+  $("measurement-projection-warning").hidden = false;
+  $("measurement-projection-warning").textContent = "Die Änderung kann den aktuellen Fahrzeugstand verändern. Maßgeblich ist das neueste Datum; bei mehreren Einträgen am selben Tag gilt der zuletzt angelegte Stand.";
+}
+function setMeasurementReadonly(record, exact) {
+  $("record-edit-readonly-date").textContent = `Datum: ${readableDate(record.date) || "nicht verfügbar"}`;
+  $("record-edit-readonly-odometer").textContent = `Stand: ${record.odometer === null || record.odometer === undefined ? "nicht erfasst" : distanceExact(exact, record.odometerUnit)}`;
+  $("record-edit-readonly-closed-issue").textContent = record.closedIssueId === null || record.closedIssueId === undefined || record.closedIssueId === "" ? "Kein Punkt wurde mit diesem Beleg abgeschlossen." : "Punktabschluss bleibt unverändert.";
+}
+function setReadingReadonly(reading) {
+  $("record-edit-readonly-date").textContent = `Datum: ${readableDate(reading.date) || "nicht verfügbar"}`;
+  $("record-edit-readonly-odometer").textContent = `Stand: ${distanceExact(reading.odometerExact, reading.unit)}`;
+  const source = reading.provenance === "manual" ? "Unabhängig erfasster Kilometerstand." : reading.provenance === "record" ? "Mit einem Arbeitsbeleg verknüpfter Kilometerstand." : "Herkunft dieses älteren Kilometerstands ist noch nicht bestätigt.";
+  $("record-edit-readonly-closed-issue").textContent = source;
+}
+function measurementReasonField() {
+  const reason = entryField("Grund der Korrektur", "measurement-reason", "text"); reason.required = true; reason.maxLength = 1600; reason.setAttribute("aria-describedby", "own-hint");
+  return reason;
+}
+function provenanceConfirmation(text) {
+  const wrapper = el("div", "own-field provenance-confirm-field"), input = el("input"), label = el("label", "", text);
+  input.id = "entry-provenanceConfirm"; input.name = "provenanceConfirm"; input.type = "checkbox"; label.setAttribute("for", input.id); wrapper.append(input, label); $("own-fields").append(wrapper); return input;
+}
+function fillRecordMeasurementEditor(entry, measurement) {
+  const record = measurement.record;
+  if (!record || String(record.id) !== entry.objectId || !Number.isInteger(record.revision) || !["date_only", "linked"].includes(measurement.correctionMode)) throw new Error("Messdaten konnten nicht gelesen werden.");
+  if (measurement.correctionMode === "linked" && (!measurement.sourceReading || !Number.isInteger(measurement.sourceReading.revision) || !exactDecimalText(measurement.sourceReading.odometerExact))) throw new Error("Die verknüpfte Kilometerangabe ist nicht vollständig lesbar.");
+  entry.record = record; entry.revision = record.revision; entry.correctionMode = measurement.correctionMode; entry.sourceReading = measurement.sourceReading || null; entry.odometerExact = measurement.odometerExact;
+  setMeasurementReadonly(record, measurement.odometerExact);
+  const date = entryField("Korrigiertes Datum", "measurement-date", "date", record.date); date.required = true;
+  if (measurement.correctionMode === "linked") {
+    const odometer = entryField(`Korrigierter Stand (${display(record.odometerUnit) || "Einheit unbekannt"})`, "measurement-odometer", "text", measurement.sourceReading.odometerExact);
+    odometer.inputMode = "decimal"; odometer.maxLength = 24; odometer.required = true; odometer.setAttribute("aria-describedby", "own-hint measurement-projection-warning");
+  }
+  measurementReasonField(); showMeasurementProjectionWarning();
+  $("own-hint").textContent = measurement.correctionMode === "date_only" ? "Zu diesem Beleg wurde kein Kilometerstand erfasst. Du kannst nur das Datum ändern." : "Datum und verknüpfter Stand werden gemeinsam gespeichert. Gib den Stand mit höchstens drei Nachkommastellen ein.";
+  $("own-message").textContent = ""; $("own-save").disabled = false; $("own-cancel").disabled = false; entry.busy = false;
+  $("own-save").textContent = "Datum / Stand speichern"; $("own-title").textContent = "Datum / Stand korrigieren"; date.focus();
+}
+function legacyCandidateMatches(reading, record, exact) {
+  return reading && reading.provenance === "legacy_unknown" && reading.date === record.date && reading.unit === record.odometerUnit && decimalMatchKey(reading.odometerExact) !== null && decimalMatchKey(reading.odometerExact) === decimalMatchKey(exact);
+}
+async function loadLegacyCandidates(entry, measurement) {
+  const record = measurement.record, exact = measurement.odometerExact;
+  if (!record || !record.date || !record.odometerUnit || !exactDecimalText(exact)) throw new Error("Für diesen Beleg sind keine exakt vergleichbaren Messdaten verfügbar.");
+  const candidates = [], seen = new Set(), seenCursors = new Set(); let cursor = null, pages = 0;
+  do {
+    const params = [`limit=25`, `from=${encodeURIComponent(record.date)}`, `to=${encodeURIComponent(record.date)}`];
+    if (cursor) params.push(`cursor=${encodeURIComponent(cursor)}`);
+    const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/page?${params.join("&")}`);
+    if (!measurementAlive(entry)) return null;
+    if (!Array.isArray(result.readings) || !(result.nextCursor === null || typeof result.nextCursor === "string")) throw new Error("Messungen konnten nicht vollständig gelesen werden.");
+    for (const reading of result.readings) if (legacyCandidateMatches(reading, record, exact) && !seen.has(String(reading.id))) { candidates.push(reading); seen.add(String(reading.id)); }
+    cursor = result.nextCursor; pages++;
+    if (cursor && seenCursors.has(cursor)) throw new Error("Die Messungsseiten konnten nicht vollständig gelesen werden.");
+    if (cursor) seenCursors.add(cursor);
+    if (cursor && pages >= 2000) throw new Error("Zu viele Messungsseiten für diese Auswahl.");
+  } while (cursor);
+  return candidates;
+}
+function fillRecordProvenanceEditor(entry, measurement, candidates) {
+  entry.mode = "odometer-provenance-record";
+  const record = measurement.record; entry.record = record; entry.revision = record.revision; entry.measurement = measurement; entry.candidates = candidates;
+  setMeasurementReadonly(record, measurement.odometerExact);
+  $("own-title").textContent = "Kilometerstand zuordnen";
+  $("own-hint").textContent = "Für ältere Daten ist keine Verknüpfung bekannt. Wähle bei Bedarf selbst einen passenden, noch nicht zugeordneten Stand. Datum, Wert und Einheit müssen exakt übereinstimmen. Es wird nichts automatisch ausgewählt.";
+  if (!candidates.length) {
+    $("own-message").textContent = "Für dieses Datum wurde kein exakt passender, noch nicht zugeordneter Stand gefunden. Es wird kein neuer Stand angelegt und keine Verknüpfung vorgenommen.";
+    $("own-save").disabled = true; $("own-cancel").disabled = false; entry.busy = false; return;
+  }
+  const options = [["", "Bitte auswählen"], ...candidates.map(reading => {
+    const note = display(reading.note); const label = [readableDate(reading.date), distanceExact(reading.odometerExact, reading.unit), note].filter(Boolean).join(" · ");
+    return [String(reading.id), label];
+  })];
+  const select = entryField("Exakt passenden Kilometerstand auswählen", "candidateReadingId", "", "", options); select.required = true;
+  provenanceConfirmation("Ich bestätige, dass dieser Stand zu genau diesem Arbeitsbeleg gehört.");
+  measurementReasonField();
+  $("own-message").textContent = ""; $("own-save").textContent = "Zuordnung bestätigen"; $("own-save").disabled = false; $("own-cancel").disabled = false; entry.busy = false; select.focus();
+}
+async function openRecordMeasurementCorrection(recordId, openerId = `record-measurement-edit-${String(recordId)}`) {
+  const vehicle = selectedVehicle(); if (!canOpenMeasurementEditor() || !vehicle || recordId === null || recordId === undefined) return;
+  const entry = startMeasurementEntry("record-measurement-edit", recordId, openerId, "Datum / Stand korrigieren"); if (!entry) return;
+  entry.recordId = entry.objectId;
+  try {
+    const measurement = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}/measurement`);
+    if (!measurementAlive(entry)) return;
+    if (measurement.correctionMode === "legacy_unresolved") {
+      entry.measurement = measurement;
+      const candidates = await loadLegacyCandidates(entry, measurement);
+      if (!measurementAlive(entry) || !candidates) return;
+      fillRecordProvenanceEditor(entry, measurement, candidates); return;
+    }
+    fillRecordMeasurementEditor(entry, measurement);
+  } catch (error) {
+    if (measurementAlive(entry)) { entry.busy = false; $("own-save").disabled = true; $("own-cancel").disabled = false; $("own-message").textContent = error.status === 404 ? "Dieser Beleg gehört nicht zu diesem Fahrzeug oder ist nicht mehr verfügbar." : error.status === 409 ? "Die Messungen haben sich beim Laden geändert. Bitte schließe den Dialog und lade den Verlauf neu." : error.status === 503 ? "Der Messdatenspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : error.message || "Messdaten konnten nicht geladen werden."; }
+  }
+}
+function fillIndependentReadingEditor(entry, reading) {
+  if (!reading || String(reading.id) !== entry.objectId || !Number.isInteger(reading.revision) || reading.provenance !== "manual" || !exactDecimalText(reading.odometerExact)) throw new Error("Kilometerstand kann nicht unabhängig korrigiert werden.");
+  entry.reading = reading; entry.revision = reading.revision; setReadingReadonly(reading); showMeasurementProjectionWarning();
+  const date = entryField("Korrigiertes Datum", "measurement-date", "date", reading.date); date.required = true;
+  const odometer = entryField(`Korrigierter Stand (${display(reading.unit) || "Einheit unbekannt"})`, "measurement-odometer", "text", reading.odometerExact); odometer.inputMode = "decimal"; odometer.maxLength = 24; odometer.required = true; odometer.setAttribute("aria-describedby", "own-hint measurement-projection-warning");
+  const note = entryField("Notiz (optional)", "measurement-note", "text", reading.note); note.maxLength = 500;
+  measurementReasonField(); $("own-hint").textContent = "Nur als unabhängig erfasster Stand gekennzeichnete Messungen können hier korrigiert werden. Der aktuelle Fahrzeugstand kann sich dadurch ändern.";
+  $("own-title").textContent = "Datum / Stand korrigieren"; $("own-save").textContent = "Datum / Stand speichern"; $("own-message").textContent = ""; $("own-save").disabled = false; $("own-cancel").disabled = false; entry.busy = false; date.focus();
+}
+function fillManualProvenanceEditor(entry, reading) {
+  if (!reading || String(reading.id) !== entry.objectId || !Number.isInteger(reading.revision) || reading.provenance !== "legacy_unknown") throw new Error("Herkunft dieses Kilometerstands kann nicht geändert werden.");
+  entry.reading = reading; entry.revision = reading.revision; setReadingReadonly(reading);
+  $("own-title").textContent = "Herkunft bestätigen";
+  $("own-hint").textContent = "Für ältere Messungen ist nicht bekannt, ob sie unabhängig erfasst oder mit einem Arbeitsbeleg verknüpft wurden. Bestätige nur, wenn du diesen Stand unabhängig von einem Arbeitsbeleg erfasst hast.";
+  provenanceConfirmation("Diesen Stand habe ich unabhängig von einem Arbeitsbeleg erfasst."); measurementReasonField();
+  $("own-save").textContent = "Unabhängige Erfassung bestätigen"; $("own-message").textContent = ""; $("own-save").disabled = false; $("own-cancel").disabled = false; entry.busy = false; $("entry-provenanceConfirm").focus();
+}
+async function openReadingCorrection(readingId, openerId = `log-odometer-edit-${String(readingId)}`) {
+  const vehicle = selectedVehicle(); if (!canOpenMeasurementEditor() || !vehicle || readingId === null || readingId === undefined) return;
+  const entry = startMeasurementEntry("odometer-edit", readingId, openerId, "Datum / Stand korrigieren"); if (!entry) return;
+  try {
+    const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/${encodeURIComponent(entry.objectId)}`);
+    if (!measurementAlive(entry)) return;
+    const reading = result.reading;
+    if (!reading || String(reading.id) !== entry.objectId) throw new Error("Kilometerstand konnte nicht gelesen werden.");
+    if (reading.provenance === "record") {
+      if (reading.sourceRecordId === null || reading.sourceRecordId === undefined) throw new Error("Zum verknüpften Arbeitsbeleg fehlen Daten.");
+      entry.busy = false; closeEntry(); await openRecordMeasurementCorrection(reading.sourceRecordId, openerId); return;
+    }
+    if (reading.provenance === "legacy_unknown") { entry.mode = "odometer-provenance-manual"; fillManualProvenanceEditor(entry, reading); return; }
+    fillIndependentReadingEditor(entry, reading);
+  } catch (error) { if (measurementAlive(entry)) { entry.busy = false; $("own-save").disabled = true; $("own-cancel").disabled = false; $("own-message").textContent = error.status === 404 ? "Dieser Stand gehört nicht zu diesem Fahrzeug oder ist nicht mehr verfügbar." : error.status === 409 ? "Der Kilometerstand wurde geändert. Bitte lade den Verlauf neu." : error.message || "Der Kilometerstand konnte nicht geladen werden."; } }
+}
+async function openReadingProvenance(readingId, openerId = `log-odometer-resolve-${String(readingId)}`) {
+  const vehicle = selectedVehicle(); if (!canOpenMeasurementEditor() || !vehicle || readingId === null || readingId === undefined) return;
+  const entry = startMeasurementEntry("odometer-provenance-manual", readingId, openerId, "Herkunft bestätigen"); if (!entry) return;
+  try {
+    const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/${encodeURIComponent(entry.objectId)}`);
+    if (!measurementAlive(entry)) return;
+    fillManualProvenanceEditor(entry, result.reading);
+  } catch (error) { if (measurementAlive(entry)) { entry.busy = false; $("own-save").disabled = true; $("own-cancel").disabled = false; $("own-message").textContent = error.status === 404 ? "Dieser Stand gehört nicht zu diesem Fahrzeug oder ist nicht mehr verfügbar." : error.message || "Der Kilometerstand konnte nicht geladen werden."; } }
+}
 function closeEntry(restoreFocus = false) {
   if (state.entry && state.entry.busy) return;
-  const entry = state.entry; const opener = entry && $(entry.opener); state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true;
+  const entry = state.entry; const opener = entry && $(entry.opener); state.entry = null; $("own-panel").hidden = true; $("own-message").textContent = ""; $("record-edit-readonly").hidden = true; $("measurement-projection-warning").hidden = true;
   if (restoreFocus) { if (opener) opener.focus(); else if (entry && entry.fromLogbook) $("logbook-title").focus(); else $("record-add").focus(); }
 }
 function openEntry(mode, action = {}) {
+  if (protectMeasurementDraft()) return;
   if (!state.standalone || state.saving || state.entry && state.entry.busy) return;
   const vehicle = selectedVehicle(); if (mode !== "vehicle-new" && !vehicle) return;
   const names = {"vehicle-new":"Fahrzeug hinzufügen", "vehicle-edit":"Fahrzeug bearbeiten", odometer:"Stand erfassen", record:"Arbeit dokumentieren", "record-close-issue":"Punkt abschließen"};
   const openers = {"vehicle-new":"vehicle-add", "vehicle-edit":"vehicle-edit", odometer:"odometer-add", record:"record-add"};
   $("own-notice").textContent = "";
   state.entry = {mode, vehicleId:vehicle && String(vehicle.id), revision:vehicle && vehicle.revision, statusRevision:vehicle && vehicle.status && vehicle.status.revision, opener:action.openerId || openers[mode], issueId:action.issue && action.issue.id, busy:false};
-  $("record-edit-readonly").hidden = true;
+  $("record-edit-readonly").hidden = true; $("measurement-projection-warning").hidden = true;
   if (mode === "odometer" || mode === "record" || mode === "record-close-issue") {
     if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") { state.entry = null; $("own-notice").textContent = "Zum Erfassen benötigst du HTTPS oder einen lokalen Zugriff über localhost."; return; }
     state.entry.commandId = globalThis.crypto.randomUUID();
@@ -581,6 +771,32 @@ function openIssueCompletion(issueId, issueText, openerId) {
   if (!issue) return;
   openEntry("record-close-issue", {issue, openerId});
 }
+function validMeasurementCorrectionInput(date, amount, reason, requireAmount) {
+  const validDate = validIsoDate(date), validAmount = !requireAmount || /^\d+(?:[.,]\d{1,3})?$/.test(amount);
+  return validDate && validAmount && Boolean(reason) && reason.length <= 1600 && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(reason);
+}
+async function finishMeasurementWrite(entry, result) {
+  entry.busy = false; closeEntry();
+  if (entry.fromLogbook) { state.logbook.filter = readLogbookFilter(); state.logbook.records = []; state.logbook.cursor = null; }
+  await load(entry.vehicleId);
+  let confirmation = entry.mode === "record-measurement-edit" ? "Belegdatum und Messstand wurden korrigiert." : entry.mode === "odometer-edit" ? "Kilometerstand wurde korrigiert." : entry.mode === "odometer-provenance-record" ? "Der ältere Kilometerstand wurde diesem Arbeitsbeleg zugeordnet." : "Der Kilometerstand wurde als unabhängig erfasst bestätigt.";
+  if (result && Object.hasOwn(result, "currentReadingBefore") && Object.hasOwn(result, "currentReadingAfter")) {
+    confirmation += currentReadingChanged(result.currentReadingBefore, result.currentReadingAfter)
+      ? ` Der aktuelle Fahrzeugstand hat sich geändert (${measurementSummary(result.currentReadingBefore)} → ${measurementSummary(result.currentReadingAfter)}).`
+      : " Der aktuelle Fahrzeugstand blieb unverändert.";
+  }
+  $("own-notice").textContent = confirmation;
+  await showHistory(true);
+  if (entry.fromLogbook) await openLogbook(true);
+  if (entry.mode === "odometer-provenance-record") {
+    await openRecordMeasurementCorrection(entry.recordId, entry.opener);
+    return;
+  }
+  const focusId = entry.mode === "odometer-provenance-manual" ? entry.opener.replace("log-odometer-resolve-", "log-odometer-edit-") : entry.returnFocusId;
+  const opener = document.getElementById(focusId);
+  if (opener) opener.focus();
+  else if (entry.fromLogbook) $("logbook-title").focus();
+}
 async function saveEntry(event) {
   event.preventDefault(); const entry = state.entry; if (!entry || entry.busy) return;
   const field = name => $(`entry-${name}`).value.trim(); let payload; let path; let method = "POST";
@@ -596,6 +812,25 @@ async function saveEntry(event) {
     if (documentUrl) { try { const url = new URL(documentUrl); if (url.protocol !== "https:" || url.username || url.password) throw new Error(); documentValue = url.href; } catch (_) { $("own-message").textContent = "Der Beleglink muss eine HTTPS-Adresse ohne eingebettete Zugangsdaten sein."; return; } }
     payload = {revision:entry.revision, commandId:entry.commandId, description, kind, cost:costValue, currency:currencyValue, documentUrl:documentValue, correctionReason};
     path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}`; method = "PUT";
+  } else if (entry.mode === "record-measurement-edit") {
+    const date = field("measurement-date"), rawOdometer = entry.correctionMode === "linked" ? field("measurement-odometer") : "", correctionReason = field("measurement-reason");
+    if (!validMeasurementCorrectionInput(date, rawOdometer, correctionReason, entry.correctionMode === "linked")) { $("own-message").textContent = "Bitte gib ein gültiges Datum, einen Stand mit höchstens drei Nachkommastellen und einen Korrekturgrund an."; return; }
+    payload = {revision:entry.revision, readingRevision:entry.correctionMode === "linked" ? entry.sourceReading.revision : null, date, odometer:entry.correctionMode === "linked" ? rawOdometer.replace(",", ".") : null, commandId:entry.commandId, correctionReason};
+    path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/records/${encodeURIComponent(entry.recordId)}/measurement`; method = "PUT";
+  } else if (entry.mode === "odometer-edit") {
+    const date = field("measurement-date"), rawOdometer = field("measurement-odometer"), correctionReason = field("measurement-reason");
+    if (!validMeasurementCorrectionInput(date, rawOdometer, correctionReason, true)) { $("own-message").textContent = "Bitte gib ein gültiges Datum, einen Stand mit höchstens drei Nachkommastellen und einen Korrekturgrund an."; return; }
+    payload = {revision:entry.reading.revision, date, odometer:rawOdometer.replace(",", "."), note:field("measurement-note") || null, commandId:entry.commandId, correctionReason};
+    path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/${encodeURIComponent(entry.objectId)}`; method = "PUT";
+  } else if (entry.mode === "odometer-provenance-manual" || entry.mode === "odometer-provenance-record") {
+    const correctionReason = field("measurement-reason");
+    if (!$("entry-provenanceConfirm").checked || !correctionReason || correctionReason.length > 1600 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(correctionReason)) { $("own-message").textContent = "Bitte bestätige die Herkunft ausdrücklich und gib einen Korrekturgrund an."; return; }
+    const provenanceRecord = entry.mode === "odometer-provenance-record";
+    const reading = provenanceRecord && entry.candidates ? entry.candidates.find(item => String(item.id) === field("candidateReadingId")) : entry.reading;
+    if (!reading || !Number.isInteger(reading.revision) || provenanceRecord && !Number.isInteger(entry.record && entry.record.revision)) { $("own-message").textContent = "Bitte wähle einen gültigen Kilometerstand aus."; return; }
+    entry.provenanceReading = reading;
+    payload = {revision:reading.revision, commandId:entry.commandId, provenance:provenanceRecord ? "record" : "manual", sourceRecordId:provenanceRecord ? entry.record.id : null, recordRevision:provenanceRecord ? entry.record.revision : null, correctionReason};
+    path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/${encodeURIComponent(reading.id)}/provenance`; method = "PUT";
   } else if (entry.mode.startsWith("vehicle-")) {
     payload = {make:field("make"), model:field("model"), licensePlate:field("licensePlate"), vehicleType:field("vehicleType"), odometerUnit:field("odometerUnit")};
     if (state.inspectionStatus) payload.inspectionDueMonth = field("inspectionDueMonth") || null;
@@ -624,12 +859,14 @@ async function saveEntry(event) {
   try {
     const response = await fetch(path, {method, credentials:"same-origin", headers:{"Content-Type":"application/json", "X-Garage-Request":"1"}, body:JSON.stringify(payload)});
     if (!response.ok) {
-      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : entry.mode === "record-close-issue" ? "Dieser Punkt oder der Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und prüfe den Verlauf vor einem erneuten Versuch." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
+      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : ["record-measurement-edit","odometer-edit","odometer-provenance-manual","odometer-provenance-record"].includes(entry.mode) ? "Diese Messung oder Verknüpfung wurde inzwischen geändert. Entwurf, Revisionen und Wiederholungskennung bleiben erhalten. Lade den Datensatz erst nach Prüfung des Verlaufs neu." : entry.mode === "record-close-issue" ? "Dieser Punkt oder der Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und prüfe den Verlauf vor einem erneuten Versuch." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
       let message = "Die Angaben konnten nicht gespeichert werden. Bitte prüfe deine Eingaben.";
       try { const detail = await response.json(); if (typeof detail.error === "string") message = detail.error; } catch (_) { /* retain the useful fallback */ }
       throw new Error(message);
     }
-    const result = await response.json(); const id = entry.mode === "vehicle-new" ? (result.vehicle || result).id : entry.vehicleId;
+    const result = await response.json();
+    if (["record-measurement-edit","odometer-edit","odometer-provenance-manual","odometer-provenance-record"].includes(entry.mode)) { await finishMeasurementWrite(entry, result); return; }
+    const id = entry.mode === "vehicle-new" ? (result.vehicle || result).id : entry.vehicleId;
     entry.busy = false; closeEntry(); if (entry.mode === "record-edit" && entry.fromLogbook) { state.logbook.filter = readLogbookFilter(); state.logbook.records = []; state.logbook.cursor = null; }
     await load(id); $("own-notice").textContent = entry.mode === "record-edit" ? "Belegkorrektur gespeichert. Verlauf wurde aktualisiert." : entry.mode === "record-close-issue" ? "Arbeit gespeichert und Punkt abgeschlossen. Verlauf wurde aktualisiert." : "Gespeichert.";
     if (entry.mode === "record-edit") await showHistory(true);
@@ -660,7 +897,12 @@ function historyFacts(value) {
   if (value.description) facts.push(display(value.description));
   if (value.kind) facts.push(value.kind === "repair" ? "Reparatur" : value.kind === "service" ? "Wartung" : display(value.kind));
   if (value.date) facts.push(readableDate(value.date));
-  if (value.odometer !== null && value.odometer !== undefined) facts.push(distance(value.odometer, value.odometerUnit || value.unit));
+  if (typeof value.odometerExact === "string" && value.odometerExact) facts.push(distanceExact(value.odometerExact, value.odometerUnit || value.unit));
+  else if (value.odometer !== null && value.odometer !== undefined) facts.push(distance(value.odometer, value.odometerUnit || value.unit));
+  if (value.provenance === "manual") facts.push("Herkunft: unabhängig erfasst");
+  else if (value.provenance === "record") facts.push("Herkunft: Arbeitsbeleg");
+  else if (value.provenance === "legacy_unknown") facts.push("Herkunft noch nicht bestätigt");
+  if (Object.hasOwn(value, "sourceRecordId") && value.sourceRecordId === null && value.provenance === "manual") facts.push("Kein Arbeitsbeleg verknüpft");
   if (value.cost !== null && value.cost !== undefined && value.cost !== "") facts.push(cost(value.cost, value.currency));
   else if (Object.hasOwn(value, "cost")) facts.push("Kosten entfernt");
   if (Object.hasOwn(value, "documentUrl")) facts.push(value.documentUrl ? `Beleglink: ${display(value.documentUrl)}` : "Beleglink entfernt");
@@ -668,7 +910,12 @@ function historyFacts(value) {
   if (value.correctionReason) facts.push(`Korrekturgrund: ${display(value.correctionReason)}`);
   if (value.note) facts.push(display(value.note));
   if (value.record) facts.push(...historyFacts(value.record));
+  if (value.odometerReading) facts.push(...historyFacts(value.odometerReading));
   if (value.status) facts.push(...historyFacts(value.status));
+  if (value.reading) facts.push(...historyFacts(value.reading));
+  if (value.sourceReading) facts.push(...historyFacts(value.sourceReading));
+  if (Object.hasOwn(value, "currentReadingBefore")) facts.push(`Aktueller Stand vorher: ${measurementSummary(value.currentReadingBefore)}`);
+  if (Object.hasOwn(value, "currentReadingAfter")) facts.push(`Aktueller Stand nachher: ${measurementSummary(value.currentReadingAfter)}`);
   return facts.filter(Boolean);
 }
 async function showHistory(force = false) {
@@ -678,7 +925,7 @@ async function showHistory(force = false) {
   try {
     const result = await getJson(`/garage-api/vehicles/${id}/history`); if (state.selected !== id) return;
     if (!Array.isArray(result.events)) throw new Error("invalid history");
-    const actions = {"vehicle.created":"Fahrzeug angelegt", "vehicle.updated":"Stammdaten geändert", "status.updated":"Zustand aktualisiert", "odometer.created":"Stand erfasst", "issue.completed":"Offenen Punkt abgeschlossen", "record.created":"Arbeit dokumentiert", "record.corrected":"Beleg korrigiert"};
+    const actions = {"vehicle.created":"Fahrzeug angelegt", "vehicle.updated":"Stammdaten geändert", "status.updated":"Zustand aktualisiert", "odometer.created":"Stand erfasst", "issue.completed":"Offenen Punkt abgeschlossen", "record.created":"Arbeit dokumentiert", "record.corrected":"Beleg korrigiert", "record.measurement-corrected":"Datum oder Stand korrigiert", "odometer.corrected":"Kilometerstand korrigiert", "odometer.provenance-confirmed":"Herkunft des Kilometerstands bestätigt"};
     for (const item of result.events.slice().reverse()) {
       const row = el("div", "history-event"); row.append(el("h4", "", actions[item.action] || "Änderung gespeichert"));
       const instant = new Date(item.occurredAt); if (!Number.isNaN(instant.getTime())) row.append(el("p", "record-sub", new Intl.DateTimeFormat("de-DE", {dateStyle:"medium", timeStyle:"short"}).format(instant)));
@@ -701,16 +948,33 @@ function logbookDistance(value, unit) {
   const n = number(value); if (n === "") return "";
   const u = display(unit); return u ? `${n} ${u}` : `Stand ${n} (Einheit unbekannt)`;
 }
+function readingProvenanceText(reading) {
+  if (reading.provenance === "manual") return "Herkunft: unabhängig erfasst";
+  if (reading.provenance === "record") return "Herkunft: Arbeitsbeleg";
+  if (reading.provenance === "legacy_unknown") return "Herkunft: noch nicht bestätigt";
+  return "Herkunft nicht verfügbar";
+}
+function readingLogbookDistance(reading) {
+  if (reading.odometer === null || reading.odometer === undefined || reading.odometer === "") return "Kilometerstand nicht erfasst";
+  return exactDecimalText(reading.odometerExact) ? distanceExact(reading.odometerExact, reading.unit) : logbookDistance(reading.odometer, reading.unit);
+}
 function renderLogbookRows(type, rows) {
   const container = $("logbook-records"); container.replaceChildren();
   for (const item of rows) {
     const row = el("div", "logbook-row"); const main = el("div", "logbook-row-main");
     if (type === "odometer") {
-      const value = item.odometer === null || item.odometer === undefined || item.odometer === "" ? "Kilometerstand nicht erfasst" : logbookDistance(item.odometer, item.unit);
+      const value = readingLogbookDistance(item);
       main.append(el("div", "logbook-row-title", value || "Kilometerstand nicht erfasst"));
-      main.append(el("p", "logbook-row-meta", readableDate(item.date) || "Datum nicht verfügbar"));
+      const provenance = state.measurementCorrections ? readingProvenanceText(item) : "";
+      main.append(el("p", "logbook-row-meta", [readableDate(item.date) || "Datum nicht verfügbar", provenance].filter(Boolean).join(" · ")));
       if (display(item.note)) main.append(el("p", "logbook-row-note", display(item.note)));
-      row.append(main);
+      if (state.measurementCorrections && item.provenance === "record" && item.sourceRecordId !== null && item.sourceRecordId !== undefined) {
+        const edit = el("button", "condition-edit record-edit", "Arbeitsbeleg korrigieren"); edit.type = "button"; edit.id = `log-odometer-record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Datum oder Stand des Arbeitsbelegs korrigieren: ${value}`); edit.addEventListener("click", () => openRecordMeasurementCorrection(item.sourceRecordId, edit.id)); row.append(main, edit);
+      } else if (state.measurementCorrections && item.provenance === "manual") {
+        const edit = el("button", "condition-edit record-edit", "Datum / Stand korrigieren"); edit.type = "button"; edit.id = `log-odometer-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Datum oder Stand korrigieren: ${value}`); edit.addEventListener("click", () => openReadingCorrection(item.id, edit.id)); row.append(main, edit);
+      } else if (state.measurementCorrections && item.provenance === "legacy_unknown") {
+        const resolve = el("button", "condition-edit record-edit", "Herkunft festlegen"); resolve.type = "button"; resolve.id = `log-odometer-resolve-${String(item.id)}`; resolve.setAttribute("aria-label", `Herkunft des Kilometerstands festlegen: ${value}`); resolve.addEventListener("click", () => openReadingProvenance(item.id, resolve.id)); row.append(main, resolve);
+      } else row.append(main);
     } else {
       const title = display(item.description) || "Arbeit ohne Beschreibung";
       main.append(el("div", "logbook-row-title", title));
@@ -720,6 +984,7 @@ function renderLogbookRows(type, rows) {
       if (state.recordCorrections && item.id !== null && item.id !== undefined) {
         const edit = el("button", "condition-edit record-edit", "Beleg korrigieren"); edit.type = "button"; edit.id = `log-record-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Beleg korrigieren: ${title}`); edit.addEventListener("click", () => openRecordCorrection(item.id, edit.id)); row.append(main, edit);
       } else row.append(main);
+      if (state.measurementCorrections && item.id !== null && item.id !== undefined) { const edit = el("button", "condition-edit record-edit", "Datum / Stand korrigieren"); edit.type = "button"; edit.id = `log-record-measurement-edit-${String(item.id)}`; edit.setAttribute("aria-label", `Datum oder Stand korrigieren: ${title}`); edit.addEventListener("click", () => openRecordMeasurementCorrection(item.id, edit.id)); row.append(edit); }
     }
     const kind = type === "records" ? item.kind === "repair" ? "Reparatur" : item.kind === "service" ? "Wartung" : display(item.kind) : "Kilometerstand";
     if (kind) row.append(el("span", "logbook-kind", kind));
@@ -788,6 +1053,7 @@ async function initialize() {
     if (capabilities.backend !== "standalone" || !Array.isArray(capabilities.features) || !required.every(feature => capabilities.features.includes(feature))) throw new Error("invalid capabilities");
     state.standalone = true;
     state.recordCorrections = capabilities.features.includes("recordCorrections");
+    state.measurementCorrections = capabilities.features.includes("measurementCorrections");
     state.historyBrowsing = capabilities.features.includes("historyBrowsing");
     state.scheduledWork = capabilities.features.includes("scheduledWork");
     state.dataExport = capabilities.features.includes("dataExport");

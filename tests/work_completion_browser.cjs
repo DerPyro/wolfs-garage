@@ -1,5 +1,5 @@
 // Synthetic real-Chromium acceptance for editing and completing active work.
-// Serve a fresh schema-4 database at http://127.0.0.1:18989 before running.
+// Serve a fresh schema-5 database at http://127.0.0.1:18989 before running.
 const fs = require('fs');
 const {spawn} = require('child_process');
 const {setTimeout: delay} = require('timers/promises');

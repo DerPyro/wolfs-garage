@@ -14,6 +14,9 @@ This file tracks changes for a future release. Entries under **Unreleased** do n
 - Explicitly upgrade standalone schemas 1, 2 or 3 to schema 4 after a checked backup; initialization is create-only, and startup neither creates nor migrates a database.
 - Export owner data as format version 2, including stored inspection month but no derived inspection projection. This portable JSON attachment is not a restorable backup and excludes command replay state.
 - Document the bounded completed-record correction workflow: description, work kind, cost, currency, and document reference can be corrected with a reason and before/after audit. Record date, odometer, unit, and issue closure remain fixed in this workflow.
+- Link record-created odometer readings explicitly and correct linked record dates/exact values atomically with expected revisions, idempotent retries and before/after audit history. Manual readings have their own correction operation; legacy links require explicit owner confirmation and are never inferred from notes or matching values.
+- Add schema 5 with reading revision/provenance/source-record fields. Explicitly upgrade schema 1–4 after a checked backup; old readings remain `legacy_unknown` with no link. Startup and automatic updates do not migrate across schemas.
+- Version the portable owner export as format 3 with reading provenance/revision/link fields; SQLite remains the full restore format.
 
 ### Release preparation
 

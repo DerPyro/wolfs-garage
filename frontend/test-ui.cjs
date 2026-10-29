@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 class Element {
-  constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attributes = {}; this.hidden = false; this.listeners = {}; this._text = ''; this.classList = { toggle() {}, add() {} }; this.value = ''; }
+  constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attributes = {}; this.hidden = false; this.listeners = {}; this._text = ''; this.classList = { toggle() {}, add() {} }; this.value = ''; this.checked = false; }
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -21,8 +21,8 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, reducedMotion = false, version = '0.1.0a0', initialHash = '', storageUnavailable = false, storedMotionPreference = null} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload','nav-toggle','site-navigation','nav-garage','nav-backups','nav-settings','garage-view','backups-view','settings-view','garage-title','backups-title','settings-title','app-version','motion-preference','motion-message'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, measurementCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, reducedMotion = false, version = '0.1.0a0', initialHash = '', storageUnavailable = false, storedMotionPreference = null} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','measurement-projection-warning','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload','nav-toggle','site-navigation','nav-garage','nav-backups','nav-settings','garage-view','backups-view','settings-view','garage-title','backups-title','settings-title','app-version','motion-preference','motion-message'].map(id => [id, new Element()]));
   nodes['nav-garage'].setAttribute('href','#garage'); nodes['nav-backups'].setAttribute('href','#sicherungen'); nodes['nav-settings'].setAttribute('href','#einstellungen');
   nodes['site-navigation'].append(nodes['nav-garage'],nodes['nav-backups'],nodes['nav-settings']);
   nodes['garage-view'].hidden=false; nodes['backups-view'].hidden=true; nodes['settings-view'].hidden=true; nodes['site-navigation'].hidden=true;
@@ -46,7 +46,7 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
   const scrollCalls=[]; const window = {location:{_hash:initialHash},matchMedia:()=>({matches:reducedMotion}),addEventListener:(name,listener)=>{windowListeners[name]=listener;},scrollTo:options=>scrollCalls.push(options)};
   Object.defineProperty(window.location,'hash',{get(){return this._hash||'';},set(value){this._hash=String(value).startsWith('#')?String(value):`#${value}`; if(windowListeners.hashchange)windowListeners.hashchange({});}});
   const localStorage = storageUnavailable ? {getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}} : {getItem(key){return storage.has(key)?storage.get(key):null;},setItem(key,value){storage.set(key,String(value));}};
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window, localStorage, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',version,features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window, localStorage, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',version,features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(measurementCorrections?['measurementCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, TypeError, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
   Object.defineProperty(nodes,'__downloads',{value:downloads}); Object.defineProperty(nodes,'__objectUrls',{value:objectUrls});
   Object.defineProperty(nodes,'__storage',{value:storage}); Object.defineProperty(nodes,'__documentListeners',{value:documentListeners}); Object.defineProperty(nodes,'__windowListeners',{value:windowListeners});
   Object.defineProperty(nodes,'__setHash',{value:value=>{window.location.hash=value;}});
@@ -839,10 +839,136 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   nodes.refresh.listeners.click(); await new Promise(resolve=>setTimeout(resolve,30));
   assert.match(nodes['work-status'].textContent,/Stand: 29\.10\.2026/);
 
+  // Linked record measurement corrections use exact decimal strings, retain revisions and commandId on conflict, and expose audit facts.
+  const linkedVehicle={id:60,name:'Messkorrektur',revision:2,status:{readiness:'ready',issues:[],revision:1}};
+  const currentBefore={id:12,date:'2026-03-01',odometer:1234.5,odometerExact:'1234.500',unit:'km',note:'',revision:7,provenance:'record',sourceRecordId:10};
+  const currentAfter={...currentBefore,date:'2026-03-02',odometer:1235.125,odometerExact:'1235.125',revision:8};
+  let measurementAttempt=0; const measurementWrites=[];
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[linkedVehicle]})};
+    if(path==='/garage-api/vehicles/60/summary') return {ok:true,json:async()=>({vehicle:{status:linkedVehicle.status},reminders:[],services:[{id:10,date:'2026-03-01',description:'Ölwechsel',kind:'service',odometer:1234.5,odometerUnit:'km'}]})};
+    if(path==='/garage-api/vehicles/60/records/10/measurement' && !options.method) return {ok:true,json:async()=>({record:{id:10,revision:4,description:'Ölwechsel',kind:'service',date:'2026-03-01',odometer:1234.5,odometerUnit:'km',closedIssueId:null},odometerExact:'1234.500',sourceReading:currentBefore,correctionMode:'linked',currentReading:currentBefore})};
+    if(options.method==='PUT' && path==='/garage-api/vehicles/60/records/10/measurement') {measurementWrites.push(JSON.parse(options.body));if(++measurementAttempt===1)return {ok:false,status:409};if(measurementAttempt===2)throw new TypeError('temporary network interruption');return {ok:true,json:async()=>({record:{id:10,revision:5,date:'2026-03-02',odometer:1235.125,odometerUnit:'km',closedIssueId:null},reading:currentAfter,currentReadingBefore:currentBefore,currentReadingAfter:currentAfter})};}
+    if(path==='/garage-api/vehicles/60/history') return {ok:true,json:async()=>({events:[{action:'record.measurement-corrected',occurredAt:'2026-03-02T12:00:00Z',before:{record:{id:10,date:'2026-03-01',odometer:1234.5,odometerExact:'1234.500',odometerUnit:'km'},odometerReading:currentBefore},after:{record:{id:10,date:'2026-03-02',odometer:1235.125,odometerExact:'1235.125',odometerUnit:'km'},odometerReading:currentAfter,correctionReason:'Beleg geprüft'}}]})};
+    throw Error('Unexpected measurement correction request: '+path);
+  },{standalone:true,measurementCorrections:true});
+  const linkedAction=nodes.services.querySelectorAll('button').find(button=>button.id==='record-measurement-edit-10'); assert.ok(linkedAction);
+  await linkedAction.listeners.click();
+  const measurementField=name=>nodes['own-fields'].querySelectorAll('input').concat(nodes['own-fields'].querySelectorAll('select')).find(field=>field.id==='entry-'+name);
+  assert.equal(nodes['own-title'].textContent,'Datum / Stand korrigieren'); assert.equal(measurementField('measurement-date').value,'2026-03-01');
+  assert.equal(measurementField('measurement-odometer').value,'1234.500'); assert.match(nodes['measurement-projection-warning'].textContent,/neueste Datum.*zuletzt angelegte Stand/);
+  measurementField('measurement-date').value='2026-03-02'; measurementField('measurement-odometer').value='1235,125';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(measurementWrites.length,0,'a correction without a reason never writes'); assert.match(nodes['own-message'].textContent,/Korrekturgrund/);
+  measurementField('measurement-reason').value='Beleg geprüft';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.match(nodes['own-message'].textContent,/Entwurf, Revisionen und Wiederholungskennung bleiben erhalten/); assert.equal(nodes['own-panel'].hidden,false);
+  const linkedPayload=measurementWrites[0]; assert.equal(linkedPayload.revision,4); assert.equal(linkedPayload.readingRevision,7); assert.equal(linkedPayload.date,'2026-03-02');
+  assert.equal(linkedPayload.odometer,'1235.125'); assert.equal(typeof linkedPayload.odometer,'string'); assert.match(linkedPayload.commandId,/^[0-9a-f-]{36}$/);
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.match(nodes['own-message'].textContent,/Antwort konnte nicht empfangen/);
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(measurementWrites[1].commandId,linkedPayload.commandId,'measurement retry after a network failure keeps the same commandId');
+  assert.equal(measurementWrites[2].commandId,linkedPayload.commandId,'measurement retry after a stale revision keeps the same commandId');
+  assert.equal(measurementWrites[2].revision,linkedPayload.revision); assert.equal(measurementWrites[2].readingRevision,linkedPayload.readingRevision);
+  assert.match(nodes['own-notice'].textContent,/Der aktuelle Fahrzeugstand hat sich geändert/);
+  assert.match(nodes['history-events'].textContent,/Datum oder Stand korrigiert/); assert.match(nodes['history-events'].textContent,/1235\.125 km/); assert.match(nodes['history-events'].textContent,/Beleg geprüft/);
+  assert.equal(nodes.services.querySelectorAll('button').find(button=>button.id==='record-measurement-edit-10').focused,true,'success returns focus to the action after reloading the service list');
+
+  // Date-only records have no stand field and cannot create, remove or alter a reading.
+  const dateVehicle={id:61,name:'Nur Datum',revision:1,status:{readiness:'ready',issues:[],revision:0}}; let dateOnlyWrite;
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[dateVehicle]})};
+    if(path==='/garage-api/vehicles/61/summary') return {ok:true,json:async()=>({vehicle:{status:dateVehicle.status},reminders:[],services:[{id:11,date:'2026-01-10',description:'Prüfung ohne Stand',kind:'service',odometer:null,odometerUnit:'km'}]})};
+    if(path==='/garage-api/vehicles/61/records/11/measurement' && !options.method) return {ok:true,json:async()=>({record:{id:11,revision:2,date:'2026-01-10',odometer:null,odometerUnit:'km',closedIssueId:null},odometerExact:null,sourceReading:null,correctionMode:'date_only',currentReading:null})};
+    if(options.method==='PUT') {dateOnlyWrite=JSON.parse(options.body);return {ok:true,json:async()=>({record:{id:11,revision:3,date:dateOnlyWrite.date,odometer:null},reading:null,currentReadingBefore:null,currentReadingAfter:null})};}
+    if(path==='/garage-api/vehicles/61/history') return {ok:true,json:async()=>({events:[]})};
+    throw Error('Unexpected date-only request: '+path);
+  },{standalone:true,measurementCorrections:true});
+  await nodes.services.querySelectorAll('button').find(button=>button.id==='record-measurement-edit-11').listeners.click();
+  assert.equal(measurementField('measurement-odometer'),undefined); assert.match(nodes['own-hint'].textContent,/nur das Datum ändern/);
+  measurementField('measurement-date').value='2026-01-11'; measurementField('measurement-reason').value='Datum auf Rechnung geprüft';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(dateOnlyWrite.date,'2026-01-11'); assert.equal(dateOnlyWrite.odometer,null); assert.equal(dateOnlyWrite.readingRevision,null); assert.equal(typeof dateOnlyWrite.commandId,'string');
+
+  // Legacy record provenance is resolved only through date/value/unit-matched unknown readings and explicit confirmation.
+  const legacyRecordVehicle={id:62,name:'Altdaten-Beleg',revision:1,status:{readiness:'ready',issues:[],revision:0}}; let linkedResolution=false, candidateWrites=[]; let candidatePageCalls=[]; let measurementGets=0;
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[legacyRecordVehicle]})};
+    if(path==='/garage-api/vehicles/62/summary') return {ok:true,json:async()=>({vehicle:{status:legacyRecordVehicle.status},reminders:[],services:[{id:40,date:'2026-04-04',description:'Historischer Service',kind:'service',odometer:1000,odometerUnit:'km'}]})};
+    if(path==='/garage-api/vehicles/62/records/40/measurement') {measurementGets++;return {ok:true,json:async()=>linkedResolution?{record:{id:40,revision:6,date:'2026-04-04',odometer:1000,odometerUnit:'km',closedIssueId:null},odometerExact:'1000.000',sourceReading:{id:700,date:'2026-04-04',odometer:1000,odometerExact:'1000.000',unit:'km',note:'Record 40',revision:3,provenance:'record',sourceRecordId:40},correctionMode:'linked',currentReading:null}:{record:{id:40,revision:5,date:'2026-04-04',odometer:1000,odometerUnit:'km',closedIssueId:null},odometerExact:'1000.000',sourceReading:null,correctionMode:'legacy_unresolved',currentReading:null}};}
+    if(path.includes('/odometer/page?')) {candidatePageCalls.push(path);return path.includes('cursor=next')?{ok:true,json:async()=>({readings:[{id:700,date:'2026-04-04',odometer:1000,odometerExact:'1000.000',unit:'km',note:'Record 40 <img src=x onerror=alert(1)>',revision:3,provenance:'legacy_unknown',sourceRecordId:null},{id:701,date:'2026-04-04',odometer:1000,odometerExact:'1000.000',unit:'mi',note:'falsche Einheit',revision:1,provenance:'legacy_unknown',sourceRecordId:null},{id:702,date:'2026-04-04',odometer:1000,odometerExact:'1000.000',unit:'km',note:'bereits verknüpft',revision:1,provenance:'record',sourceRecordId:3}],nextCursor:null})}:{ok:true,json:async()=>({readings:[{id:699,date:'2026-04-04',odometer:1000,odometerExact:'1000.001',unit:'km',revision:1,provenance:'legacy_unknown',sourceRecordId:null}],nextCursor:'next'})};}
+    if(options.method==='PUT' && path.endsWith('/provenance')) {candidateWrites.push(JSON.parse(options.body));if(candidateWrites.length===1)return {ok:false,status:409};linkedResolution=true;return {ok:true,json:async()=>({reading:{id:700,revision:4,provenance:'record',sourceRecordId:40},record:{id:40,revision:6}})};}
+    if(path==='/garage-api/vehicles/62/history') return {ok:true,json:async()=>({events:[{action:'odometer.provenance-confirmed',occurredAt:'2026-04-04T12:00:00Z',before:{odometerReading:{id:700,date:'2026-04-04',odometerExact:'1000.000',unit:'km',provenance:'legacy_unknown'}},after:{odometerReading:{id:700,date:'2026-04-04',odometerExact:'1000.000',unit:'km',provenance:'record',sourceRecordId:40},correctionReason:'Rechnung abgeglichen'}}]})};
+    throw Error('Unexpected provenance resolution request: '+path);
+  },{standalone:true,historyBrowsing:true,measurementCorrections:true});
+  await nodes.services.querySelectorAll('button').find(button=>button.id==='record-measurement-edit-40').listeners.click();
+  assert.equal(candidatePageCalls.length,2); assert.match(candidatePageCalls[0],/from=2026-04-04&to=2026-04-04/); assert.match(candidatePageCalls[1],/cursor=next/);
+  const candidateSelect=nodes['own-fields'].querySelectorAll('select').find(field=>field.id==='entry-candidateReadingId');
+  assert.ok(candidateSelect); assert.equal(candidateSelect.children.length,2,'only one exact same-day/unit legacy candidate is shown'); assert.equal(candidateSelect.value,'','no legacy match is preselected');
+  assert.match(nodes['own-hint'].textContent,/nichts automatisch ausgewählt/); assert.match(nodes['own-fields'].textContent,/Record 40 <img src=x onerror=alert\(1\)>/,'API note is shown as literal text, not HTML');
+  candidateSelect.value='700';
+  measurementField('measurement-reason').value='Rechnung abgeglichen';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.match(nodes['own-message'].textContent,/bestätige die Herkunft ausdrücklich/); assert.equal(candidateWrites.length,0);
+  nodes['own-fields'].querySelectorAll('input').find(field=>field.id==='entry-provenanceConfirm').checked=true;
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.match(nodes['own-message'].textContent,/Messung oder Verknüpfung wurde inzwischen geändert/);
+  const provenancePayload=candidateWrites[0]; assert.equal(provenancePayload.revision,3); assert.equal(provenancePayload.provenance,'record'); assert.equal(provenancePayload.sourceRecordId,40); assert.equal(provenancePayload.recordRevision,5); assert.match(provenancePayload.commandId,/^[0-9a-f-]{36}$/);
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(candidateWrites[1].commandId,provenancePayload.commandId); assert.equal(candidateWrites[1].revision,3); assert.equal(candidateWrites[1].recordRevision,5);
+  assert.equal(measurementGets,2,'after explicit link, the record measurement form reloads verified linked facts');
+  assert.equal(nodes['own-title'].textContent,'Datum / Stand korrigieren'); assert.equal(measurementField('measurement-odometer').value,'1000.000');
+
+  // Legacy reading provenance can be declared independent only by explicit owner confirmation and never auto-links.
+  const legacyReadingVehicle={id:63,name:'Altdaten-Stand',revision:1,status:{readiness:'ready',issues:[],revision:0}}; let provenanceManualWrites=[];
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[legacyReadingVehicle]})};
+    if(path==='/garage-api/vehicles/63/summary') return {ok:true,json:async()=>({vehicle:{status:legacyReadingVehicle.status},reminders:[],services:[]})};
+    if(path.includes('/records/page?')) return {ok:true,json:async()=>({records:[],nextCursor:null})};
+    if(path.includes('/odometer/page?')) return {ok:true,json:async()=>({readings:[{id:90,date:'2026-02-01',odometer:0,odometerExact:'0.000',unit:'km',note:'Record 22',revision:1,provenance:provenanceManualWrites.length?'manual':'legacy_unknown',sourceRecordId:null}],nextCursor:null})};
+    if(path==='/garage-api/vehicles/63/odometer/90' && !options.method) return {ok:true,json:async()=>({reading:{id:90,date:'2026-02-01',odometer:0,odometerExact:'0.000',unit:'km',note:'Record 22',revision:1,provenance:'legacy_unknown',sourceRecordId:null}})};
+    if(options.method==='PUT' && path.endsWith('/provenance')) {provenanceManualWrites.push(JSON.parse(options.body));return {ok:true,json:async()=>({reading:{id:90,date:'2026-02-01',odometerExact:'0.000',unit:'km',revision:2,provenance:'manual',sourceRecordId:null},record:null})};}
+    if(path==='/garage-api/vehicles/63/history') return {ok:true,json:async()=>({events:[]})};
+    throw Error('Unexpected manual provenance request: '+path);
+  },{standalone:true,historyBrowsing:true,measurementCorrections:true});
+  nodes['logbook-toggle'].listeners.click(); await new Promise(resolve=>setTimeout(resolve,0)); nodes['logbook-type'].value='odometer'; nodes['logbook-type'].listeners.change(); await nodes['logbook-filters'].listeners.submit({preventDefault(){}});
+  const resolution=nodes['logbook-records'].querySelectorAll('button').find(button=>button.id==='log-odometer-resolve-90'); assert.ok(resolution);
+  await resolution.listeners.click(); assert.match(nodes['own-hint'].textContent,/nur, wenn du diesen Stand unabhängig/);
+  assert.equal(nodes['own-fields'].querySelectorAll('input').find(field=>field.id==='entry-provenanceConfirm').checked,false);
+  measurementField('measurement-reason').value='Alten Zettel geprüft';
+  await nodes['own-form'].listeners.submit({preventDefault(){}}); assert.equal(provenanceManualWrites.length,0);
+  nodes['own-fields'].querySelectorAll('input').find(field=>field.id==='entry-provenanceConfirm').checked=true; await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.equal(provenanceManualWrites[0].provenance,'manual'); assert.equal(provenanceManualWrites[0].sourceRecordId,null); assert.equal(provenanceManualWrites[0].recordRevision,null); assert.equal(provenanceManualWrites[0].revision,1);
+  assert.equal(nodes['logbook-records'].querySelectorAll('button').find(button=>button.id==='log-odometer-edit-90').focused,true,'after reload, the independent-reading correction action is offered and focused');
+
+  // A new correction draft survives refresh, vehicle selection and attempts to open another editor.
+  const guardedVehicles=[legacyReadingVehicle,{...legacyReadingVehicle,id:64,name:'Anderes Fahrzeug'}]; let vehicleListReads=0; const guardedSummaryReads=[];
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') {vehicleListReads++;return {ok:true,json:async()=>({vehicles:guardedVehicles})};}
+    if(path==='/garage-api/vehicles/63/summary'||path==='/garage-api/vehicles/64/summary') {guardedSummaryReads.push(path);return {ok:true,json:async()=>({vehicle:{status:legacyReadingVehicle.status},reminders:[],services:[{id:91,date:'2026-02-01',description:'Korrekturgrundlage',kind:'service',odometer:5,odometerUnit:'km'}]})};}
+    if(path==='/garage-api/vehicles/63/records/91/measurement') return {ok:true,json:async()=>({record:{id:91,revision:2,date:'2026-02-01',odometer:5,odometerUnit:'km',closedIssueId:null},odometerExact:'5.000',sourceReading:{id:92,date:'2026-02-01',odometer:5,odometerExact:'5.000',unit:'km',revision:3,provenance:'record',sourceRecordId:91},correctionMode:'linked',currentReading:null})};
+    throw Error('Unexpected guarded correction request: '+path);
+  },{standalone:true,measurementCorrections:true});
+  await nodes.services.querySelectorAll('button').find(button=>button.id==='record-measurement-edit-91').listeners.click();
+  const guardedField=name=>nodes['own-fields'].querySelectorAll('input').find(field=>field.id==='entry-'+name);
+  guardedField('measurement-date').value='2026-02-02'; guardedField('measurement-odometer').value='6,125'; guardedField('measurement-reason').value='Entwurf nicht verlieren';
+  const initialListReads=vehicleListReads;
+  nodes.refresh.listeners.click();
+  await nodes.vehicles.children.find(card=>card.getAttribute('aria-label').includes('Anderes Fahrzeug')).listeners.click();
+  nodes['vehicle-add'].listeners.click();
+  assert.equal(vehicleListReads,initialListReads,'refresh is blocked while a correction draft is open');
+  assert.equal(guardedSummaryReads.includes('/garage-api/vehicles/64/summary'),false,'switching cards is blocked while a correction draft is open');
+  assert.equal(nodes['own-title'].textContent,'Datum / Stand korrigieren'); assert.equal(nodes['own-panel'].hidden,false);
+  assert.equal(guardedField('measurement-date').value,'2026-02-02'); assert.equal(guardedField('measurement-odometer').value,'6,125'); assert.equal(guardedField('measurement-reason').value,'Entwurf nicht verlieren');
+  assert.match(nodes['own-message'].textContent,/Entwurf bleibt erhalten/);
+
   const legacyWorkRequests=[];
-  nodes=await run(async path=>{legacyWorkRequests.push(path);return path==='/garage-api/vehicles'?{ok:true,json:async()=>({vehicles:[{id:30,name:'Legacy Fahrzeug',status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}}]})}:{ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}},reminders:[],services:[]})};});
+  nodes=await run(async path=>{legacyWorkRequests.push(path);return path==='/garage-api/vehicles'?{ok:true,json:async()=>({vehicles:[{id:30,name:'Legacy Fahrzeug',status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}}]})}:{ok:true,json:async()=>({vehicle:{status:{readiness:'ready',issues:[{id:1,text:'Nur Text'}],revision:1}},reminders:[],services:[{id:31,date:'2026-02-01',description:'Legacy service',kind:'service'}]})};});
   assert.equal(nodes['work-dashboard'].hidden,true);
   assert.equal(legacyWorkRequests.includes('/garage-api/work'),false);
+  assert.equal(nodes.services.querySelectorAll('button').some(button=>button.id==='record-measurement-edit-31'),false,'measurement correction action remains hidden without the standalone capability');
+  assert.equal(legacyWorkRequests.some(path=>path.includes('/measurement')),false,'legacy capability absence does not call measurement APIs');
 
   console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Verlauf, Logbuchpagination und geplante offene Arbeiten bestanden.');
 })().catch(err => { console.error(err); process.exitCode = 1; });

@@ -1,5 +1,5 @@
 // Synthetic Chromium acceptance for hash navigation, focus, view state and motion preference.
-// Serve a fresh schema-4 standalone database on loopback port 18993 first.
+// Serve a fresh schema-5 standalone database on loopback port 18993 first.
 const fs = require('fs');
 const {spawn} = require('child_process');
 const {setTimeout: delay} = require('timers/promises');

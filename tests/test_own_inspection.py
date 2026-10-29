@@ -1,4 +1,4 @@
-"""Synthetic API, calendar-projection, export and schema-4 migration checks."""
+"""Synthetic API, calendar-projection, export and frozen legacy migration checks."""
 from contextlib import closing
 import calendar
 from datetime import date, datetime, timezone
@@ -278,7 +278,7 @@ class InspectionApiTests(unittest.TestCase):
     def test_export_format2_contains_raw_month_but_no_derived_inspection_fields(self):
         vehicle = self.create("2027-08")
         exported = self.store.export_data()
-        self.assertEqual((exported["formatVersion"], exported["databaseSchema"]), (2, 4))
+        self.assertEqual((exported["formatVersion"], exported["databaseSchema"]), (3, 5))
         raw = next(item for item in exported["vehicles"] if item["id"] == vehicle["id"])
         self.assertEqual(raw["inspectionDueMonth"], "2027-08")
         self.assertNotIn("inspection", raw)
@@ -305,7 +305,7 @@ class InspectionSchemaUpgradeTests(unittest.TestCase):
         for schema in (1, 2, 3):
             with self.subTest(schema=schema):
                 path = self.path(schema)
-                backup = self.directory / f"schema{schema}-before-4.sqlite3"
+                backup = self.directory / f"schema{schema}-before-5.sqlite3"
                 with closing(sqlite3.connect(path)) as db:
                     before_history = db.execute("SELECT * FROM history").fetchall()
                     before_record = db.execute("SELECT * FROM records").fetchall()
@@ -313,7 +313,7 @@ class InspectionSchemaUpgradeTests(unittest.TestCase):
                 store = Store(path, today_provider=lambda: date(2026, 10, 1))
                 self.assertTrue(store.upgrade(backup))
                 with closing(sqlite3.connect(path)) as db:
-                    self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+                    self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
                     self.assertIn("inspection_due_month", [row[1] for row in db.execute("PRAGMA table_info(vehicles)")])
                     self.assertIsNone(db.execute("SELECT inspection_due_month FROM vehicles").fetchone()[0])
                     self.assertEqual(db.execute("SELECT * FROM records").fetchall(), before_record if schema != 1 else [(*before_record[0], 1)])
@@ -339,28 +339,30 @@ class InspectionSchemaUpgradeTests(unittest.TestCase):
         self.assertEqual(after.status_code, 200, after.json)
         self.assertEqual(after.json["vehicles"][0]["inspection"]["state"], "unknown")
 
-    def test_failed_schema4_migration_rolls_back_column_and_version(self):
+    def test_failed_schema5_migration_rolls_back_columns_and_version(self):
         path = self.path(3)
         with closing(sqlite3.connect(path)) as db, db:
-            db.execute("CREATE TRIGGER reject_schema4 BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT,'synthetic schema4 failure'); END")
+            db.execute("CREATE TRIGGER reject_schema5 BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT,'synthetic schema5 failure'); END")
         backup = self.directory / "schema3-failed-upgrade-backup.sqlite3"
         with self.assertRaises(sqlite3.IntegrityError):
             Store(path).upgrade(backup)
         with closing(sqlite3.connect(path)) as db:
             self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 3)
             self.assertNotIn("inspection_due_month", [row[1] for row in db.execute("PRAGMA table_info(vehicles)")])
+            self.assertFalse({"revision", "provenance", "source_record_id"} &
+                             {row[1] for row in db.execute("PRAGMA table_info(odometer_readings)")})
         with closing(sqlite3.connect(backup)) as db:
             self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 3)
 
-    def test_backup_accepts_current_schema4_and_upgrade4_is_noop(self):
+    def test_backup_accepts_current_schema5_and_upgrade5_is_noop(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "current.sqlite3"
             store = Store(path)
             store.initialize()
-            backup = Path(tmp) / "schema4-backup.sqlite3"
+            backup = Path(tmp) / "schema5-backup.sqlite3"
             store.backup(backup)
             with closing(sqlite3.connect(backup)) as db:
-                self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 4)
+                self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
             self.assertFalse(store.upgrade(Path(tmp) / "unused.sqlite3"))
             self.assertFalse((Path(tmp) / "unused.sqlite3").exists())
 
