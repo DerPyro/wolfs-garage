@@ -8,6 +8,7 @@ class Element {
   set textContent(value) { this._text = String(value); this.children = []; }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
+  getAttribute(name) { return this.attributes[name] ?? null; }
   removeAttribute(name) { delete this.attributes[name]; }
   append(...children) { for (const child of children) child.parent = this; this.children.push(...children); }
   prepend(...children) { for (const child of children) child.parent = this; this.children.unshift(...children); }
@@ -15,12 +16,16 @@ class Element {
   focus(options) { this.focused = true; this.focusOptions = options; }
   scrollIntoView(options) { this.scrollCount = (this.scrollCount || 0) + 1; this.scrollOptions = options; }
   click() { this.clicked = true; if (this.listeners.click) return this.listeners.click(); }
+  contains(target) { return this === target || this.children.some(child => child.contains(target)); }
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tagName === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, reducedMotion = false} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, reducedMotion = false, version = '0.1.0a0', initialHash = '', storageUnavailable = false, storedMotionPreference = null} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload','nav-toggle','site-navigation','nav-garage','nav-backups','nav-settings','garage-view','backups-view','settings-view','garage-title','backups-title','settings-title','app-version','motion-preference','motion-message'].map(id => [id, new Element()]));
+  nodes['nav-garage'].setAttribute('href','#garage'); nodes['nav-backups'].setAttribute('href','#sicherungen'); nodes['nav-settings'].setAttribute('href','#einstellungen');
+  nodes['site-navigation'].append(nodes['nav-garage'],nodes['nav-backups'],nodes['nav-settings']);
+  nodes['garage-view'].hidden=false; nodes['backups-view'].hidden=true; nodes['settings-view'].hidden=true; nodes['site-navigation'].hidden=true;
   nodes['inspection-panel'].append(nodes['inspection-message']);
   nodes['own-detail-actions'].setAttribute('tabindex','-1');
   nodes['data-export'].href='/garage-api/export'; nodes['data-export'].download='wolfs-garage-export.json'; nodes['data-export'].textContent='Portabler JSON-Export';
@@ -30,15 +35,22 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, hi
   nodes['backup-restore-help'].children[0].textContent='Import / Wiederherstellen'; nodes['backup-restore-help'].children[1].textContent='Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank: python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3 Es gibt keinen Upload oder Import im Browser.';
   for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
-  const documentListeners = {};
+  const documentListeners = {}, windowListeners = {}, storage = new Map();
+  if (storedMotionPreference === 'system' || storedMotionPreference === 'reduce') storage.set('wolfs-garage-motion-preference', storedMotionPreference);
   let inspectionInterval;
   const downloads = []; const body = new Element('body');
   const objectUrls = {created:[],revoked:[],createObjectURL(blob){this.created.push(blob);return `blob:test-${this.created.length}`;},revokeObjectURL(url){this.revoked.push(url);}};
   const URLMock = class extends URL {};
   URLMock.createObjectURL = blob => objectUrls.createObjectURL(blob); URLMock.revokeObjectURL = url => objectUrls.revokeObjectURL(url);
   const document = { body, visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => {const element=new Element(tag); if(tag==='a')downloads.push(element); return element;}, createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window:{matchMedia:()=>({matches:reducedMotion})}, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  const scrollCalls=[]; const window = {location:{_hash:initialHash},matchMedia:()=>({matches:reducedMotion}),addEventListener:(name,listener)=>{windowListeners[name]=listener;},scrollTo:options=>scrollCalls.push(options)};
+  Object.defineProperty(window.location,'hash',{get(){return this._hash||'';},set(value){this._hash=String(value).startsWith('#')?String(value):`#${value}`; if(windowListeners.hashchange)windowListeners.hashchange({});}});
+  const localStorage = storageUnavailable ? {getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}} : {getItem(key){return storage.has(key)?storage.get(key):null;},setItem(key,value){storage.set(key,String(value));}};
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window, localStorage, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',version,features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
   Object.defineProperty(nodes,'__downloads',{value:downloads}); Object.defineProperty(nodes,'__objectUrls',{value:objectUrls});
+  Object.defineProperty(nodes,'__storage',{value:storage}); Object.defineProperty(nodes,'__documentListeners',{value:documentListeners}); Object.defineProperty(nodes,'__windowListeners',{value:windowListeners});
+  Object.defineProperty(nodes,'__setHash',{value:value=>{window.location.hash=value;}});
+  Object.defineProperty(nodes,'__scrollCalls',{value:scrollCalls});
   Object.defineProperty(nodes,'__visibilityChanged',{value:async visibilityState=>{document.visibilityState=visibilityState;return documentListeners.visibilitychange&&documentListeners.visibilitychange();}});
   Object.defineProperty(nodes,'__inspectionTick',{value:async()=>inspectionInterval&&inspectionInterval.callback()});
   Object.defineProperty(nodes,'__inspectionInterval',{value:()=>inspectionInterval&&inspectionInterval.delay});
@@ -59,6 +71,38 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
 
   nodes = await run(async () => ({ok: false, status: 502}));
   assert.match(nodes.status.textContent, /konnten nicht geladen/);
+
+  // Header views are hash-addressable, backup navigation is capability-gated, and settings are backed by version data.
+  nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:true,dataExport:true,databaseBackup:true,version:'0.1.0a7'});
+  assert.equal(nodes['garage-view'].hidden,false); assert.equal(nodes['backups-view'].hidden,true); assert.equal(nodes['settings-view'].hidden,true);
+  assert.equal(nodes['nav-backups'].hidden,false); assert.equal(nodes['app-version'].textContent,'Version 0.1.0a7');
+  nodes['nav-toggle'].listeners.click();
+  assert.equal(nodes['site-navigation'].hidden,false); assert.equal(nodes['nav-toggle'].attributes['aria-expanded'],'true');
+  nodes['nav-settings'].listeners.click({currentTarget:nodes['nav-settings'],preventDefault(){}});
+  assert.equal(nodes['settings-view'].hidden,false); assert.equal(nodes['garage-view'].hidden,true); assert.equal(nodes['nav-settings'].attributes['aria-current'],'page');
+  assert.equal(nodes['settings-title'].focused,true); assert.equal(nodes['settings-title'].focusOptions.preventScroll,true);
+  assert.equal(nodes.__scrollCalls.at(-1).top,0); assert.equal(nodes.__scrollCalls.at(-1).behavior,'auto');
+  assert.equal(nodes['site-navigation'].hidden,true); assert.equal(nodes['nav-toggle'].attributes['aria-expanded'],'false');
+  nodes['nav-toggle'].listeners.click();
+  nodes.__documentListeners.keydown({key:'Escape',preventDefault(){this.prevented=true;}});
+  assert.equal(nodes['site-navigation'].hidden,true); assert.equal(nodes['nav-toggle'].focused,true,'Escape closes disclosure and returns focus to its button');
+  nodes['nav-toggle'].listeners.click();
+  nodes.__documentListeners.click({target:nodes.status});
+  assert.equal(nodes['site-navigation'].hidden,true,'clicking outside closes the disclosure');
+  nodes.__setHash('#garage');
+  assert.equal(nodes['garage-view'].hidden,false); assert.equal(nodes['nav-garage'].attributes['aria-current'],'page');
+  nodes.__setHash('#sicherungen');
+  assert.equal(nodes['backups-view'].hidden,false); assert.equal(nodes['data-export-wrap'].hidden,false);
+  nodes['motion-preference'].value='reduce'; nodes['motion-preference'].listeners.change();
+  assert.equal(nodes['__storage'].get('wolfs-garage-motion-preference'),'reduce'); assert.match(nodes['motion-message'].textContent,/gespeichert/);
+  nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:false,initialHash:'#sicherungen'});
+  assert.equal(nodes['nav-backups'].hidden,true); assert.equal(nodes['backups-view'].hidden,true); assert.equal(nodes['garage-view'].hidden,false,'legacy mode cannot open the backup view');
+  assert.match(nodes['app-version'].textContent,/in diesem Modus nicht verfügbar/);
+  nodes = await run(async () => ({ok:true,json:async()=>({vehicles:[]})}), {standalone:true,storageUnavailable:true});
+  assert.equal(nodes['motion-preference'].value,'system');
+  nodes['motion-preference'].value='reduce'; nodes['motion-preference'].listeners.change();
+  assert.match(nodes['motion-message'].textContent,/bis zum Neuladen/,'storage exceptions leave the setting usable for this page');
+  assert.doesNotMatch(fs.readFileSync(require('node:path').join(__dirname,'index.html'),'utf8'),/Alles im <em>Blick/,'the promotional intro is removed');
 
   // HU month projection is explicitly capability-gated and server-dated; the UI only renders its values.
   const huCases = [
@@ -143,6 +187,40 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
     : {ok:true,json:async()=>({vehicle:navVehicles[0],reminders:[],services:[]})},{standalone:true,reducedMotion:true});
   await nodes.vehicles.children[0].listeners.click();
   assert.equal(nodes['own-detail-actions'].scrollOptions.behavior,'auto','reduced motion avoids smooth scrolling');
+  nodes=await run(async path=>path==='/garage-api/vehicles'
+    ? {ok:true,json:async()=>({vehicles:[navVehicles[0]]})}
+    : {ok:true,json:async()=>({vehicle:navVehicles[0],reminders:[],services:[]})},{standalone:true,storedMotionPreference:'reduce'});
+  assert.equal(nodes['motion-preference'].value,'reduce','stored motion preference is restored from local storage');
+  await nodes.vehicles.children[0].listeners.click();
+  assert.equal(nodes['own-detail-actions'].scrollOptions.behavior,'auto','the saved preference reduces action-bar scrolling even when the OS allows motion');
+  let delayNextSummary=false, releaseNavigationSummary;
+  nodes=await run(async path=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[navVehicles[0]]})};
+    if(delayNextSummary){delayNextSummary=false;return new Promise(resolve=>{releaseNavigationSummary=resolve;});}
+    return {ok:true,json:async()=>({vehicle:navVehicles[0],reminders:[],services:[]})};
+  },{standalone:true});
+  delayNextSummary=true;
+  const pendingCardSelection=nodes.vehicles.children[0].listeners.click();
+  while(!releaseNavigationSummary) await new Promise(resolve=>setTimeout(resolve,1));
+  nodes['nav-settings'].listeners.click({currentTarget:nodes['nav-settings'],preventDefault(){}});
+  releaseNavigationSummary({ok:true,json:async()=>({vehicle:navVehicles[0],reminders:[],services:[]})}); await pendingCardSelection;
+  assert.equal(nodes['own-detail-actions'].scrollCount,undefined,'a vehicle summary finishing after a view switch cannot focus hidden garage actions');
+  assert.equal(nodes['settings-title'].focused,true);
+
+  let unsavedVehicle={id:31,name:'Draft vehicle',make:'Example',model:'Original',year:2022,vehicleType:'Limousine',revision:2,status:{readiness:'ready',issues:[],revision:1}}, draftWrites=0;
+  nodes=await run(async(path,options={})=>{
+    if(options.method){draftWrites++;return {ok:true,json:async()=>unsavedVehicle};}
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[unsavedVehicle]})};
+    return {ok:true,json:async()=>({vehicle:unsavedVehicle,reminders:[],services:[]})};
+  },{standalone:true,dataExport:true});
+  nodes['vehicle-edit'].listeners.click();
+  const findModel=node=>node.id==='entry-model'?node:node.children.map(findModel).find(Boolean);
+  findModel(nodes['own-fields']).value='Unsaved draft';
+  nodes['nav-settings'].listeners.click({currentTarget:nodes['nav-settings'],preventDefault(){}});
+  assert.equal(nodes['garage-view'].hidden,true); assert.equal(nodes['own-panel'].hidden,false); assert.equal(findModel(nodes['own-fields']).value,'Unsaved draft');
+  assert.equal(draftWrites,0,'changing views does not submit an active form');
+  nodes['nav-garage'].listeners.click({currentTarget:nodes['nav-garage'],preventDefault(){}});
+  assert.equal(findModel(nodes['own-fields']).value,'Unsaved draft','returning to Garage preserves the unsaved form values');
 
   const legacyHuNodes=await run(async path=>({ok:true,json:async()=>path.endsWith('/summary')?{vehicle:{status:{readiness:'ready',issues:[],revision:1}},reminders:[],services:[]}:{vehicles:[{id:1,name:'Legacy',status:{readiness:'ready',issues:[],revision:1}}]}}),{standalone:true});
   assert.equal(legacyHuNodes['inspection-panel'].hidden,true);

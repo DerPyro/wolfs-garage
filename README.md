@@ -10,6 +10,7 @@ The standalone **0.1 alpha** has its own backend and SQLite database. It runs wi
 
 Available now:
 
+- Navigate Garage, Sicherungen and Einstellungen from the header; the garage opens directly without an intro screen, and view changes preserve unsaved forms without writing them.
 - Create and edit vehicles, vehicle types, units and identifying details.
 - Maintain readiness and open issues independently. INOP marks an unusable vehicle; a wrench indicates open work, without a counter or green readiness check.
 - Record dated odometer readings and completed service/repair work with costs and an optional HTTPS document reference.
@@ -21,6 +22,7 @@ Available now:
 - Record an inspection due month and view its Europe/Berlin status and separate effective-readiness projection under the owner's policy; unknown dates remain unknown.
 - Download a portable owner-data JSON export, separate from the restorable SQLite backup.
 - Download a consistent full SQLite backup separately from the portable JSON export; restore it only to a new database path with the explicit restore command.
+- Choose system motion or reduced motion in local settings; the system choice respects the operating-system preference.
 
 Recurring maintenance rules, corrections to record dates or odometer readings, photo and invoice uploads, parts inventory, Telegram, calendar integration and AI are still roadmap items. Following the user decision of 2026-10-29, maintenance planning and reliable 1.0 operation take priority over photo and invoice uploads; existing HTTPS document references remain available. Unclassified work remains explicitly unclassified; the app does not infer a severity. This is an early alpha, not the completed original feature list.
 

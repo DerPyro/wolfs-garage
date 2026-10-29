@@ -28,6 +28,16 @@ To stop the container while retaining its data, use `docker compose ... down` (w
 
 `deploy/compose.release.yaml` is prepared for a future pinned image, but no registry image is published yet. Continue using the source-build target above until the release is explicitly available. After that, the release guide explains how to provide `GARAGE_IMAGE` and switch Compose files while preserving the same project name and data volume: [container releases](container-releases.md).
 
+## Views and preferences
+
+The header navigation opens **Garage**, **Sicherungen** and **Einstellungen**. The Garage view opens directly without an intro screen; vehicle creation remains there. **Sicherungen** contains the portable JSON export, the complete SQLite backup download and the offline restore instructions. There is no browser upload or JSON restore. The JSON file and SQLite backup are separate formats and purposes.
+
+The navigation uses `#garage`, `#sicherungen` and `#einstellungen`; browser Back/Forward changes views. Switching views does not submit or discard an open form, and returning to Garage restores the selected vehicle and unsaved editor draft. Escape closes the navigation and returns focus to its button; clicking outside closes it without moving focus from the clicked control.
+
+**Einstellungen** shows the application version and a local motion preference. **Systemeinstellung** follows the browser/operating-system `prefers-reduced-motion` setting; **Animationen reduzieren** disables smooth card-selection scrolling. The choice is saved in this browser's local storage and does not write to the Garage database or sync to other browsers.
+
+**Verifiziert am 2026-10-29:** Synthetic real-Chromium checks passed for navigation, browser Back/Forward, draft preservation, keyboard/outside-click focus behavior, version and motion preferences, and the SQLite download at 320, 390, 768 and 1280 px. The navigation screenshot uses synthetic/empty app data: [mobile navigation menu](discovery/evidence/navigation-menu-mobile.png). The separate [SQLite backup browser check](../tests/database_backup_browser.cjs) verifies the downloaded SQLite file. These checks did not use live vehicle data.
+
 ## Network boundary and access
 
 The Compose service binds to `127.0.0.1` on the host, by default port `8080`. Keep that loopback binding; never publish the container directly to the public Internet. The app has no in-app login or user authorization. Anyone who can reach it can view and change all vehicle data.

@@ -1,11 +1,12 @@
 // Synthetic Chromium acceptance for the distinct full-database backup download.
-// Serve a fresh schema-4 standalone database on loopback port 18990 first.
+// Serve the standalone app on loopback; override GARAGE_BROWSER_ORIGIN if needed.
 const fs = require('fs');
 const {spawn} = require('child_process');
 const {setTimeout: delay} = require('timers/promises');
 const browserDir = fs.readdirSync('/ms-playwright').find(name => name.startsWith('chromium-'));
 const binary = [`/ms-playwright/${browserDir}/chrome-linux/chrome`, `/ms-playwright/${browserDir}/chrome-linux64/chrome`].find(fs.existsSync);
 const output = '/out/database-backup-browser';
+const origin = process.env.GARAGE_BROWSER_ORIGIN || 'http://127.0.0.1:18990';
 let browser, pageSocket, browserSocket, sequence = 0;
 const pagePending = new Map(), browserPending = new Map(), downloadEvents = [], errors = [];
 
@@ -27,7 +28,7 @@ async function until(expression, label) {
     await delay(100);
     try { if (await value(expression)) return; } catch (_) {}
   }
-  const diagnostic = await value(`({status:document.querySelector('#status')?.textContent,button:document.querySelector('#database-backup')?.outerHTML,errors:${JSON.stringify(errors)}})`);
+  const diagnostic = await value(`({status:document.querySelector('#status')?.textContent,hash:location.hash,button:document.querySelector('#database-backup')?.outerHTML,errors:${JSON.stringify(errors)}})`);
   throw Error(`Timed out waiting for ${label}: ${JSON.stringify(diagnostic)}`);
 }
 
@@ -75,8 +76,14 @@ async function main() {
   await rpc(pageSocket,pagePending,'Page.enable');
   await rpc(pageSocket,pagePending,'Runtime.enable');
   await rpc(pageSocket,pagePending,'Emulation.setDeviceMetricsOverride',{width:390,height:900,deviceScaleFactor:1,mobile:true});
-  await rpc(pageSocket,pagePending,'Page.navigate',{url:'http://127.0.0.1:18990/'});
-  await until("document.querySelector('#status')?.textContent.includes('leer') && !!document.querySelector('#database-backup')",'backup action on empty standalone page');
+  await rpc(pageSocket,pagePending,'Page.navigate',{url:`${origin}/`});
+  await until("document.querySelector('#nav-toggle') && document.querySelector('#vehicle-add')?.getClientRects().length>0",'initial garage view and loaded capabilities');
+  const initial=await value(`({intro:!!document.querySelector('.intro'),backup:document.querySelector('#database-backup').getClientRects().length>0,garage:!document.querySelector('#garage-view').hidden})`);
+  if(initial.intro||initial.backup||!initial.garage)throw Error(`Garage view still shows intro or backup controls: ${JSON.stringify(initial)}`);
+  await value("document.querySelector('#nav-toggle').click()");
+  await until("!document.querySelector('#site-navigation').hidden",'open navigation for backup view');
+  await value("document.querySelector('#nav-backups').click()");
+  await until("location.hash==='#sicherungen' && !document.querySelector('#backups-view').hidden",'open backups view');
 
   const widths=[320,390,768,1280];
   for (const width of widths) {
