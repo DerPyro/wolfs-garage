@@ -1,4 +1,4 @@
-// Synthetic Chromium acceptance. The caller serves a fresh schema-5 DB at
+// Synthetic Chromium acceptance. The caller serves a fresh schema-6 DB at
 // http://127.0.0.1:18987; this script creates two fixtures through the API.
 const fs = require('fs');
 const os = require('os');
@@ -48,11 +48,14 @@ async function main(){
   for(let i=0;i<120&&!fs.existsSync(downloaded);i++)await delay(100);
   if(!fs.existsSync(downloaded))throw Error('JSON export download did not complete');
   const text=fs.readFileSync(downloaded,'utf8');const data=JSON.parse(text);
-  if(data.format!=='wolfs-garage-owner-export'||data.formatVersion!==3||data.databaseSchema!==5||data.applicationVersion!==vehicles.applicationVersion)throw Error('Downloaded export metadata is invalid');
+  if(data.format!=='wolfs-garage-owner-export'||data.formatVersion!==4||data.databaseSchema!==6||data.applicationVersion!==vehicles.applicationVersion)throw Error('Downloaded export metadata is invalid');
   if(data.vehicles.length!==2||!data.vehicles.some(v=>v.id===vehicles.one.id)||!data.vehicles.some(v=>v.id===vehicles.two.id))throw Error('Downloaded export does not include both synthetic vehicles');
   if(data.records.length!==1||data.records[0].description!=='Synthetic repair after correction'||data.records[0].cost!=='13.40')throw Error('Downloaded export does not include corrected synthetic record');
   if(data.odometerReadings.length!==3||!data.odometerReadings.every(x=>typeof x.odometer==='string'))throw Error('Downloaded export lost odometer rows or exact string values');
-  if(!data.odometerReadings.every(x=>Number.isInteger(x.revision)&&['manual','record'].includes(x.provenance))||!data.odometerReadings.some(x=>x.provenance==='record'&&x.sourceRecordId===data.records[0].id))throw Error('Format 3 export omitted reading revision/provenance/link fields');
+  if(!data.odometerReadings.every(x=>Number.isInteger(x.revision)&&['manual','record'].includes(x.provenance))||!data.odometerReadings.some(x=>x.provenance==='record'&&x.sourceRecordId===data.records[0].id))throw Error('Format 4 export omitted reading revision/provenance/link fields');
+  const exportedOne=data.vehicles.find(v=>v.id===vehicles.one.id),exportedTwo=data.vehicles.find(v=>v.id===vehicles.two.id);
+  if(exportedOne.annualUsage!==null||exportedOne.readingPromptDays!==30||exportedTwo.annualUsage!==null||exportedTwo.readingPromptDays!==30)throw Error('Format 4 export omitted raw annual-usage/prompt settings');
+  if('mileageEstimate'in exportedOne||'readingPrompt'in exportedOne)throw Error('Format 4 export unexpectedly contains derived mileage projections');
   if(!data.history.some(e=>e.action==='issue.completed')||!data.history.some(e=>e.action==='record.corrected'))throw Error('Downloaded export is missing closure or correction history');
   if(data.commands!==undefined||text.includes('commandId'))throw Error('Export unexpectedly contains command replay state');
   if(errors.length)throw Error('JavaScript errors: '+errors.join(','));

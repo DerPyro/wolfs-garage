@@ -46,7 +46,7 @@ class MeasurementStoreTests(unittest.TestCase):
 
     def test_schema5_new_manual_and_work_readings_have_explicit_provenance(self):
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 6)
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
             cols = [row[1] for row in db.execute("PRAGMA table_info(odometer_readings)")]
             self.assertEqual(cols[-3:], ["revision", "provenance", "source_record_id"])
@@ -168,7 +168,7 @@ class MeasurementStoreTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT seq FROM sqlite_sequence WHERE name='odometer_readings'").fetchone()[0], 88)
             self.assertEqual(db.execute("SELECT id,revision,provenance,source_record_id FROM odometer_readings WHERE id=20").fetchone(),
                              (20, 1, "legacy_unknown", None))
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 6)
         self.assertEqual(legacy_store.list_odometer(7)[0]["note"], "Record 11")
 
         before = legacy_store.get_odometer_reading(7, 20)["reading"]

@@ -17,6 +17,9 @@ This file tracks changes for a future release. Entries under **Unreleased** do n
 - Link record-created odometer readings explicitly and correct linked record dates/exact values atomically with expected revisions, idempotent retries and before/after audit history. Manual readings have their own correction operation; legacy links require explicit owner confirmation and are never inferred from notes or matching values.
 - Add schema 5 with reading revision/provenance/source-record fields. Explicitly upgrade schema 1–4 after a checked backup; old readings remain `legacy_unknown` with no link. Startup and automatic updates do not migrate across schemas.
 - Version the portable owner export as format 3 with reading provenance/revision/link fields; SQLite remains the full restore format.
+- Show an annual-usage estimate derived from the latest actual reading and an inline configurable Garage prompt for a new actual reading. Projections are read-only and are never persisted as readings.
+- Add schema 6 with optional exact annual usage and nullable check-prompt interval (default 30 days); explicitly upgrade schemas 1–5 only after a checked backup. Schema-6 fields are stored settings; estimates and prompt states remain derived.
+- Version portable owner export as format 4 with only the stored `annualUsage` and `readingPromptDays`; omit derived projections.
 
 ### Release preparation
 

@@ -56,6 +56,7 @@
 @media(max-width:350px){.card-top{gap:4px}.card-indicators{gap:4px}.car-icon{width:80px}}
 
 .inspection-summary{margin:9px 0 0}.inspection-message{margin:0;color:#b9c5b4;font-size:12px;line-height:1.45;overflow-wrap:anywhere}.inspection-message.state-due{color:#e5ce83}.inspection-message.state-overdue,.inspection-message.state-blocking{color:#ffb9a9}.inspection-message.unavailable{color:#9daa99}
+.mileage-forecast{margin:8px 0 0;color:#d6dfce;font-size:13px;line-height:1.45;overflow-wrap:anywhere}.mileage-forecast.unavailable{color:#aab5a3}.mileage-prompts{margin:24px 0}.mileage-prompt-items{display:grid;gap:10px}.mileage-prompt{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 14px;padding:12px 14px;border:1px solid #3c4934;border-radius:10px;background:#20271e}.mileage-prompt h3{margin:0;color:#eaf0e3;font-size:14px}.mileage-prompt-reason,.mileage-prompt-last-reading{grid-column:1;margin:0;color:#b9c5b4;font-size:12px;line-height:1.4}.mileage-prompt .condition-edit{grid-column:2;grid-row:1 / span 3}.mileage-prompt-status{margin:0}
 
 /* Standalone entry forms keep actions outside the compact vehicle cards. */
 .own-toolbar{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 18px}.own-notice{color:#d3e7b1;font-size:13px;line-height:1.5}.own-notice:empty{display:none}

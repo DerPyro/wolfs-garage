@@ -10,7 +10,7 @@ Treat both files as sensitive vehicle data. Keep a backup outside the applicatio
 ## Before updating
 
 1. Select a candidate source revision that is a known Git tag or full commit. Record the tag, resolved 40-character commit SHA, application version, current database schema, and resulting container image digest. Use a clean source checkout. An exact image digest is the strongest pin; a source tag alone does not freeze a rebuilt image's dependencies unless those inputs are pinned too.
-2. Confirm the candidate is compatible with the current schema. Normal startup never creates or upgrades an existing database. The private automatic updater accepts matching schemas 3, 4 or 5; every cross-schema transition remains blocked and requires its own migration and recovery rehearsal.
+2. Confirm the candidate is compatible with the current schema. Normal startup never creates or upgrades an existing database. The updater code accepts matching schemas 3–6; every cross-schema transition remains blocked and requires its own migration and recovery rehearsal. The private reference installation remains at application version `0.1.0a8` and schema 5 pending separate approval for a schema-6 migration.
 3. Stop writes for the backup point. Create a fresh SQLite backup destination and copy it to independent protected storage. Check the retained file with `python -m wolfs_garage check-db` against a copy or use the isolated restore procedure below; do not treat successful download alone as a restore test.
 4. Preserve the previous known-good image digest and its matching schema information. Keep the backup until the update and recovery window have passed.
 
@@ -57,7 +57,7 @@ This is future guidance only: no GHCR image is published yet. For rollback witho
 
 ## Restore rehearsal
 
-Use a unique Compose project name, which creates a new named volume. Put a copy of the backup in a local `recovery/` directory. The current application supports restore sources with schema 1–5; restore validates SQLite integrity, foreign keys, canonical schema layout and supported version, then writes a new exclusive `0600` destination. It does not migrate, overwrite a destination, follow a symlink, alter its source, or replace the configured live database.
+Use a unique Compose project name, which creates a new named volume. Put a copy of the backup in a local `recovery/` directory. The current application supports restore sources with schema 1–6; restore validates SQLite integrity, foreign keys, canonical schema layout and supported version, then writes a new exclusive `0600` destination. It does not migrate, overwrite a destination, follow a symlink, alter its source, or replace the configured live database.
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -68,7 +68,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   sh -c 'python -m wolfs_garage restore-backup /recovery/wolfs-garage-backup.sqlite3 /var/lib/wolfs-garage/garage.sqlite3 && chown 65532:65532 /var/lib/wolfs-garage/garage.sqlite3'
 ```
 
-The restore leaves the source schema unchanged. For a schema-5 backup, validate and start the isolated instance:
+The restore leaves the source schema unchanged. For a schema-6 backup, validate and start the isolated instance:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -85,7 +85,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   -f deploy/compose.standalone.yaml down
 ```
 
-Do not weaken the off-host backup's permissions for the container. This one-off helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to give the new `0600` destination to the application's UID 65532; the normal app remains unprivileged. The current runtime only opens schema 5. For a schema-1/2/3/4 backup, stop before `check-db` or startup. Explicitly migrate the restored copy in the isolated volume and create its checked backup:
+Do not weaken the off-host backup's permissions for the container. This one-off helper runs as root with only `DAC_OVERRIDE` to read the protected read-only source mount and `CHOWN` to give the new `0600` destination to the application's UID 65532; the normal app remains unprivileged. The current runtime opens schema 6. For a schema-1–5 backup, stop before `check-db` or startup. Explicitly migrate the restored copy in the isolated volume and create its checked backup:
 
 ```sh
 docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
@@ -95,7 +95,7 @@ docker compose --project-name wg-restore-UNIQUE --env-file .env.example \
   /var/lib/wolfs-garage/schema-before-upgrade-UNIQUE.sqlite3
 ```
 
-Run the upgrade only for a schema-1/2/3/4 source; then use the schema-5 `check-db` and startup commands above. Use the same reviewed image for restore and validation. The migration applies only to the isolated copy. Choose a free loopback port for the health check. Confirm the health endpoint and representative vehicles, statuses, readings (including legacy provenance), records, audit history and command retries. Keep the restored instance private, then stop it with `down` (without `-v`). Never mount or point the rehearsal at the live project volume.
+Run the upgrade only for a schema-1–5 source; then use the schema-6 `check-db` and startup commands above. Use the same reviewed image for restore and validation. The migration applies only to the isolated copy. Choose a free loopback port for the health check. Confirm the health endpoint and representative vehicles, statuses, readings (including legacy provenance), records, audit history and command retries. Keep the restored instance private, then stop it with `down` (without `-v`). Never mount or point the rehearsal at the live project volume.
 
 ## Update, migration and rollback
 

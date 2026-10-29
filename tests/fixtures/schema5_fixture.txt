@@ -1,0 +1,24 @@
+-- Frozen schema-5 layout before annual-usage/read-prompt fields. Do not rewrite as current schema.
+PRAGMA foreign_keys=ON;
+CREATE TABLE meta(schema INTEGER NOT NULL);
+INSERT INTO meta VALUES(5);
+CREATE TABLE vehicles(id INTEGER PRIMARY KEY AUTOINCREMENT,make TEXT NOT NULL,model TEXT NOT NULL,name TEXT NOT NULL,year INTEGER,license_plate TEXT NOT NULL,vehicle_type TEXT NOT NULL,unit TEXT NOT NULL,revision INTEGER NOT NULL,inspection_due_month TEXT);
+CREATE TABLE states(vehicle_id INTEGER PRIMARY KEY REFERENCES vehicles(id),readiness TEXT NOT NULL,issues TEXT NOT NULL,revision INTEGER NOT NULL);
+CREATE TABLE records(id INTEGER PRIMARY KEY AUTOINCREMENT,vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),description TEXT NOT NULL,kind TEXT NOT NULL,day TEXT NOT NULL,odometer TEXT,unit TEXT NOT NULL,cost TEXT,currency TEXT,document_url TEXT,closed_issue_id TEXT,revision INTEGER NOT NULL DEFAULT 1);
+CREATE UNIQUE INDEX records_id_vehicle_unique ON records(id,vehicle_id);
+CREATE TABLE commands(vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),action TEXT NOT NULL,command_id TEXT NOT NULL,payload_hash TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(vehicle_id,action,command_id));
+CREATE TABLE history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),action TEXT NOT NULL,occurred_at TEXT NOT NULL,before_json TEXT NOT NULL,after_json TEXT NOT NULL);
+CREATE TABLE odometer_readings(id INTEGER PRIMARY KEY AUTOINCREMENT,vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),day TEXT NOT NULL,value TEXT NOT NULL,unit TEXT NOT NULL,note TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1 CHECK(typeof(revision)='integer' AND revision>=1),provenance TEXT NOT NULL CHECK(provenance IN ('legacy_unknown','manual','record')),source_record_id INTEGER,CHECK((provenance='record' AND source_record_id IS NOT NULL) OR (provenance IN ('legacy_unknown','manual') AND source_record_id IS NULL)),FOREIGN KEY(source_record_id,vehicle_id) REFERENCES records(id,vehicle_id));
+CREATE UNIQUE INDEX odometer_source_record_unique ON odometer_readings(source_record_id) WHERE source_record_id IS NOT NULL;
+CREATE TRIGGER history_no_update BEFORE UPDATE ON history BEGIN SELECT RAISE(ABORT,'history is append-only'); END;
+CREATE TRIGGER history_no_delete BEFORE DELETE ON history BEGIN SELECT RAISE(ABORT,'history is append-only'); END;
+CREATE INDEX odometer_vehicle_date ON odometer_readings(vehicle_id,day,id);
+CREATE INDEX records_vehicle_date ON records(vehicle_id,day,id);
+INSERT INTO vehicles VALUES(7,'Synthetic','Mileage','Synthetic Mileage',2020,'','Car','km',4,'2027-04');
+INSERT INTO states VALUES(7,'ready','[]',3);
+INSERT INTO records VALUES(11,7,'Linked synthetic service','service','2025-04-05','1234.125','km','9.99','EUR',NULL,NULL,6);
+INSERT INTO odometer_readings VALUES(17,7,'2025-04-05','1234.125','km','Record 11',3,'legacy_unknown',NULL);
+INSERT INTO odometer_readings VALUES(18,7,'2025-04-05','1234.125','km','Record 11',4,'record',11);
+INSERT INTO odometer_readings VALUES(19,7,'2025-06-01','1300.500','km','Manual synthetic reading',2,'manual',NULL);
+INSERT INTO commands VALUES(7,'record','legacy-command','legacy-hash','{"record":{"id":11,"description":"Linked synthetic service"}}');
+INSERT INTO history VALUES(13,7,'record.created','2025-04-05T00:00:00+00:00','null','{"record":{"id":11,"description":"Linked synthetic service"}}');

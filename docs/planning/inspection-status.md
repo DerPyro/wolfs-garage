@@ -18,9 +18,9 @@ The projected `effectiveReadiness` is `not_ready` if manually stored readiness i
 
 Vehicle create/update accepts `inspectionDueMonth` as `null` or canonical `YYYY-MM`, years 0001–9998. Omission during update preserves the existing value; explicit `null` clears it. A successful update increments the vehicle revision and audits the stored vehicle fields. Public vehicle and summary responses add `inspection` and `effectiveReadiness`; `status.readiness` remains the manual value. The date provider is read once for a list projection and each returned object carries `asOf` and `timeZone`.
 
-Schema 4 introduced nullable `vehicles.inspection_due_month`; fresh databases currently use schema 5. Schemas 1–4 require an explicit checked-backup upgrade to schema 5; startup does not migrate. Schema 1 also gains its existing `records.revision` field. Schema-5 upgrade is a no-op without a backup. Backups can read schemas 1–5. Automatic live updates must keep the running and candidate schemas equal. See the current [measurement provenance and rollout record](measurement-corrections.md).
+Schema 4 introduced nullable `vehicles.inspection_due_month`; fresh databases currently use schema 6. Schemas 1–5 require an explicit checked-backup upgrade to schema 6; startup does not migrate. Schema 1 also gains its existing `records.revision` field. A current-schema upgrade is a no-op without a backup. Backups can read schemas 1–6. Automatic live updates must keep the running and candidate schemas equal; the private reference database remains schema 5 pending separate migration approval. See the current [measurement provenance and rollout record](measurement-corrections.md).
 
-Portable export format 2 includes the raw `inspectionDueMonth` in stored vehicle metadata, but omits `inspection` and `effectiveReadiness`. Existing audit payloads retain their original recorded fields.
+Portable export format 2 historically added the raw `inspectionDueMonth` in stored vehicle metadata, but omitted `inspection` and `effectiveReadiness`. Current export format 4 also includes stored `annualUsage` and `readingPromptDays`, while omitting all derived projections. Existing audit payloads retain their original recorded fields.
 
 ## Acceptance focus
 

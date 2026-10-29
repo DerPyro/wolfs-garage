@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, measurementCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, measurementCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, mileageForecast: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -100,6 +100,9 @@ const severityLabels = {observation:"Auffälligkeit", repair:"Reparaturbedürfti
 const lifecycleLabels = {open:"Offen", observed:"Beobachten"};
 const dueStateLabels = {overdue:"Überfällig", today:"Heute fällig", upcoming:"Noch nicht fällig", unscheduled:"Ohne Fälligkeitsdatum"};
 const inspectionStateLabels = {unknown:"HU / TÜV nicht erfasst", upcoming:"HU / TÜV fällig in", due:"HU / TÜV diesen Monat fällig", overdue:"HU / TÜV überfällig", blocking:"INOP: HU / TÜV überfällig"};
+const mileageEstimateStates = new Set(["estimated", "annual_usage_missing", "anchor_missing", "future_anchor", "unit_mismatch", "out_of_range"]);
+const readingPromptStates = new Set(["disabled", "needs_reading", "not_due", "due", "needs_review"]);
+const readingPromptReasons = {future_anchor:"Der letzte Stand liegt in der Zukunft.", unit_mismatch:"Die Einheit des letzten Stands stimmt nicht mit dem Fahrzeug überein.", date_out_of_range:"Das Datum des letzten Stands kann nicht für die Erinnerung verwendet werden."};
 function validIsoDate(value) { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value; }
 function validInspectionMonth(value) { if (typeof value !== "string" || !/^(\d{4})-(0[1-9]|1[0-2])$/.test(value)) return false; const year = Number(value.slice(0, 4)); return year >= 1 && year <= 9998; }
 function validInspection(vehicle) {
@@ -132,6 +135,85 @@ function inspectionSummary(vehicle) {
   const overdueMonths = Math.abs(value.monthsUntilDue);
   const overdueText = `überfällig seit circa ${overdueMonths} ${overdueMonths === 1 ? "Monat" : "Monaten"}`;
   return value.state === "blocking" ? `HU / TÜV: ${date} · ${overdueText} · automatisch INOP ab ${readableDate(value.blockingFrom)}` : `HU / TÜV: ${date} · ${overdueText}`;
+}
+function validExactDecimal(value) { return typeof value === "string" && /^\d+(?:\.\d{1,3})?$/.test(value); }
+function validMileageEstimate(vehicle) {
+  const estimate = vehicle && vehicle.mileageEstimate;
+  if (!estimate || !validIsoDate(estimate.asOf) || estimate.timeZone !== "Europe/Berlin" || !mileageEstimateStates.has(estimate.state)) return false;
+  if (!(estimate.annualUsage === null || validExactDecimal(estimate.annualUsage)) || !(estimate.estimatedOdometer === null || validExactDecimal(estimate.estimatedOdometer))) return false;
+  if (!(estimate.elapsedDays === null || Number.isInteger(estimate.elapsedDays) && (estimate.state === "future_anchor" ? estimate.elapsedDays < 0 : estimate.elapsedDays >= 0))) return false;
+  if (!(estimate.anchor === null || estimate.anchor && validIsoDate(estimate.anchor.date) && validExactDecimal(estimate.anchor.odometer) && typeof estimate.anchor.unit === "string")) return false;
+  return estimate.unit === vehicle.odometerUnit;
+}
+function validReadingPrompt(vehicle) {
+  const prompt = vehicle && vehicle.readingPrompt;
+  if (!prompt || !validIsoDate(prompt.asOf) || prompt.timeZone !== "Europe/Berlin" || !readingPromptStates.has(prompt.state)) return false;
+  if (!(prompt.intervalDays === null || Number.isInteger(prompt.intervalDays) && prompt.intervalDays >= 1 && prompt.intervalDays <= 3650)) return false;
+  if (!(prompt.dueDate === null || validIsoDate(prompt.dueDate))) return false;
+  if (!(prompt.reason === null || Object.hasOwn(readingPromptReasons, prompt.reason))) return false;
+  return true;
+}
+function formattedEstimate(value) {
+  if (!validExactDecimal(value)) return "";
+  const [whole, fraction] = value.split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return fraction === undefined ? grouped : `${grouped},${fraction}`;
+}
+function openForecastAction(mode, action = {}) {
+  if (state.entry || state.saving || !$("own-panel").hidden || !$("condition-form").hidden) { $("own-notice").textContent = "Schließe zuerst den geöffneten Entwurf, bevor du diese Aktion startest."; return; }
+  openEntry(mode, action);
+}
+function renderMileageEstimate(vehicle) {
+  const output = $("mileage-forecast"); output.hidden = !state.mileageForecast;
+  if (!state.mileageForecast) return;
+  output.replaceChildren();
+  output.className = "mileage-forecast";
+  if (!validMileageEstimate(vehicle)) { output.classList.add("unavailable"); output.textContent = "Fahrleistungsschätzung momentan nicht verfügbar."; return; }
+  const estimate = vehicle.mileageEstimate;
+  output.classList.add(`state-${estimate.state}`);
+  if (estimate.state === "estimated" && estimate.estimatedOdometer !== null && estimate.anchor) {
+    const unit = estimate.unit === "h" ? "h" : estimate.unit;
+    output.textContent = estimate.unit === "h"
+      ? `Geschätzter Betriebsstundenstand heute: ca. ${formattedEstimate(estimate.estimatedOdometer)} h · letzter tatsächlicher Stand: ${formattedEstimate(estimate.anchor.odometer)} h am ${readableDate(estimate.anchor.date)}`
+      : `Geschätzt heute: ca. ${formattedEstimate(estimate.estimatedOdometer)} ${unit} · letzter tatsächlicher Stand: ${formattedEstimate(estimate.anchor.odometer)} ${unit} am ${readableDate(estimate.anchor.date)}`;
+    return;
+  }
+  const messages = {
+    annual_usage_missing:"Jährliche Nutzung hinterlegen, um eine Schätzung zu sehen.",
+    anchor_missing:"Für eine Schätzung zuerst einen tatsächlichen Stand erfassen.",
+    future_anchor:"Der letzte tatsächliche Stand liegt in der Zukunft; eine Schätzung ist nicht verfügbar.",
+    unit_mismatch:"Die Einheit des letzten tatsächlichen Stands passt nicht zur Fahrzeugeinheit.",
+    out_of_range:"Die Fahrleistungsschätzung liegt außerhalb des unterstützten Bereichs."
+  };
+  output.classList.add("unavailable"); output.append(document.createTextNode(messages[estimate.state] || "Fahrleistungsschätzung momentan nicht verfügbar."));
+  if (estimate.state === "annual_usage_missing") { const action = el("button", "condition-edit mileage-forecast-action", "Jahresnutzung eintragen"); action.type = "button"; action.addEventListener("click", () => openForecastAction("vehicle-edit")); output.append(document.createTextNode(" "), action); }
+  if (estimate.state === "anchor_missing") { const action = el("button", "condition-edit mileage-forecast-action", "Tatsächlichen Stand erfassen"); action.type = "button"; action.addEventListener("click", () => openForecastAction("odometer", {prompt:true, promptDate:estimate.asOf})); output.append(document.createTextNode(" "), action); }
+}
+function renderMileagePrompts() {
+  const section = $("mileage-prompts"), container = $("mileage-prompt-items"), status = $("mileage-prompt-status");
+  section.hidden = !state.mileageForecast; container.replaceChildren(); status.textContent = "";
+  if (!state.mileageForecast) return;
+  const candidates = []; let incomplete = false;
+  for (const vehicle of state.vehicles) {
+    if (!validReadingPrompt(vehicle)) { incomplete = true; continue; }
+    const prompt = vehicle.readingPrompt;
+    if (["due", "needs_reading", "needs_review"].includes(prompt.state)) candidates.push({vehicle, prompt});
+  }
+  for (const {vehicle, prompt} of candidates) {
+    const row = el("article", `mileage-prompt state-${prompt.state}`); row.id = `mileage-prompt-${String(vehicle.id)}`;
+    const title = el("h3", "", vehicleName(vehicle)); row.append(title);
+    const actualUnitName = vehicle.odometerUnit === "h" ? "Betriebsstundenstand" : vehicle.odometerUnit === "mi" ? "Meilenstand" : "Kilometerstand";
+    const reason = prompt.state === "needs_reading" ? `Noch kein tatsächlicher ${actualUnitName} erfasst.` : prompt.state === "needs_review" ? readingPromptReasons[prompt.reason] || "Der letzte Stand muss geprüft werden." : `Ein neuer Stand ist fällig${prompt.dueDate ? ` seit ${readableDate(prompt.dueDate)}` : ""}.`;
+    row.append(el("p", "mileage-prompt-reason", reason));
+    const candidateAnchor = vehicle.mileageEstimate && vehicle.mileageEstimate.anchor;
+    const anchor = candidateAnchor && validIsoDate(candidateAnchor.date) && validExactDecimal(candidateAnchor.odometer) && typeof candidateAnchor.unit === "string" ? candidateAnchor : null;
+    row.append(el("p", "mileage-prompt-last-reading", anchor ? `Letzter tatsächlicher Stand: ${readableDate(anchor.date)}` : "Kein tatsächlicher Stand vorhanden."));
+    const review = prompt.state === "needs_review";
+    const action = el("button", "condition-edit", review ? "Verlauf prüfen" : "Stand abgleichen"); action.type = "button"; action.id = `mileage-prompt-action-${String(vehicle.id)}`; action.setAttribute("aria-label", review ? `Verlauf für ${vehicleName(vehicle)} prüfen` : `Stand für ${vehicleName(vehicle)} abgleichen`); action.addEventListener("click", () => review ? openPromptReview(vehicle.id) : openPromptReading(vehicle.id)); row.append(action);
+    container.append(row);
+  }
+  if (incomplete) { section.hidden = false; status.textContent = "Hinweise zu Kilometerständen sind momentan nicht vollständig verfügbar."; }
+  else section.hidden = candidates.length === 0;
 }
 function validWorkItem(item) { return item && (typeof item.vehicleId === "number" || typeof item.vehicleId === "string") && item.id !== null && item.id !== undefined && typeof item.text === "string" && (item.dueDate === null || validIsoDate(item.dueDate)) && (item.severity === null || Object.hasOwn(severityLabels, item.severity)) && Object.hasOwn(lifecycleLabels, item.lifecycle) && Object.hasOwn(dueStateLabels, item.dueState); }
 function validCondition(condition) { return condition && Object.hasOwn(readinessLabels, condition.readiness) && Array.isArray(condition.issues) && Number.isInteger(condition.revision) && condition.revision >= 0; }
@@ -242,6 +324,7 @@ function renderCondition(condition) {
   const vehicle = selectedVehicle();
   $("condition-readiness").replaceChildren(conditionBadge(condition, effectiveReadiness(vehicle)));
   renderInspection(vehicle);
+  renderMileageEstimate(vehicle);
   $("condition-work-asof").hidden = !state.scheduledWork;
   if (state.scheduledWork) $("condition-work-asof").textContent = state.work.status === "ready" ? `Fälligkeitsstand: ${readableDate(state.work.today)} (${display(state.work.timeZone)}).` : state.work.status === "error" ? "Fälligkeitsstatus momentan nicht verfügbar." : "Fälligkeitsstatus wird geladen …";
   const issues = conditionIssueItems(condition); const list = $("condition-issues"); list.replaceChildren();
@@ -399,6 +482,12 @@ function mergeSummaryVehicle(vehicle, projected) {
     vehicle.inspection = projected.inspection;
     vehicle.effectiveReadiness = projected.effectiveReadiness;
   }
+  if (state.mileageForecast) {
+    vehicle.annualUsage = projected.annualUsage;
+    vehicle.readingPromptDays = projected.readingPromptDays;
+    vehicle.mileageEstimate = projected.mileageEstimate;
+    vehicle.readingPrompt = projected.readingPrompt;
+  }
   return true;
 }
 async function refreshVehicleSummaryProjection(id) {
@@ -407,7 +496,7 @@ async function refreshVehicleSummaryProjection(id) {
   if (generation !== state.generation || state.selected !== id) return false;
   const vehicle = state.vehicles.find(candidate => String(candidate.id) === id);
   if (!vehicle || !mergeSummaryVehicle(vehicle, result.vehicle)) throw new Error("Der Fahrzeugstatus konnte nicht aktualisiert werden.");
-  renderCards(); if ($("condition-form").hidden) renderCondition(vehicle.status);
+  renderCards(); renderMileagePrompts(); renderMileageEstimate(vehicle); if ($("condition-form").hidden) renderCondition(vehicle.status);
   return true;
 }
 function navigateToVehicleActions() {
@@ -426,7 +515,7 @@ async function selectVehicle(id, refreshProjection = true, options = {}) {
   closeConditionEditor(); renderCondition(vehicle.status);
   $("detail").hidden = false; $("detail-heading").textContent = vehicleName(vehicle); $("detail-meta").textContent = vehicleSubtitle(vehicle); $("detail-content").hidden = true; setStatus("detail-status", "Fahrzeugdaten werden geladen …");
   const generation = ++state.generation; state.detailLoading = true;
-  try { const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(id)}/summary`); if (generation !== state.generation) return; if (mergeSummaryVehicle(vehicle, result.vehicle)) { if ($("condition-form").hidden) renderCondition(vehicle.status); renderCards(); } renderRecords("reminders", result.reminders, "reminders"); renderRecords("services", result.services, "services"); setStatus("detail-status", ""); $("detail-content").hidden = false; }
+  try { const result = await getJson(`/garage-api/vehicles/${encodeURIComponent(id)}/summary`); if (generation !== state.generation) return; if (mergeSummaryVehicle(vehicle, result.vehicle)) { if ($("condition-form").hidden) renderCondition(vehicle.status); else renderMileageEstimate(vehicle); renderCards(); renderMileagePrompts(); } renderRecords("reminders", result.reminders, "reminders"); renderRecords("services", result.services, "services"); setStatus("detail-status", ""); $("detail-content").hidden = false; }
   catch (error) { if (generation === state.generation) setStatus("detail-status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeugdaten konnten nicht geladen werden. Bitte versuche es erneut.", true); }
   finally { if (generation === state.generation) state.detailLoading = false; }
   if (refreshProjection && state.standalone && state.scheduledWork && generation === state.generation) await refreshWork();
@@ -435,15 +524,15 @@ async function selectVehicle(id, refreshProjection = true, options = {}) {
 async function load(preferredId = null) {
   if (protectMeasurementDraft()) return;
   const loadGeneration = ++state.loadGeneration; state.loading = true;
-  $("refresh").disabled = true; setStatus("status", "Fahrzeuge werden geladen …"); $("vehicle-count").hidden = true; $("detail").hidden = true; $("detail-content").hidden = true; state.selected = null; state.vehicles = []; ++state.generation; $("vehicles").replaceChildren(); invalidateWork();
+  $("refresh").disabled = true; setStatus("status", "Fahrzeuge werden geladen …"); $("vehicle-count").hidden = true; $("detail").hidden = true; $("detail-content").hidden = true; state.selected = null; state.vehicles = []; renderMileagePrompts(); ++state.generation; $("vehicles").replaceChildren(); invalidateWork();
   try { const result = await getJson("/garage-api/vehicles"); if (loadGeneration !== state.loadGeneration) return; if (!Array.isArray(result.vehicles)) throw new Error("invalid vehicles"); state.vehicles = result.vehicles.filter((v) => v && v.id !== null && v.id !== undefined); $("vehicle-count").textContent = state.vehicles.length; $("vehicle-count").hidden = false;
     if (!state.vehicles.length) { const status = $("status"); status.replaceChildren(document.createTextNode("Deine Garage ist noch leer. ")); if (state.standalone) { const button = el("button", "condition-edit", "Erstes Fahrzeug anlegen"); button.type = "button"; button.addEventListener("click", () => openEntry("vehicle-new")); status.append(button); } else { const link = el("a", "", "Erstes Fahrzeug in LubeLogger anlegen"); link.href = "/Home"; status.append(link); } await refreshWork(); return; }
-    setStatus("status", ""); renderCards(); const selected = state.vehicles.find(v => String(v.id) === String(preferredId)) || state.vehicles[0]; await selectVehicle(String(selected.id), false); if (loadGeneration === state.loadGeneration) await refreshWork();
+    setStatus("status", ""); renderCards(); renderMileagePrompts(); const selected = state.vehicles.find(v => String(v.id) === String(preferredId)) || state.vehicles[0]; await selectVehicle(String(selected.id), false); if (loadGeneration === state.loadGeneration) await refreshWork();
   } catch (error) { if (loadGeneration === state.loadGeneration) { setStatus("status", error.status === 503 ? "Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut." : "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); if (state.scheduledWork) { state.work.status = "error"; state.work.items = null; renderWorkDashboard(); } } }
   finally { if (loadGeneration === state.loadGeneration) { state.loading = false; $("refresh").disabled = false; } }
 }
 async function refreshInspectionVehicles() {
-  if (!state.inspectionStatus || document.visibilityState !== "visible" || state.loading || state.detailLoading || state.saving || state.entry || !$("condition-form").hidden || state.inspectionRefreshInFlight) return false;
+  if ((!state.inspectionStatus && !state.mileageForecast) || document.visibilityState !== "visible" || state.loading || state.detailLoading || state.saving || state.entry || !$("condition-form").hidden || state.inspectionRefreshInFlight) return false;
   const loadGeneration = state.loadGeneration, generation = state.generation, selected = state.selected;
   state.inspectionRefreshInFlight = true;
   try {
@@ -454,7 +543,7 @@ async function refreshInspectionVehicles() {
     if (selected !== null && !vehicles.some(vehicle => String(vehicle.id) === selected)) return false;
     state.vehicles = vehicles;
     $("vehicle-count").textContent = vehicles.length; $("vehicle-count").hidden = false;
-    renderCards();
+    renderCards(); renderMileagePrompts();
     const vehicle = selectedVehicle();
     if (vehicle) renderCondition(vehicle.status);
     if (state.scheduledWork) await refreshWork();
@@ -490,6 +579,50 @@ function entryField(labelText, name, type, value = "", options = null) {
     content.append(source); help.append(summary, content); labelRow.append(label, help); wrapper.append(labelRow, field);
   } else wrapper.append(label, field);
   $("own-fields").append(wrapper); return field;
+}
+function annualUsageLabel(unit) { return unit === "h" ? "Geschätzte Nutzung (Betriebsstunden/Jahr)" : `Geschätzte Fahrleistung (${unit === "mi" ? "mi" : "km"}/Jahr)`; }
+function buildAnnualUsageField(unit, value) {
+  const wrapper = el("div", "own-field"), label = el("label", "", annualUsageLabel(unit)), input = el("input"), hint = el("p", "form-hint", "Keine Tausendertrennzeichen verwenden. Punkt oder Komma trennen die Nachkommastellen.");
+  input.id = "entry-annualUsage"; input.name = "annualUsage"; input.type = "text"; input.inputMode = "decimal"; input.maxLength = 24; input.placeholder = "z. B. 12000"; input.value = value === null || value === undefined ? "" : String(value);
+  label.setAttribute("for", input.id); hint.id = "annual-usage-hint"; input.setAttribute("aria-describedby", hint.id); wrapper.append(label, input, hint); $("own-fields").append(wrapper);
+  return {wrapper, label, input, hint};
+}
+function normalizedAnnualUsage(raw) {
+  const text = raw.trim().replace(",", ".");
+  if (!text) return null;
+  if (!/^\d+(?:\.\d{1,3})?$/.test(text)) return undefined;
+  const [whole] = text.split("."), canonical = whole.replace(/^0+(?=\d)/, "");
+  if (canonical.length > 10 || canonical.length === 10 && canonical > "1000000000") return undefined;
+  if (canonical === "1000000000" && text.includes(".") && /[1-9]/.test(text.split(".")[1])) return undefined;
+  return text;
+}
+function setAnnualUsageUnitLabel(label, unit) { label.textContent = annualUsageLabel(unit); }
+function promptActionable(prompt) { return validReadingPrompt({readingPrompt:prompt}) && ["due", "needs_reading", "needs_review"].includes(prompt.state); }
+async function openPromptReading(vehicleId) {
+  if (!state.mileageForecast || state.saving || state.entry || !$("own-panel").hidden || !$("condition-form").hidden || state.view !== "garage") return;
+  const targetId = String(vehicleId), vehicle = state.vehicles.find(item => String(item.id) === targetId);
+  if (!vehicle || !promptActionable(vehicle.readingPrompt)) return;
+  if (state.selected !== targetId) await selectVehicle(targetId, false);
+  if (state.view !== "garage" || state.selected !== targetId || state.entry || state.saving || !$("condition-form").hidden || $("detail-content").hidden) return;
+  const selected = selectedVehicle(), prompt = selected && selected.readingPrompt;
+  if (!promptActionable(prompt)) { renderMileagePrompts(); $("mileage-prompt-status").textContent = "Dieser Hinweis ist nicht mehr aktuell. Die Übersicht wurde aktualisiert."; return; }
+  openEntry("odometer", {promptDate:prompt.asOf, prompt:true, openerId:`mileage-prompt-action-${targetId}`});
+  if (state.entry && state.entry.mode === "odometer") {
+    const reading = $("entry-odometer"); reading.value = ""; reading.placeholder = "Abgelesener Stand"; reading.focus();
+    $("own-hint").textContent = "Trage den aktuell abgelesenen Stand ein. Die Schätzung wird nicht als Messwert übernommen.";
+  }
+}
+async function openPromptReview(vehicleId) {
+  if (!state.mileageForecast || state.saving || state.entry || !$("own-panel").hidden || !$("condition-form").hidden || state.view !== "garage") return;
+  const targetId = String(vehicleId), vehicle = state.vehicles.find(item => String(item.id) === targetId);
+  if (!vehicle || !validReadingPrompt(vehicle) || vehicle.readingPrompt.state !== "needs_review") return;
+  if (state.selected !== targetId) await selectVehicle(targetId, false);
+  if (state.view !== "garage" || state.selected !== targetId || state.entry || state.saving || !$("condition-form").hidden || $("detail-content").hidden) return;
+  const selected = selectedVehicle();
+  if (!selected || !validReadingPrompt(selected) || selected.readingPrompt.state !== "needs_review") { renderMileagePrompts(); $("mileage-prompt-status").textContent = "Dieser Hinweis ist nicht mehr aktuell. Die Übersicht wurde aktualisiert."; return; }
+  if (!state.historyBrowsing) { $("mileage-prompt-status").textContent = "Der Kilometerverlauf ist in dieser Ansicht nicht verfügbar."; return; }
+  $("logbook-type").value = "odometer";
+  await openLogbook(true);
 }
 function readonlyRecordFacts(record) {
   const date = readableDate(record.date) || "Datum nicht verfügbar";
@@ -733,11 +866,32 @@ function openEntry(mode, action = {}) {
     const types = [["","Nicht festgelegt"],["Limousine","Limousine"],["Schrägheck","Schrägheck"],["Kombi","Kombi"],["Hochdachkombi","Hochdachkombi"],["SUV","SUV"],["Cross-Motorrad","Cross-Motorrad"],["Naked Bike","Naked Bike"],["Motorrad","Motorrad"],["Sonstiges","Sonstiges"]];
     if (values.vehicleType && !types.some(([key]) => key === values.vehicleType)) types.push([values.vehicleType, values.vehicleType]);
     entryField("Fahrzeugtyp", "vehicleType", "", values.vehicleType || "", types);
-    entryField("Einheit für den Stand", "odometerUnit", "", values.odometerUnit || "km", [["km","Kilometer"],["mi","Meilen"],["h","Betriebsstunden"]]);
+    const unitField = entryField("Einheit für den Stand", "odometerUnit", "", values.odometerUnit || "km", [["km","Kilometer"],["mi","Meilen"],["h","Betriebsstunden"]]);
+    if (state.mileageForecast) {
+      const annualUsage = buildAnnualUsageField(unitField.value, values.annualUsage);
+      const hasActualAnchor = mode === "vehicle-edit" && values.mileageEstimate && values.mileageEstimate.anchor;
+      if (hasActualAnchor) unitField.disabled = true;
+      else unitField.addEventListener("change", () => {
+        setAnnualUsageUnitLabel(annualUsage.label, unitField.value);
+        if (unitField.value === (values.odometerUnit || "km")) return;
+        annualUsage.input.value = "";
+        annualUsage.hint.textContent = "Die Einheit wurde geändert. Die bisherige Jahresnutzung wurde geleert und nicht umgerechnet; gib sie bei Bedarf neu ein.";
+      });
+      const promptToggleWrapper = el("div", "own-field mileage-prompt-toggle"), promptToggle = el("input"), promptLabel = el("label", "", "Regelmäßige Erinnerung zum Ständeabgleich");
+      promptToggle.id = "entry-readingPromptEnabled"; promptToggle.name = "readingPromptEnabled"; promptToggle.type = "checkbox";
+      promptToggle.checked = mode === "vehicle-new" || values.readingPromptDays === undefined ? true : values.readingPromptDays !== null;
+      promptLabel.setAttribute("for", promptToggle.id); promptToggleWrapper.append(promptToggle, promptLabel); $("own-fields").append(promptToggleWrapper);
+      const promptDays = entryField("Erinnerungsabstand (Tage)", "readingPromptDays", "number", values.readingPromptDays === null ? 30 : values.readingPromptDays ?? 30);
+      promptDays.min = "1"; promptDays.max = "3650"; promptDays.step = "1"; promptDays.disabled = !promptToggle.checked;
+      promptToggle.addEventListener("change", () => { promptDays.disabled = !promptToggle.checked; if (promptToggle.checked && !promptDays.value) promptDays.value = "30"; });
+      const promptHint = el("p", "form-hint", "Die Erinnerung erscheint nur in der Garage. Eine Telegram-Benachrichtigung ist hier nicht eingerichtet."); promptHint.id = "reading-prompt-hint"; promptDays.setAttribute("aria-describedby", promptHint.id); $("own-fields").append(promptHint);
+      if (hasActualAnchor) { const lockHint = el("p", "form-hint", "Die Einheit kann nach erfassten Kilometerständen nicht geändert werden."); $("own-fields").append(lockHint); }
+      state.entry.mileageFields = {annualUsage, promptToggle, promptDays, unitField};
+    }
     if (state.inspectionStatus) { const inspection = entryField("HU / TÜV gültig bis", "inspectionDueMonth", "month", values.inspectionDueMonth || ""); inspection.min = "0001-01"; inspection.max = "9998-12"; }
-    $("own-hint").textContent = state.inspectionStatus ? "Der HU-Monat steuert die automatische INOP-Regel. Deine manuelle Einschätzung bleibt erhalten." : "Die Fahrbereitschaft bleibt unabhängig von den Stammdaten. Eine Änderung der Einheit rechnet vorhandene Einträge nicht um.";
+    $("own-hint").textContent = [state.inspectionStatus ? "Der HU-Monat steuert die automatische INOP-Regel. Deine manuelle Einschätzung bleibt erhalten." : "Die Fahrbereitschaft bleibt unabhängig von den Stammdaten. Eine Änderung der Einheit rechnet vorhandene Einträge nicht um.", state.mileageForecast ? "Die Schätzung dient nur zur Orientierung und ersetzt keinen abgelesenen Stand." : ""].filter(Boolean).join(" ");
   } else {
-    const date = entryField("Datum", "date", "date", localToday()); date.required = true;
+    const date = entryField("Datum", "date", "date", mode === "odometer" && action.promptDate ? action.promptDate : localToday()); date.required = true;
     const directCompletion = mode === "record-close-issue";
     if (mode === "record" || directCompletion) {
       entryField("Art der Arbeit", "kind", "", directCompletion ? "" : "service", [...(directCompletion ? [["","Bitte wählen"]] : []), ["service","Wartung"],["repair","Reparatur"]]);
@@ -745,7 +899,8 @@ function openEntry(mode, action = {}) {
       const description = entryField("Durchgeführte Arbeit", "description", "text", directCompletion ? action.issue.text : ""); description.required = true; description.maxLength = 160;
       if (directCompletion) { const closeIssueId = el("input"); closeIssueId.type = "hidden"; closeIssueId.id = "entry-closeIssueId"; closeIssueId.name = "closeIssueId"; closeIssueId.value = String(action.issue.id); $("own-fields").append(closeIssueId); }
     }
-    const reading = entryField(`${mode === "record" || directCompletion ? "Stand (optional)" : "Stand"} in ${vehicle.odometerUnit}`, "odometer", "number", mode === "odometer" ? vehicle.odometer : ""); reading.required = mode === "odometer"; reading.min = "0"; reading.step = "any";
+    const reading = entryField(`${mode === "record" || directCompletion ? "Stand (optional)" : "Stand"} in ${vehicle.odometerUnit}`, "odometer", "number", mode === "odometer" && !action.prompt ? vehicle.odometer : ""); reading.required = mode === "odometer"; reading.min = "0"; reading.step = "any";
+    if (mode === "odometer" && action.prompt) reading.placeholder = "Abgelesener Stand";
     if (mode === "odometer") { const note = entryField("Notiz (optional)", "note", "text"); note.maxLength = 500; }
     else {
       const amount = entryField("Kosten (optional)", "cost", "text"); amount.inputMode = "decimal"; amount.placeholder = "z. B. 49,90"; amount.maxLength = 20;
@@ -833,6 +988,14 @@ async function saveEntry(event) {
     path = `/garage-api/vehicles/${encodeURIComponent(entry.vehicleId)}/odometer/${encodeURIComponent(reading.id)}/provenance`; method = "PUT";
   } else if (entry.mode.startsWith("vehicle-")) {
     payload = {make:field("make"), model:field("model"), licensePlate:field("licensePlate"), vehicleType:field("vehicleType"), odometerUnit:field("odometerUnit")};
+    if (state.mileageForecast) {
+      const annualUsage = normalizedAnnualUsage(field("annualUsage"));
+      if (annualUsage === undefined) { $("own-message").textContent = "Gib eine jährliche Nutzung von 0 bis 1.000.000.000 mit höchstens drei Nachkommastellen ein. Verwende kein Tausendertrennzeichen."; return; }
+      const promptEnabled = $("entry-readingPromptEnabled").checked, rawDays = field("readingPromptDays");
+      if (promptEnabled && (!/^\d+$/.test(rawDays) || !Number.isSafeInteger(Number(rawDays)) || Number(rawDays) < 1 || Number(rawDays) > 3650)) { $("own-message").textContent = "Der Erinnerungsabstand muss eine ganze Zahl von 1 bis 3650 Tagen sein."; return; }
+      payload.annualUsage = annualUsage;
+      payload.readingPromptDays = promptEnabled ? Number(rawDays) : null;
+    }
     if (state.inspectionStatus) payload.inspectionDueMonth = field("inspectionDueMonth") || null;
     if (field("year")) payload.year = Number(field("year"));
     else if (entry.mode === "vehicle-edit") payload.year = null;
@@ -1059,6 +1222,7 @@ async function initialize() {
     state.dataExport = capabilities.features.includes("dataExport");
     state.databaseBackup = capabilities.features.includes("databaseBackup");
     state.inspectionStatus = capabilities.features.includes("inspectionStatus");
+    state.mileageForecast = capabilities.features.includes("mileageForecast");
     state.capabilitiesVersion = typeof capabilities.version === "string" && capabilities.version.trim() ? capabilities.version.trim() : null;
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); setStatus("app-version", "Versionsangabe momentan nicht verfügbar.", true); return; } }
   state.capabilitiesReady = true;
@@ -1069,6 +1233,7 @@ async function initialize() {
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
   $("logbook-toggle").hidden = !state.historyBrowsing;
   $("work-dashboard").hidden = !state.scheduledWork; renderWorkDashboard();
+  $("mileage-prompts").hidden = !state.mileageForecast; $("mileage-forecast").hidden = !state.mileageForecast;
   $("data-export-wrap").hidden = !state.dataExport && !state.databaseBackup;
   $("database-backup").hidden = !state.databaseBackup; $("database-backup-hint").hidden = !state.databaseBackup;
   $("backup-restore-help").hidden = !state.databaseBackup;
@@ -1077,7 +1242,7 @@ async function initialize() {
   await load();
 }
 document.addEventListener("visibilitychange", () => {
-  if (state.inspectionStatus && document.visibilityState === "visible") return refreshInspectionVehicles();
+  if ((state.inspectionStatus || state.mileageForecast) && document.visibilityState === "visible") return refreshInspectionVehicles();
 });
 document.addEventListener("keydown", event => { if (event.key === "Escape" && !$("site-navigation").hidden) { event.preventDefault(); setNavigationOpen(false, true); } });
 document.addEventListener("click", event => {

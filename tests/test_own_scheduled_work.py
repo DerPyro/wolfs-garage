@@ -215,7 +215,7 @@ class ScheduledWorkApiTests(unittest.TestCase):
         self.assertEqual(self.send("GET", f"/garage-api/vehicles/{vehicle['id']}/status").json, status.json)
         self.assertEqual(self.send("GET", f"/garage-api/vehicles/{vehicle['id']}/history").json, history_before)
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 6)
 
     def test_default_clock_uses_berlin_calendar_date_across_winter_and_summer_midnight(self):
         app = create_app({"TESTING": True, "GARAGE_DB": str(self.path),
@@ -257,10 +257,10 @@ class Schema3UpgradeTests(unittest.TestCase):
         self.store = Store(self.path)
 
     def test_schema2_upgrade_backs_up_and_preserves_rows_commands_audit_and_legacy_issue_json(self):
-        backup = self.directory / "before-schema5.sqlite3"
+        backup = self.directory / "before-schema6.sqlite3"
         self.assertTrue(self.store.upgrade(backup))
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 6)
             self.assertEqual(db.execute("SELECT id,description,revision FROM records").fetchone(),
                              (11, "Legacy service", 1))
             self.assertEqual(db.execute("SELECT action,command_id,response FROM commands").fetchone(),
@@ -297,7 +297,7 @@ class Schema3UpgradeTests(unittest.TestCase):
         self.assertEqual(collision.read_text(), "keep")
 
         with closing(sqlite3.connect(self.path)) as db, db:
-            db.execute("CREATE TRIGGER reject_schema5 BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT,'synthetic schema failure'); END")
+            db.execute("CREATE TRIGGER reject_schema6 BEFORE UPDATE ON meta BEGIN SELECT RAISE(ABORT,'synthetic schema failure'); END")
         backup = self.directory / "rollback-backup.sqlite3"
         with self.assertRaises(sqlite3.IntegrityError):
             self.store.upgrade(backup)
@@ -310,13 +310,13 @@ class Schema3UpgradeTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 2)
             self.assertEqual(db.execute("SELECT id,description FROM records").fetchone(), (11, "Legacy service"))
 
-    def test_explicit_upgrade_to_schema5_is_noop_and_no_second_backup(self):
+    def test_explicit_upgrade_to_schema6_is_noop_and_no_second_backup(self):
         backup = self.directory / "first-upgrade.sqlite3"
         self.assertTrue(self.store.upgrade(backup))
         self.assertFalse(self.store.upgrade(self.directory / "second-upgrade.sqlite3"))
         self.assertFalse((self.directory / "second-upgrade.sqlite3").exists())
         with closing(sqlite3.connect(self.path)) as db:
-            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 5)
+            self.assertEqual(db.execute("SELECT schema FROM meta").fetchone()[0], 6)
 
 
 if __name__ == "__main__":

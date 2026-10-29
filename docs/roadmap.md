@@ -4,6 +4,8 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 
 ## Available: 0.1 alpha
 
+- [x] Store optional exact annual usage and a configurable actual-reading prompt; derive Berlin-date estimates from actual readings without saving projected readings ([contract](planning/mileage-forecast.md)). Schema 6 and owner export format 4 are implemented; the private reference database remains schema 5 pending separate migration approval.
+
 - [x] Responsive vehicle dashboard with types, manufacturer artwork and monochrome plates.
 - [x] INOP for manually recorded unavailability and a wrench for open work; no task counter or green readiness check.
 - [x] Vehicle creation and metadata editing with stable local identities.
@@ -13,7 +15,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Revision checks and idempotent reading/record submissions.
 - [x] Bounded completed-record metadata corrections with a reason, revision check, retry handling and before/after history; measurement corrections use their separate linked schema-5 workflow.
 - [x] Safe date/odometer corrections with explicit reading provenance, revision checks, idempotent retries and atomic before/after history ([contract](planning/measurement-corrections.md)); local acceptance and the separately authorized reference-instance schema-4-to-5 migration completed 2026-10-29.
-- [x] Explicit schema-1/2/3/4-to-5 upgrade command with checked pre-upgrade backup; startup never upgrades automatically.
+- [x] Explicit schema upgrades through schema 6 with checked pre-upgrade backups; startup never migrates. The reference schema-4-to-5 migration is historical; schema 5-to-6 was rehearsed on isolated copies only.
 - [x] Download a consistent full SQLite backup and restore it to a new validated database file; preserve command replay data and rehearse in isolation.
 - [x] Portable owner-data JSON export for inspection and transfer; full SQLite backup remains the restore format and JSON import is not supported.
 - [x] Record an inspection due month and display a Berlin-date status/readiness projection under the documented owner policy; unknown dates remain unknown.
@@ -50,7 +52,7 @@ User decision — 2026-10-29: maintenance planning and reliable 1.0 operation ta
 
 ## Reliable 1.0 operation
 
-- [x] Explicit schema-1/2/3/4-to-5 upgrade with a verified pre-upgrade backup; initialization is create-only and startup never migrates. The reference-instance migration was separately authorized, rehearsed and completed 2026-10-29.
+- [x] Explicit schema upgrades through schema 6 with a verified pre-upgrade backup; initialization is create-only and startup never migrates. A schema-5-to-6 recovery rehearsal passed on isolated copies; the private reference database remains schema 5 pending separate migration approval.
 - [x] Document the separate portable JSON export and complete SQLite backup/restore paths; test a synthetic isolated restore including retry state.
 - [ ] Establish an independent recurring off-host backup schedule and runbook for the chosen operator storage.
 - [ ] Rehearse authenticated reverse-proxy deployment and direct-origin protection.
@@ -70,7 +72,6 @@ Following the user decision of 2026-10-29, uploads are deferred until maintenanc
 
 - [ ] Telegram with a configurable allowed user, confirmed writes and durable duplicate handling.
 - [ ] Reminders and Google Calendar synchronization with explicit failure and retry behavior.
-- [ ] Mileage projections clearly marked as estimates.
 - [ ] Advisory AI using approved history and verifiable sources, with confirmation before changes.
 - [ ] OBD screenshot interpretation and manually maintained fault-code history.
 

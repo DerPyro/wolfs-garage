@@ -243,8 +243,8 @@ def _candidate_preflight(old_image, candidate, config):
         shutil.copyfile(workdir / "source.sqlite3", workdir / "candidate.sqlite3")
         os.chmod(workdir / "candidate.sqlite3", 0o600)
         candidate_schema = _image_schema(candidate)
-        if original_schema != candidate_schema or candidate_schema not in {3, 4, 5}:
-            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3, 4, or 5.")
+        if original_schema != candidate_schema or candidate_schema not in {3, 4, 5, 6}:
+            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3, 4, 5, or 6.")
         _run(["docker", "run", "--rm", "--network", "none", "--user", "0:0", "--read-only",
               "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit", "128",
               "--mount", f"type=bind,src={workdir},dst=/work",
@@ -302,9 +302,9 @@ def _deploy_candidate(candidate, old_image, sha, config, compose_config, candida
         old_schema = _schema(backup_path)
         if candidate_schema is None:
             candidate_schema = _image_schema(candidate)
-        if (old_schema != candidate_schema or old_schema not in {3, 4, 5}
-                or candidate_schema not in {3, 4, 5}):
-            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3, 4, or 5.")
+        if (old_schema != candidate_schema or old_schema not in {3, 4, 5, 6}
+                or candidate_schema not in {3, 4, 5, 6}):
+            raise UpdateError("Automatic update blocked: live and candidate schemas must match supported schema 3, 4, 5, or 6.")
 
         candidate_start_attempted = True
         _compose(compose_config, candidate, "up", "-d", "--no-deps", "garage_live")

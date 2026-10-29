@@ -46,10 +46,10 @@ def main():
                 parser.error("upgrade-db requires a new backup destination filename")
             print("Explicit schema upgrade requested. Stop the application first and test recovery on a separate database copy.")
             if store.upgrade(args.destination):
-                print("Database upgraded to schema 5 after a checked backup was created.")
+                print("Database upgraded to schema 6 after a checked backup was created.")
                 print("Keep the backup until the upgraded database has been verified.")
             else:
-                print("Database is already schema 5; no upgrade or backup file was written.")
+                print("Database is already schema 6; no upgrade or backup file was written.")
         else:
             if args.destination or args.restore_destination:
                 parser.error(f"{args.command} does not accept destination paths")

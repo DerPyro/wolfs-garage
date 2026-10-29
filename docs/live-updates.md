@@ -22,7 +22,7 @@ then builds a local candidate image.
 
 Before changing the running service, it validates the candidate against an
 isolated copy of the current database and makes a checked backup. Automatic
-updates support schemas 3, 4 and 5 only when the running database, candidate
+updates support schemas 3, 4, 5 and 6 only when the running database, candidate
 image and checked copy all report the same schema. Any mismatch or unsupported
 schema leaves the live application and database untouched; a schema change
 requires a separate explicit checked-backup upgrade. Startup never performs an
@@ -104,7 +104,18 @@ checks passed. A fresh offline schema-4 backup was independently copied and
 hash-verified before migration. Integrity, foreign-key, schema, API, export,
 backup and health checks passed; the existing six data tables and sequence
 state were preserved, and prior readings remain unlinked with
-`legacy_unknown` provenance. The application is serving normally behind its
-existing access boundary. The installed updater now accepts same-schema
-updates for 3, 4 or 5, and its timer has resumed. No vehicle facts or historical
-measurement links were changed or inferred.
+`legacy_unknown` provenance. The private reference installation remains at
+application version `0.1.0a8` and schema 5 pending separate approval for a
+schema-6 migration. The updater code in this repository accepts matching
+schemas 3–6. A schema-6 candidate is rejected while the reference database is
+schema 5. The installed application has not been updated to this source, and
+no schema-6 migration or deployment has been performed on the reference
+installation.
+
+An isolated rehearsal used a fresh copy of a schema-5 backup. The copy upgraded
+to schema 6, and a separate restore of the original backup opened successfully
+with the older `0.1.0a8` image. Shared columns across the six domain tables and
+`sqlite_sequence` matched; new fields held `annual_usage=NULL` and
+`reading_prompt_days=30`; integrity and foreign-key checks passed. The
+pre-upgrade backup and separate restore were byte-identical. This rehearsal did
+not change the reference database or deploy schema 6.
