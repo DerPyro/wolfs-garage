@@ -39,7 +39,7 @@ The export reads all included tables and the application version/schema metadata
 
 ## Download in the interface
 
-When the standalone `dataExport` capability is available, the application toolbar shows **Daten exportieren**. The browser downloads `wolfs-garage-export.json`. Protect that file as sensitive vehicle data. The API is subject to the same configured-host boundary as other reads; the app has no built-in authentication, so non-local access still requires the documented authenticated proxy.
+When the standalone `dataExport` capability is available, the application toolbar shows **Daten exportieren**. The browser downloads `wolfs-garage-export.json`. The separate database-backup action downloads a SQLite file, not JSON. Protect either download as sensitive vehicle data. Both APIs are subject to the configured-host boundary; the app has no built-in authentication, so non-local access still requires the documented authenticated proxy.
 
 ## HTTP API
 
@@ -56,7 +56,7 @@ docker compose --env-file .env.example -f deploy/compose.standalone.yaml exec ga
 
 The CLI refuses existing paths, symlinks, and the database path. It creates a new export with owner-only `0600` permissions, flushes it, and calls `fsync`. If writing fails after creation, it removes only the partial file it created. Copy the result to the destination you choose and store it securely; a copy inside the same data volume is not an independent backup.
 
-The explicit CLI syntax is `python -m wolfs_garage export NEW_PATH`. It reads the current database and does not initialize, upgrade, or alter it. For recoverable backups and restore instructions, use the [standalone guide](standalone.md#backup-and-isolated-restore).
+The explicit CLI syntax is `python -m wolfs_garage export NEW_PATH`. It reads the current database and does not initialize, upgrade, or alter it. For the separate full-database download and create-only restore procedure, use the [standalone guide](standalone.md#backup-and-isolated-restore) and [backup/update workflow](planning/backup-update-workflow.md).
 
 ## Historical format 1 evidence
 

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Stand: 2026-10-28. ADR-0001–0007 sind historische **Vorschläge**; deren LubeLogger-Zielannahmen sind für den neuen Kern durch ADR-0009 ersetzt. ADR-0009/0010 halten die entschiedene eigenständige Entwicklung und MIT fest. ADR-0008 hält die ausdrücklich geklärte Produktvorgabe fest; seine technische Umsetzung bleibt getrennt zu prüfen. Nach Entscheidung Status, Datum, Entscheider und Begründung ergänzen; verworfene Optionen nachvollziehbar erhalten. Keine Betriebsfreigabe wird vorausgesetzt.
+Stand: 2026-10-29. ADR-0001–0007 sind historische **Vorschläge**; deren LubeLogger-Zielannahmen sind für den neuen Kern durch ADR-0009 ersetzt. ADR-0009/0010 halten die entschiedene eigenständige Entwicklung und MIT fest. ADR-0008 hält die ausdrücklich geklärte Produktvorgabe fest; seine technische Umsetzung bleibt getrennt zu prüfen. Nach Entscheidung Status, Datum, Entscheider und Begründung ergänzen; verworfene Optionen nachvollziehbar erhalten. Keine Betriebsfreigabe wird vorausgesetzt.
 
 | ADR | Thema | Offener Punkt |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ Stand: 2026-10-28. ADR-0001–0007 sind historische **Vorschläge**; deren LubeL
 | [0009](0009-backend-ownership-challenge.md) | Eigener Garage-Kern | Entwicklung entschieden; produktive Übernahme separat |
 | [0010](0010-open-source-mit.md) | Eigenständiges Open Source unter MIT | Lizenz entschieden; veröffentlichbaren Quellstand und Installation prüfen |
 | [0011](0011-reading-provenance.md) | Provenienz zwischen Beleg und Kilometerstand | Vorgeschlagene Schema-5-Grundlage für spätere Datum-/Kilometerkorrektur; nicht angenommen |
+| [0012](0012-release-update-policy.md) | Release- und Updatekanäle | Vorgeschlagene Trennung von privatem tested-main und versionierten self-hosted Images; nicht angenommen |
 
 [Entscheidungsvorlage D01–D11](../planning/decision-brief.md) bündelt Empfehlungen und Konsequenzen. ADR-0008 hält die geklärte Produktvorgabe fest; seine technische Ausgestaltung und die übrigen ADRs bleiben Vorschläge.
 

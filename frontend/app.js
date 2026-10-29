@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, inspectionStatus: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, capabilitiesReady: false, entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -33,6 +33,28 @@ function distance(value, unit) { const n = number(value); if (!n) return ""; con
 function cost(value, currency) { const n = number(value); if (!n) return ""; const c = display(currency); return c ? `${n} ${c}` : `Kosten: ${n} (Währung unbekannt)`; }
 function setStatus(id, message, error = false) { const node = $(id); node.textContent = message; node.classList.toggle("error", error); }
 async function getJson(url) { const response = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; } return response.json(); }
+async function downloadDatabaseBackup() {
+  if (!state.databaseBackup || state.backupBusy) return;
+  state.backupBusy = true; $("database-backup").disabled = true; $("database-backup").setAttribute("aria-busy", "true");
+  setStatus("database-backup-message", "Sicherung wird erstellt …");
+  try {
+    const response = await fetch("/garage-api/backup", { credentials: "same-origin" });
+    if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; }
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) throw new Error("empty backup");
+    const signature = new TextDecoder().decode(await blob.slice(0, 16).arrayBuffer());
+    if (signature !== "SQLite format 3\u0000") throw new Error("invalid backup");
+    const objectUrl = URL.createObjectURL(blob); const link = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.href = objectUrl; link.download = `wolfs-garage-backup-${stamp}.sqlite3`; link.hidden = true;
+    document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(objectUrl);
+    setStatus("database-backup-message", "Sicherung erstellt. Der Download wurde gestartet.");
+  } catch (_) {
+    setStatus("database-backup-message", "Die Sicherung konnte nicht heruntergeladen werden. Bitte versuche es erneut.", true);
+  } finally {
+    state.backupBusy = false; $("database-backup").disabled = false; $("database-backup").removeAttribute("aria-busy");
+  }
+}
 const readinessLabels = { ready: "Fahrbereit", not_ready: "Nicht fahrbereit", unknown: "Status nicht erfasst" };
 const severityLabels = {observation:"Auffälligkeit", repair:"Reparaturbedürftig", critical:"Kritisch"};
 const lifecycleLabels = {open:"Offen", observed:"Beobachten"};
@@ -394,6 +416,7 @@ async function refreshInspectionVehicles() {
   } finally { state.inspectionRefreshInFlight = false; }
 }
 $("refresh").addEventListener("click", () => state.capabilitiesReady ? load(state.selected) : initialize());
+$("database-backup").addEventListener("click", downloadDatabaseBackup);
 $("condition-edit").addEventListener("click", () => openConditionEditor());
 $("condition-cancel").addEventListener("click", () => closeConditionEditor(true));
 $("issue-add").addEventListener("click", () => appendIssueEditor());
@@ -729,6 +752,7 @@ async function initialize() {
     state.historyBrowsing = capabilities.features.includes("historyBrowsing");
     state.scheduledWork = capabilities.features.includes("scheduledWork");
     state.dataExport = capabilities.features.includes("dataExport");
+    state.databaseBackup = capabilities.features.includes("databaseBackup");
     state.inspectionStatus = capabilities.features.includes("inspectionStatus");
   } catch (error) { if (error.status !== 404) { setStatus("status", "Die Fahrzeuge konnten nicht geladen werden. Bitte versuche es erneut.", true); return; } }
   state.capabilitiesReady = true;
@@ -736,7 +760,10 @@ async function initialize() {
   $("own-toolbar").hidden = !state.standalone; $("own-detail-actions").hidden = !state.standalone;
   $("logbook-toggle").hidden = !state.historyBrowsing;
   $("work-dashboard").hidden = !state.scheduledWork; renderWorkDashboard();
-  $("data-export-wrap").hidden = !state.dataExport;
+  $("data-export-wrap").hidden = !state.dataExport && !state.databaseBackup;
+  $("database-backup").hidden = !state.databaseBackup; $("database-backup-hint").hidden = !state.databaseBackup;
+  $("backup-restore-help").hidden = !state.databaseBackup;
+  $("data-export").hidden = !state.dataExport; $("data-export-hint").hidden = !state.dataExport;
   $("reminders-panel").hidden = state.standalone; $("detail-content").classList.toggle("standalone-detail", state.standalone);
   await load();
 }

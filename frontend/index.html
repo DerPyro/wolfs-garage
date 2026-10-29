@@ -42,7 +42,14 @@
     <section class="garage-section" aria-labelledby="vehicles-heading">
       <div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> DEINE SAMMLUNG</p><h2 id="vehicles-heading">Meine Fahrzeuge <span id="vehicle-count" class="count" hidden></span></h2></div><button id="refresh" class="icon-button" type="button" aria-label="Übersicht aktualisieren" title="Übersicht aktualisieren"><svg><use href="#i-refresh"/></svg></button></div>
       <div id="status" class="status" role="status" aria-live="polite">Fahrzeuge werden geladen …</div>
-      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button><div id="data-export-wrap" class="data-export" hidden><a id="data-export" class="condition-edit" href="/garage-api/export" download="wolfs-garage-export.json">Daten exportieren</a><p class="form-hint">JSON-Datei mit Fahrzeugdaten und Verlauf. Zur Wiederherstellung ein Datenbank-Backup verwenden.</p></div></div>
+      <div id="own-toolbar" class="own-toolbar" hidden><button id="vehicle-add" class="condition-save" type="button">+ Fahrzeug hinzufügen</button><div id="data-export-wrap" class="data-export" hidden>
+        <button id="database-backup" class="condition-save" type="button" hidden>Vollständige Sicherung herunterladen</button>
+        <p id="database-backup-hint" class="form-hint" hidden>Die Sicherung enthält alle Garage-Anwendungsdaten einschließlich Verlauf. Konfiguration und externe Dokumente sind nicht enthalten.</p>
+        <p id="database-backup-message" class="condition-message" role="status" aria-live="polite"></p>
+        <a id="data-export" class="condition-edit" href="/garage-api/export" download="wolfs-garage-export.json" hidden>Portabler JSON-Export</a>
+        <p id="data-export-hint" class="form-hint" hidden>JSON-Datei mit Fahrzeugdaten und Verlauf zur Ansicht oder Übertragung. Sie dient nicht zur Wiederherstellung.</p>
+        <details id="backup-restore-help" class="backup-restore-help" hidden><summary>Import / Wiederherstellen</summary><div class="backup-restore-content"><p>Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank:</p><pre><code>python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3</code></pre><p>Es gibt keinen Upload oder Import im Browser.</p></div></details>
+      </div></div>
       <p id="own-notice" class="own-notice" role="status" aria-live="polite"></p>
       <div id="vehicles" class="vehicle-grid" aria-label="Fahrzeuge"></div>
       <section id="work-dashboard" class="work-dashboard" aria-labelledby="work-title" hidden>
