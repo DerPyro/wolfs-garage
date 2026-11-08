@@ -16,7 +16,7 @@ TimeoutStartSec=45min
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
-ProtectSystem=full
+ProtectSystem=strict
 ReadWritePaths=/opt/wolfs-garage-demo/releases /var/lib/wolfs-garage-demo-updater
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 

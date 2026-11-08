@@ -209,6 +209,22 @@ def _template_dir(container):
     return found[next(iter(expected))].parent
 
 
+def _templates_match_release(actual_dir, release, sha):
+    """Match mounted proxy inputs to the clean immutable source commit, including rollback snapshots."""
+    if _run(["git", "-C", str(release), "rev-parse", "HEAD"], capture=True) != sha:
+        return False
+    if _run(["git", "-C", str(release), "status", "--porcelain"], capture=True):
+        return False
+    for name in (NGINX, LIMITS):
+        mounted, checked = Path(actual_dir) / name, Path(release) / "deploy" / name
+        _validate_root_managed_file(mounted)
+        _validate_root_managed_file(checked)
+        committed = _run(["git", "-C", str(release), "show", f"{sha}:deploy/{name}"], capture=True)
+        if mounted.read_bytes() != committed.encode("utf-8"):
+            return False
+    return True
+
+
 def _healthy(container, timeout):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -488,15 +504,19 @@ def update_once(config):
         sha = github_main_sha()
         if sha == old_sha and old_image == baseline and _healthy(old_app, int(config["DEMO_HEALTH_TIMEOUT"])):
             proxy_healthy = _healthy(old_proxy, int(config["DEMO_HEALTH_TIMEOUT"]))
-            if proxy_healthy:
+            canonical_release = Path(config["DEMO_RELEASE_ROOT"]) / old_sha
+            if proxy_healthy and _templates_match_release(old_templates, canonical_release, old_sha):
                 _verify_deployed(config, old_image, old_templates, old_app, old_proxy)
+                print(f"Latest tested main already active and healthy: {sha}.")
                 return False
         if not checks_succeeded(sha):
+            print(f"No completed successful Checks push for main {sha}; no update.")
             return False
         release = _install_release(config, sha)
         candidate = _build(config, release, sha)
         _preflight(config, release, candidate, sha, state)
         if github_main_sha() != sha or not checks_succeeded(sha):
+            print("Main moved before deployment; retrying on the next timer tick.")
             return False
         journal = _write_journal(state, sha=sha, old_sha=old_sha, old_image=old_image, old_templates=old_templates)
         timeout = int(config["DEMO_HEALTH_TIMEOUT"])
@@ -527,6 +547,7 @@ def update_once(config):
         # Keep the journal until the marker is durable: recovery always resets both runtime and marker.
         _write_active(state, sha)
         _clear_journal(state)
+        print(f"Updated public demo to tested main {sha}; synthetic data restarted fresh.")
         return True
     finally:
         os.close(lock_fd)

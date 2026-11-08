@@ -122,6 +122,31 @@ class DemoUpdaterTests(unittest.TestCase):
         self.assertIn(str(self.release / updater.LIMITS), content)
         self.assertEqual(override.stat().st_mode & 0o777, 0o600)
 
+    def test_same_sha_template_drift_does_not_match_checked_release(self):
+        actual = self.root / "mounted-templates"
+        actual.mkdir()
+        expected = {updater.NGINX: "server { listen 8080; }\n",
+                    updater.LIMITS: "limit_req_zone $binary_remote_addr zone=demo:10m;\n"}
+        for name, content in expected.items():
+            (self.release / name).write_text(content)
+        (actual / updater.NGINX).write_text("server { listen 8080; # changed\n}\n")
+        (actual / updater.LIMITS).write_text(expected[updater.LIMITS])
+
+        def git_result(args, **kwargs):
+            if args[-2:] == ["rev-parse", "HEAD"]:
+                return OLD
+            if args[-2:] == ["status", "--porcelain"]:
+                return ""
+            if args[-2] == "show":
+                return expected[Path(args[-1].split("/", 1)[1]).name]
+            raise AssertionError(args)
+
+        with mock.patch.object(updater, "_run", side_effect=git_result), \
+             mock.patch.object(updater, "_validate_root_managed_file", return_value=None):
+            self.assertFalse(updater._templates_match_release(actual, self.root, OLD))
+            (actual / updater.NGINX).write_text(expected[updater.NGINX])
+            self.assertTrue(updater._templates_match_release(actual, self.root, OLD))
+
     def test_failed_ci_gate_does_not_build_or_cut_over(self):
         stack, calls, _ = self._patch_update(green=False)
         with stack, mock.patch.object(updater, "_build") as build:
@@ -165,6 +190,7 @@ class DemoUpdaterTests(unittest.TestCase):
              mock.patch.object(updater, "_service_container", side_effect=["old-app", "old-proxy"]), \
              mock.patch.object(updater, "_image_of", return_value=f"wolfs-garage-demo:{OLD}"), \
              mock.patch.object(updater, "_template_dir", return_value=self.release), \
+             mock.patch.object(updater, "_templates_match_release", return_value=True), \
              mock.patch.object(updater, "github_main_sha", return_value=OLD) as main_sha, \
              mock.patch.object(updater, "checks_succeeded", return_value=True), \
              mock.patch.object(updater, "_healthy", return_value=True), \

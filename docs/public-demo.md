@@ -38,3 +38,6 @@ The connector is managed independently. `DEMO_CONNECTOR_FILE` names the separate
 ## Validation
 
 The local acceptance run confirmed the demo Compose configuration, passed `nginx -t` with the pinned image under the read-only, unprivileged settings, and passed the repository's 174 unit tests, DOM checks, and real-browser Chromium run. A 70-request API burst produced the expected 429 response with `Retry-After`; killing the worker produced a fresh generation on the next request and left only one demo temp directory. These checks validate the source configuration and runtime behavior, not external service availability.
+
+
+The demo updater acceptance run passed 185 Python tests (11 updater-specific). An isolated Docker project verified an intentional post-cutover failure, restoration of the prior app image and readable proxy templates, a successful subsequent update, unchanged-container skipping, and recovery after an interrupted marker commit. The public connector container remained unchanged throughout that rehearsal.
