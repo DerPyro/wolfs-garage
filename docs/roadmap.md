@@ -21,7 +21,7 @@ Wolfs Garage is an independent, self-hosted application under MIT. The standalon
 - [x] Record an inspection due month and display a Berlin-date status/readiness projection under the documented owner policy; unknown dates remain unknown.
 - [x] Generic Docker Compose installation, MIT license, third-party notices, contribution guide and automated checks.
 - [x] Hash-based Garage/backup/settings views with keyboard-operable navigation, local reduced-motion preference and preserved unsaved view state.
-- [x] Prepare an isolated, disposable synthetic-data demo stack and document its host/network boundary. Public endpoint availability is managed separately from this loopback-only source configuration.
+- [x] Prepare an isolated, disposable synthetic-data demo stack and document its host/network boundary. Provide an optional five-minute updater for successful tested `main` builds with app/proxy health checks, old-image/template rollback, and interrupted-deploy journal recovery. Public endpoint activation remains a separate host operation; demo state resets hourly and on process replacement.
 
 [Standalone guide](standalone.md) · [API contract](api.md) · [verification evidence](discovery/standalone-core.md)
 

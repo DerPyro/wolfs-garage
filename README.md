@@ -48,7 +48,7 @@ The default port is bound to loopback. There is no built-in login: access beyond
 
 See the [standalone guide](docs/standalone.md) for configuration, full database backups, isolated restore and development commands. The [backup/update workflow](docs/planning/backup-update-workflow.md) describes source/image pinning, restore rehearsal and rollback.
 
-Try the [online demo](https://demo-garage.fehuworks.eu) with shared synthetic data. It resets hourly; do not enter personal information. See the [demo deployment guide](docs/public-demo.md) for its isolation and operating limits.
+Try the [online demo](https://demo-garage.fehuworks.eu) with shared synthetic data. It resets hourly; do not enter personal information. See the [demo deployment guide](docs/public-demo.md) for its isolation, tested-main update path, and operating limits.
 
 The private reference installation uses the [tested-main updater](docs/live-updates.md). This updater is specific to that installation; other self-hosters opt in separately and can keep using the Compose workflow above.
 
