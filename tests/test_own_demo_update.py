@@ -123,29 +123,27 @@ class DemoUpdaterTests(unittest.TestCase):
         self.assertEqual(override.stat().st_mode & 0o777, 0o600)
 
     def test_same_sha_template_drift_does_not_match_checked_release(self):
+        release = self.root / "source-checkout"
+        checked = release / "deploy"
+        checked.mkdir(parents=True)
         actual = self.root / "mounted-templates"
         actual.mkdir()
         expected = {updater.NGINX: "server { listen 8080; }\n",
                     updater.LIMITS: "limit_req_zone $binary_remote_addr zone=demo:10m;\n"}
         for name, content in expected.items():
-            (self.release / name).write_text(content)
-        (actual / updater.NGINX).write_text("server { listen 8080; # changed\n}\n")
-        (actual / updater.LIMITS).write_text(expected[updater.LIMITS])
+            (checked / name).write_text(content)
+            (actual / name).write_text(content)
+        updater._run(["git", "init", str(release)])
+        updater._run(["git", "-C", str(release), "config", "user.name", "Updater Test"])
+        updater._run(["git", "-C", str(release), "config", "user.email", "updater-test@example.invalid"])
+        updater._run(["git", "-C", str(release), "add", "deploy"])
+        updater._run(["git", "-C", str(release), "commit", "-m", "template fixture"])
+        sha = updater._run(["git", "-C", str(release), "rev-parse", "HEAD"], capture=True)
 
-        def git_result(args, **kwargs):
-            if args[-2:] == ["rev-parse", "HEAD"]:
-                return OLD
-            if args[-2:] == ["status", "--porcelain"]:
-                return ""
-            if args[-2] == "show":
-                return expected[Path(args[-1].split("/", 1)[1]).name]
-            raise AssertionError(args)
-
-        with mock.patch.object(updater, "_run", side_effect=git_result), \
-             mock.patch.object(updater, "_validate_root_managed_file", return_value=None):
-            self.assertFalse(updater._templates_match_release(actual, self.root, OLD))
-            (actual / updater.NGINX).write_text(expected[updater.NGINX])
-            self.assertTrue(updater._templates_match_release(actual, self.root, OLD))
+        with mock.patch.object(updater, "_validate_root_managed_file", return_value=None):
+            self.assertTrue(updater._templates_match_release(actual, release, sha))
+            (actual / updater.NGINX).write_text("server { listen 8080; # changed\n}\n")
+            self.assertFalse(updater._templates_match_release(actual, release, sha))
 
     def test_failed_ci_gate_does_not_build_or_cut_over(self):
         stack, calls, _ = self._patch_update(green=False)

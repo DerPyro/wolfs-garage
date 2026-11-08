@@ -219,8 +219,11 @@ def _templates_match_release(actual_dir, release, sha):
         mounted, checked = Path(actual_dir) / name, Path(release) / "deploy" / name
         _validate_root_managed_file(mounted)
         _validate_root_managed_file(checked)
-        committed = _run(["git", "-C", str(release), "show", f"{sha}:deploy/{name}"], capture=True)
-        if mounted.read_bytes() != committed.encode("utf-8"):
+        mounted_blob = _run(["git", "-C", str(release), "hash-object", "--", str(mounted)], capture=True)
+        committed_blob = _run(["git", "-C", str(release), "rev-parse", "--verify", f"{sha}:deploy/{name}"], capture=True)
+        if (not re.fullmatch(r"[0-9a-f]{40}", mounted_blob)
+                or not re.fullmatch(r"[0-9a-f]{40}", committed_blob)
+                or mounted_blob != committed_blob):
             return False
     return True
 
