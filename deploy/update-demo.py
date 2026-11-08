@@ -316,7 +316,10 @@ def _install_release(config, sha):
     if _run(["git", "-C", str(release), "status", "--porcelain"], capture=True):
         raise UpdateError("Existing demo checkout is not clean.")
     for name in (NGINX, LIMITS):
-        _validate_root_managed_file(release / "deploy" / name)
+        template = release / "deploy" / name
+        _validate_root_managed_file(template)
+        # The proxy runs as UID 101; systemd's private umask otherwise leaves git checkout files unreadable.
+        os.chmod(template, 0o644)
     return release
 
 

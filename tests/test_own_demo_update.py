@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from contextlib import ExitStack
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -144,6 +145,33 @@ class DemoUpdaterTests(unittest.TestCase):
             self.assertTrue(updater._templates_match_release(actual, release, sha))
             (actual / updater.NGINX).write_text("server { listen 8080; # changed\n}\n")
             self.assertFalse(updater._templates_match_release(actual, release, sha))
+
+    def test_release_install_makes_nginx_templates_readable_under_private_service_umask(self):
+        source = self.root / "source-repository"
+        deploy = source / "deploy"
+        deploy.mkdir(parents=True)
+        for name in (updater.NGINX, updater.LIMITS):
+            (deploy / name).write_text("template\n")
+        updater._run(["git", "init", str(source)])
+        updater._run(["git", "-C", str(source), "config", "user.name", "Updater Test"])
+        updater._run(["git", "-C", str(source), "config", "user.email", "updater-test@example.invalid"])
+        updater._run(["git", "-C", str(source), "add", "deploy"])
+        updater._run(["git", "-C", str(source), "commit", "-m", "template fixture"])
+        sha = updater._run(["git", "-C", str(source), "rev-parse", "HEAD"], capture=True)
+        config = {**self.config, "DEMO_RELEASE_ROOT": str(self.root / "release-root")}
+
+        def validate_before_chmod(path):
+            self.assertEqual(Path(path).stat().st_mode & 0o777, 0o600)
+
+        previous_umask = os.umask(0o077)
+        try:
+            with mock.patch.object(updater, "REPOSITORY", str(source)), \
+                 mock.patch.object(updater, "_validate_root_managed_file", side_effect=validate_before_chmod):
+                release = updater._install_release(config, sha)
+        finally:
+            os.umask(previous_umask)
+        for name in (updater.NGINX, updater.LIMITS):
+            self.assertEqual((release / "deploy" / name).stat().st_mode & 0o777, 0o644)
 
     def test_failed_ci_gate_does_not_build_or_cut_over(self):
         stack, calls, _ = self._patch_update(green=False)
