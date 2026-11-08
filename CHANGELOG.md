@@ -6,6 +6,7 @@ This file tracks changes for a future release. Entries under **Unreleased** do n
 
 ### Added
 
+- Prepare an isolated public-demo Compose stack with bounded synthetic state, a loopback-only rate-limited proxy, resource limits, and deployment guidance. This does not publish a service or alter DNS, Cloudflare, tunnels, or Access.
 - Download a consistent complete SQLite backup through the protected UI/API, separately from portable owner-data JSON; restore a validated backup into a new database file without overwriting the configured database or automatically migrating it.
 - Document the explicit off-host backup, isolated restore, schema-upgrade and compatible-image rollback workflow. No live database replacement or automatic migration is introduced.
 - Browse complete odometer and completed-work histories through date-filtered, keyset-paginated views with safe cursor restart after vehicle changes.

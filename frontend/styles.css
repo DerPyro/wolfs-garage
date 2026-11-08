@@ -106,3 +106,4 @@
 
 #legacy-manage:not([hidden])+.nav-toggle{margin-left:0}
 @media(max-width:700px){.garage-section{padding-top:28px}}
+.demo-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 0;padding:11px 14px;border:1px solid #786c3d;border-radius:9px;background:#292719;color:#efe5b8;font-size:12px;line-height:1.5}.demo-banner button{flex:none}.demo-banner.expired{border-color:#79573d;background:#2b211b;color:#f0c8a6}

@@ -1,0 +1,70 @@
+# Public, synthetic-data demo. This project is isolated from every private stack.
+name: wolfs-garage-demo
+services:
+  demo_app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.standalone
+    command:
+      - gunicorn
+      - --no-control-socket
+      - --workers
+      - "1"
+      - --threads
+      - "4"
+      - --bind
+      - 0.0.0.0:8000
+      - wolfs_garage.demo:create_demo_app()
+    restart: unless-stopped
+    environment:
+      GARAGE_PUBLIC_ORIGIN: ${GARAGE_PUBLIC_ORIGIN:-http://localhost:18996}
+      GARAGE_FRONTEND: /app/frontend
+    networks: [demo_backend]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 64
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  demo_proxy:
+    image: ${GARAGE_DEMO_NGINX_IMAGE:-nginx@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236}
+    restart: unless-stopped
+    environment:
+      GARAGE_DEMO_HOST: ${GARAGE_DEMO_HOST:-localhost:18996}
+      NGINX_ENVSUBST_FILTER: ^GARAGE_DEMO_HOST$
+    ports:
+      - "127.0.0.1:${GARAGE_DEMO_PORT:-18996}:8080"
+    volumes:
+      - ./demo.nginx.conf.template:/etc/nginx/templates/demo.conf.template:ro
+      - ./demo.nginx-limits.conf.template:/etc/nginx/templates/demo-limits.conf.template:ro
+    networks: [demo_backend, demo_proxy_egress]
+    depends_on:
+      demo_app:
+        condition: service_healthy
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=16m,mode=1777
+      - /var/run:rw,noexec,nosuid,nodev,size=1m,mode=1777
+      - /tmp:rw,noexec,nosuid,nodev,size=8m,mode=1777
+      - /etc/nginx/conf.d:rw,noexec,nosuid,nodev,size=1m,mode=1777
+    user: "101:101"
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 32
+
+networks:
+  demo_backend:
+    internal: true
+  demo_proxy_egress: {}

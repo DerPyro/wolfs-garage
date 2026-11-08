@@ -48,7 +48,8 @@ def create_app(config=None):
         app.config.update(config)
     origin = public_origin(app.config["GARAGE_PUBLIC_ORIGIN"])
     host = urlsplit(origin).netloc
-    store = Store(app.config["GARAGE_DB"], today_provider=app.config.get("GARAGE_TODAY_PROVIDER"))
+    store_factory = app.config.get("GARAGE_STORE_FACTORY", Store)
+    store = store_factory(app.config["GARAGE_DB"], today_provider=app.config.get("GARAGE_TODAY_PROVIDER"))
     app.extensions["garage_store"] = store
 
     @app.before_request
@@ -64,6 +65,9 @@ def create_app(config=None):
                 return jsonify(error="Anfrage nicht erlaubt."), 403
             if request.mimetype != "application/json":
                 return jsonify(error="JSON-Anfrage erforderlich."), 415
+            demo = app.config.get("GARAGE_DEMO")
+            if demo and request.headers.get("X-Garage-Demo-Generation") != demo["generation"]:
+                return jsonify(error="Die Demo wurde zurückgesetzt. Bitte Seite neu laden."), 409
         return None
 
     @app.after_request
@@ -77,12 +81,18 @@ def create_app(config=None):
             "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
             "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         )
+        demo = app.config.get("GARAGE_DEMO")
+        if demo:
+            response.headers["X-Garage-Demo-Generation"] = demo["generation"]
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
 
     def payload():
         data = request.get_json()
         if not isinstance(data, dict):
             raise ValidationError("JSON-Objekt erforderlich.")
+        if app.config.get("GARAGE_DEMO") and data.get("documentUrl") is not None:
+            raise ValidationError("Dokumentreferenzen sind in der Demo deaktiviert.")
         return data
 
     def page_query(allow_kind=False):
@@ -140,11 +150,19 @@ def create_app(config=None):
 
     @app.get("/garage-api/capabilities")
     def capabilities():
-        return jsonify(backend="standalone", version=__version__, apiVersion=1,
-                       features=["vehicles", "status", "odometer", "records", "recordCorrections", "measurementCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "databaseBackup", "inspectionStatus", "mileageForecast"])
+        features = ["vehicles", "status", "odometer", "records", "recordCorrections", "measurementCorrections", "history", "historyBrowsing", "scheduledWork", "dataExport", "databaseBackup", "inspectionStatus", "mileageForecast"]
+        demo = app.config.get("GARAGE_DEMO")
+        if demo:
+            features = [feature for feature in features if feature not in {"dataExport", "databaseBackup"}]
+        result = dict(backend="standalone", version=__version__, apiVersion=1, features=features)
+        if demo:
+            result["demo"] = demo
+        return jsonify(result)
 
     @app.get("/garage-api/export")
     def export_data():
+        if app.config.get("GARAGE_DEMO"):
+            return jsonify(error="In der Demo nicht verfügbar."), 404
         if request.query_string:
             raise ValidationError("This endpoint does not accept query parameters.")
         body = json.dumps(store.export_data(), ensure_ascii=False, allow_nan=False, indent=2)
@@ -153,6 +171,8 @@ def create_app(config=None):
 
     @app.get("/garage-api/backup")
     def download_backup():
+        if app.config.get("GARAGE_DEMO"):
+            return jsonify(error="In der Demo nicht verfügbar."), 404
         if request.query_string:
             raise ValidationError("This endpoint does not accept query parameters.")
         temporary = tempfile.TemporaryDirectory(
