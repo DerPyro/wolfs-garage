@@ -21,8 +21,8 @@ class Element {
   replaceChildren(...children) { this._text = ''; this.children = children; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
 }
-async function run(fetchMock, {standalone = false, recordCorrections = false, measurementCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, mileageForecast = false, reducedMotion = false, version = '0.1.0a0', initialHash = '', storageUnavailable = false, storedMotionPreference = null} = {}) {
-  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','mileage-forecast','mileage-prompts','mileage-prompt-status','mileage-prompt-items','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','measurement-projection-warning','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload','nav-toggle','site-navigation','nav-garage','nav-backups','nav-settings','garage-view','backups-view','settings-view','garage-title','backups-title','settings-title','app-version','motion-preference','motion-message'].map(id => [id, new Element()]));
+async function run(fetchMock, {standalone = false, recordCorrections = false, measurementCorrections = false, historyBrowsing = false, scheduledWork = false, dataExport = false, databaseBackup = false, inspectionStatus = false, mileageForecast = false, demo = null, reducedMotion = false, version = '0.1.0a0', initialHash = '', storageUnavailable = false, storedMotionPreference = null} = {}) {
+  const nodes = Object.fromEntries(['status','vehicles','vehicle-count','refresh','detail','detail-heading','detail-meta','detail-status','detail-content','mileage-forecast','mileage-prompts','mileage-prompt-status','mileage-prompt-items','reminders','services','condition-panel','condition-view','condition-readiness','condition-issues','condition-work-asof','inspection-panel','inspection-message','issue-filter-wrap','issue-filter','condition-edit','condition-form','readiness-input','issue-editor','issue-add','condition-message','condition-save','condition-cancel','legacy-manage','legacy-banner','own-toolbar','data-export-wrap','data-export','data-export-hint','database-backup','database-backup-hint','database-backup-message','backup-restore-help','own-detail-actions','own-notice','own-panel','own-title','own-form','own-fields','own-hint','own-message','own-save','own-cancel','record-edit-readonly','record-edit-readonly-date','record-edit-readonly-odometer','record-edit-readonly-closed-issue','measurement-projection-warning','vehicle-add','vehicle-edit','odometer-add','record-add','history-toggle','history-panel','history-events','history-message','reminders-panel','work-dashboard','work-status','work-items','logbook-toggle','logbook-panel','logbook-close','logbook-filters','logbook-type','logbook-from','logbook-to','logbook-kind','logbook-kind-field','logbook-apply','logbook-message','logbook-records','logbook-more','logbook-reload','nav-toggle','site-navigation','nav-garage','nav-backups','nav-settings','garage-view','backups-view','settings-view','garage-title','backups-title','settings-title','app-version','motion-preference','motion-message','demo-banner','demo-message','demo-reload'].map(id => [id, new Element()]));
   nodes['nav-garage'].setAttribute('href','#garage'); nodes['nav-backups'].setAttribute('href','#sicherungen'); nodes['nav-settings'].setAttribute('href','#einstellungen');
   nodes['site-navigation'].append(nodes['nav-garage'],nodes['nav-backups'],nodes['nav-settings']);
   nodes['garage-view'].hidden=false; nodes['backups-view'].hidden=true; nodes['settings-view'].hidden=true; nodes['site-navigation'].hidden=true;
@@ -33,7 +33,7 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, me
   nodes['database-backup-hint'].textContent='Die Sicherung enthält alle Garage-Anwendungsdaten einschließlich Verlauf. Konfiguration und externe Dokumente sind nicht enthalten.';
   nodes['backup-restore-help'].append(new Element('summary'), new Element('div'));
   nodes['backup-restore-help'].children[0].textContent='Import / Wiederherstellen'; nodes['backup-restore-help'].children[1].textContent='Die Wiederherstellung läuft offline auf dem Server. Stoppe die Anwendung vor der Übernahme und erstelle eine neue Datenbank: python -m wolfs_garage restore-backup BACKUP.sqlite3 NEUE_DATENBANK.sqlite3 Es gibt keinen Upload oder Import im Browser.';
-  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel']) nodes[id].hidden = true;
+  for (const id of ['own-panel', 'history-panel', 'condition-form', 'work-dashboard','inspection-panel','demo-banner','demo-reload']) nodes[id].hidden = true;
   const find = (node, id) => node.id === id ? node : node.children.map(child => find(child, id)).find(Boolean);
   const documentListeners = {}, windowListeners = {}, storage = new Map();
   if (storedMotionPreference === 'system' || storedMotionPreference === 'reduce') storage.set('wolfs-garage-motion-preference', storedMotionPreference);
@@ -43,14 +43,15 @@ async function run(fetchMock, {standalone = false, recordCorrections = false, me
   const URLMock = class extends URL {};
   URLMock.createObjectURL = blob => objectUrls.createObjectURL(blob); URLMock.revokeObjectURL = url => objectUrls.revokeObjectURL(url);
   const document = { body, visibilityState:'visible', addEventListener:(name, listener)=>{documentListeners[name]=listener;}, getElementById: id => nodes[id] || Object.values(nodes).map(node => find(node, id)).find(Boolean), createElement: tag => {const element=new Element(tag); if(tag==='a')downloads.push(element); return element;}, createElementNS: (_, tag) => new Element(tag), createTextNode: text => { const n = new Element('#text'); n.textContent = text; return n; } };
-  const scrollCalls=[]; const window = {location:{_hash:initialHash},matchMedia:()=>({matches:reducedMotion}),addEventListener:(name,listener)=>{windowListeners[name]=listener;},scrollTo:options=>scrollCalls.push(options)};
+  const scrollCalls=[]; const window = {location:{_hash:initialHash,reload(){this.reloaded=true;}},matchMedia:()=>({matches:reducedMotion}),addEventListener:(name,listener)=>{windowListeners[name]=listener;},scrollTo:options=>scrollCalls.push(options)};
   Object.defineProperty(window.location,'hash',{get(){return this._hash||'';},set(value){this._hash=String(value).startsWith('#')?String(value):`#${value}`; if(windowListeners.hashchange)windowListeners.hashchange({});}});
   const localStorage = storageUnavailable ? {getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}} : {getItem(key){return storage.has(key)?storage.get(key):null;},setItem(key,value){storage.set(key,String(value));}};
-  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window, localStorage, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',version,features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(measurementCorrections?['measurementCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[]),...(mileageForecast?['mileageForecast']:[])]})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, TypeError, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8'), {document, window, localStorage, fetch: (path, options) => path === '/garage-api/capabilities' ? Promise.resolve(standalone ? {ok:true,json:async()=>({backend:'standalone',version,features:['vehicles','status','odometer','records','history',...(recordCorrections?['recordCorrections']:[]),...(measurementCorrections?['measurementCorrections']:[]),...(historyBrowsing?['historyBrowsing']:[]),...(scheduledWork?['scheduledWork']:[]),...(dataExport?['dataExport']:[]),...(databaseBackup?['databaseBackup']:[]),...(inspectionStatus?['inspectionStatus']:[]),...(mileageForecast?['mileageForecast']:[])],...(demo?{demo}:{})})} : {ok:false,status:404}) : fetchMock(path, options), Intl, URL:URLMock, TextDecoder, TypeError, crypto:require('node:crypto').webcrypto, encodeURIComponent, console, setInterval:(callback,delay)=>{inspectionInterval={callback,delay};return 1;}});
   Object.defineProperty(nodes,'__downloads',{value:downloads}); Object.defineProperty(nodes,'__objectUrls',{value:objectUrls});
   Object.defineProperty(nodes,'__storage',{value:storage}); Object.defineProperty(nodes,'__documentListeners',{value:documentListeners}); Object.defineProperty(nodes,'__windowListeners',{value:windowListeners});
   Object.defineProperty(nodes,'__setHash',{value:value=>{window.location.hash=value;}});
   Object.defineProperty(nodes,'__scrollCalls',{value:scrollCalls});
+  Object.defineProperty(nodes,'__reload',{value:()=>window.location.reloaded===true});
   Object.defineProperty(nodes,'__visibilityChanged',{value:async visibilityState=>{document.visibilityState=visibilityState;return documentListeners.visibilitychange&&documentListeners.visibilitychange();}});
   Object.defineProperty(nodes,'__inspectionTick',{value:async()=>inspectionInterval&&inspectionInterval.callback()});
   Object.defineProperty(nodes,'__inspectionInterval',{value:()=>inspectionInterval&&inspectionInterval.delay});
@@ -1030,6 +1031,69 @@ function huVehicle({id=1,name='Prüffahrzeug',dueMonth=null,inspection=huProject
   assert.equal(nodes['mileage-prompts'].hidden,true); assert.equal(nodes['mileage-forecast'].hidden,true);
   assert.equal(nodes.services.querySelectorAll('button').some(button=>button.id==='record-measurement-edit-31'),false,'measurement correction action remains hidden without the standalone capability');
   assert.equal(legacyWorkRequests.some(path=>path.includes('/measurement')),false,'legacy capability absence does not call measurement APIs');
+
+  // Shared public demo metadata is rendered as plain text, and every real write carries the initial generation.
+  const demoMeta={shared:true,generation:'0123456789abcdef0123456789abcdef',resetAt:'2026-11-08T13:00:00Z'};
+  const demoVehicle={id:91,name:'Demoauto',revision:1,status:{readiness:'ready',issues:[{id:'issue-91',text:'Prüfen'}],revision:4}};
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[demoVehicle]})};
+    if(path==='/garage-api/vehicles/91/summary') return {ok:true,json:async()=>({vehicle:{status:demoVehicle.status},reminders:[],services:[]})};
+    if(options.method==='PUT') return {ok:false,status:409,headers:{get:()=>demoMeta.generation}};
+    throw Error('Unexpected demo request '+path);
+  },{standalone:true,demo:demoMeta});
+  assert.equal(nodes['demo-banner'].hidden,false);
+  assert.match(nodes['demo-message'].textContent,/Öffentliche Demo · Gemeinsame Beispieldaten/);
+  assert.match(nodes['demo-message'].textContent,/Änderungen sind für alle sichtbar/);
+  assert.match(nodes['demo-message'].textContent,/Keine persönlichen Daten eingeben/);
+  assert.match(nodes['demo-message'].textContent,/8\. Nov\. 2026/);
+  assert.doesNotMatch(nodes['demo-message'].textContent,/<[^>]+>/,'demo metadata is rendered as text, never HTML');
+  assert.equal(nodes['nav-backups'].hidden,true,'demo without export/backup features hides the backup navigation');
+  nodes['condition-edit'].listeners.click();
+  nodes['readiness-input'].value='not_ready';
+  await nodes['condition-form'].listeners.submit({preventDefault(){}});
+  assert.match(nodes['condition-message'].textContent,/inzwischen geändert/);
+  assert.equal(nodes['condition-form'].hidden,false,'a conflict preserves the open editor draft');
+  assert.equal(nodes['readiness-input'].value,'not_ready');
+  // Changed-generation response case disables subsequent writes without discarding the draft or auto-reloading.
+  let expiredWrites=0;
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[demoVehicle]})};
+    if(path==='/garage-api/vehicles/91/summary') return {ok:true,json:async()=>({vehicle:{status:demoVehicle.status},reminders:[],services:[]})};
+    if(options.method==='PUT') {expiredWrites++; assert.equal(options.headers['X-Garage-Demo-Generation'],demoMeta.generation); return {ok:false,status:409,headers:{get:name=>name==='X-Garage-Demo-Generation'?'fedcba9876543210fedcba9876543210':null}};}
+    throw Error('Unexpected demo reset request '+path);
+  },{standalone:true,demo:demoMeta});
+  nodes['condition-edit'].listeners.click(); nodes['readiness-input'].value='not_ready';
+  await nodes['condition-form'].listeners.submit({preventDefault(){}});
+  assert.equal(expiredWrites,1);
+  assert.equal(nodes['demo-reload'].hidden,false);
+  assert.match(nodes['demo-message'].textContent,/wurde zurückgesetzt/);
+  assert.equal(nodes['condition-form'].hidden,false,'expired demo keeps the active draft visible');
+  assert.equal(nodes['readiness-input'].value,'not_ready');
+  assert.equal(nodes['condition-save'].disabled,true);
+  await nodes['condition-form'].listeners.submit({preventDefault(){}});
+  assert.equal(expiredWrites,1,'expired generation blocks another write until explicit reload');
+  nodes['demo-reload'].listeners.click();
+  assert.equal(nodes['__reload'](),true,'the explicit reload action reloads the page');
+
+  // Own-form writes use the same generation header and keep the form open on a demo conflict.
+  let ownWriteOptions;
+  nodes=await run(async(path,options={})=>{
+    if(path==='/garage-api/vehicles') return {ok:true,json:async()=>({vehicles:[demoVehicle]})};
+    if(path==='/garage-api/vehicles/91/summary') return {ok:true,json:async()=>({vehicle:{status:demoVehicle.status},reminders:[],services:[]})};
+    if(options.method==='POST') {ownWriteOptions=options; return {ok:false,status:409,headers:{get:()=>demoMeta.generation}};}
+    throw Error('Unexpected own-form demo request '+path);
+  },{standalone:true,demo:demoMeta});
+  nodes['record-add'].listeners.click();
+  const demoInput=id=>nodes['own-fields'].querySelectorAll('input').concat(nodes['own-fields'].querySelectorAll('select')).find(field=>field.id===`entry-${id}`);
+  assert.equal(demoInput('documentUrl').parent.hidden,true,'public demo hides the unsupported document link field');
+  demoInput('description').value='Beispielarbeit'; demoInput('kind').value='service';
+  await nodes['own-form'].listeners.submit({preventDefault(){}});
+  assert.ok(ownWriteOptions,'own form reaches its write request');
+  assert.equal(ownWriteOptions.headers['X-Garage-Demo-Generation'],demoMeta.generation);
+  assert.equal(nodes['own-panel'].hidden,false,'own-form draft remains available after conflict');
+
+  nodes=await run(async()=>({ok:true,json:async()=>({vehicles:[]})}),{standalone:true});
+  assert.equal(nodes['demo-banner'].hidden,true,'normal standalone mode has no public demo banner');
 
   console.log('Frontend: Legacy-Anzeige, Standalone-Erfassung, Verlauf, Logbuchpagination und geplante offene Arbeiten bestanden.');
 })().catch(err => { console.error(err); process.exitCode = 1; });

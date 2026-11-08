@@ -1,0 +1,23 @@
+# Only the proxy's actual peer address is used. Incoming X-Forwarded-For is
+# not trusted, so clients cannot evade per-address limits by spoofing it.
+map $request_method $demo_write_global_key {
+    default "";
+    POST write;
+    PUT write;
+    PATCH write;
+    DELETE write;
+}
+map $request_method $demo_write_client_key {
+    default "";
+    POST "$binary_remote_addr:write";
+    PUT "$binary_remote_addr:write";
+    PATCH "$binary_remote_addr:write";
+    DELETE "$binary_remote_addr:write";
+}
+map $status $demo_retry_after {
+    default "";
+    429 2;
+}
+limit_req_zone $binary_remote_addr zone=demo_api_reads:10m rate=10r/s;
+limit_req_zone $demo_write_client_key zone=demo_api_client_writes:10m rate=2r/s;
+limit_req_zone $demo_write_global_key zone=demo_api_global_writes:1m rate=5r/s;

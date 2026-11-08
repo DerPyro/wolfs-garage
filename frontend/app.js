@@ -2,7 +2,7 @@
 
 // Both backends use this presentation contract. Never insert API strings as HTML.
 const $ = (id) => document.getElementById(id);
-const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, measurementCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, mileageForecast: false, capabilitiesReady: false, capabilitiesVersion: null, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
+const state = { vehicles: [], selected: null, generation: 0, loadGeneration: 0, loading: false, detailLoading: false, inspectionRefreshInFlight: false, issueRowCounter: 0, editingRevision: null, conditionActionOpener: null, saving: false, standalone: false, recordCorrections: false, measurementCorrections: false, historyBrowsing: false, scheduledWork: false, dataExport: false, databaseBackup: false, backupBusy: false, inspectionStatus: false, mileageForecast: false, capabilitiesReady: false, capabilitiesVersion: null, demo: false, demoGeneration: null, demoResetAt: null, demoExpired: false, view: "garage", motionPreference: "system", entry: null, work: {generation:0, items:null, today:null, timeZone:null, status:"idle"}, issueFilter:"all", logbook: {open:false, generation:0, cursor:null, filter:null, type:"records", records:[]} };
 const display = (value) => value === null || value === undefined ? "" : String(value).trim();
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
 function icon(name) { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("aria-hidden", "true"); const use = document.createElementNS("http://www.w3.org/2000/svg", "use"); use.setAttribute("href", `#i-${name}`); svg.append(use); return svg; }
@@ -32,7 +32,30 @@ function manufacturerMark(make) {
 function distance(value, unit) { const n = number(value); if (!n) return ""; const u = display(unit); return u ? `${n} ${u}` : `Stand ${n} (Einheit unbekannt)`; }
 function cost(value, currency) { const n = number(value); if (!n) return ""; const c = display(currency); return c ? `${n} ${c}` : `Kosten: ${n} (Währung unbekannt)`; }
 function setStatus(id, message, error = false) { const node = $(id); node.textContent = message; node.classList.toggle("error", error); }
-async function getJson(url) { const response = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; } return response.json(); }
+function demoRequestHeaders(headers = {}) { const result = {...headers}; if (state.demo && state.demoGeneration) result["X-Garage-Demo-Generation"] = state.demoGeneration; return result; }
+function checkDemoGeneration(response) {
+  if (!state.demo || !response || !response.headers || typeof response.headers.get !== "function") return;
+  const generation = response.headers.get("X-Garage-Demo-Generation");
+  if (generation && state.demoGeneration && generation !== state.demoGeneration) {
+    state.demoExpired = true; renderDemoBanner();
+    throw new Error("Die Demo wurde inzwischen zurückgesetzt. Dein Entwurf bleibt erhalten. Lade die Demo neu, um weiterzuarbeiten.");
+  }
+}
+function renderDemoBanner() {
+  if (!state.demo) return;
+  const banner = $("demo-banner"), message = $("demo-message"), reload = $("demo-reload");
+  banner.hidden = false; banner.classList.toggle("expired", state.demoExpired);
+  if (state.demoExpired) {
+    message.textContent = "Die Demo wurde zurückgesetzt. Dein aktueller Entwurf bleibt erhalten; Schreibvorgänge sind bis zum Neuladen gesperrt.";
+    reload.hidden = false;
+    for (const id of ["condition-save", "own-save", "vehicle-add", "vehicle-edit", "odometer-add", "record-add"]) if ($(id)) $(id).disabled = true;
+    return;
+  }
+  const reset = new Date(state.demoResetAt);
+  const readableReset = Number.isNaN(reset.getTime()) ? "" : new Intl.DateTimeFormat("de-DE", {year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit", timeZoneName:"long"}).format(reset);
+  message.textContent = `Öffentliche Demo · Gemeinsame Beispieldaten. Änderungen sind für alle sichtbar und werden stündlich zurückgesetzt. Keine persönlichen Daten eingeben.${readableReset ? ` Nächster Reset: ${readableReset}.` : ""}`;
+}
+async function getJson(url) { const response = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" }); checkDemoGeneration(response); if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; } return response.json(); }
 const motionPreferenceKey = "wolfs-garage-motion-preference";
 function systemPrefersReducedMotion() { return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
 function shouldReduceMotion() { return state.motionPreference === "reduce" || (state.motionPreference === "system" && systemPrefersReducedMotion()); }
@@ -74,11 +97,11 @@ function navigateHash(event) {
   setNavigationOpen(false);
 }
 async function downloadDatabaseBackup() {
-  if (!state.databaseBackup || state.backupBusy) return;
+  if (!state.databaseBackup || state.backupBusy || state.demoExpired) return;
   state.backupBusy = true; $("database-backup").disabled = true; $("database-backup").setAttribute("aria-busy", "true");
   setStatus("database-backup-message", "Sicherung wird erstellt …");
   try {
-    const response = await fetch("/garage-api/backup", { credentials: "same-origin" });
+    const response = await fetch("/garage-api/backup", { credentials: "same-origin", headers: demoRequestHeaders() }); checkDemoGeneration(response);
     if (!response.ok) { const error = new Error(`HTTP ${response.status}`); error.status = response.status; throw error; }
     const blob = await response.blob();
     if (!blob || blob.size === 0) throw new Error("empty backup");
@@ -394,14 +417,14 @@ function openConditionEditor(focusIssueId = null, actionOpenerId = null) {
   (issueRow && issueRow.querySelectorAll("input")[0] || $("readiness-input")).focus();
 }
 async function saveCondition(event) {
-  event.preventDefault(); if (state.saving || state.selected === null || state.editingRevision === null) return;
+  event.preventDefault(); if (state.saving || state.demoExpired || state.selected === null || state.editingRevision === null) return;
   const id = state.selected; const rows = Array.from($("issue-editor").children);
   const issues = rows.map(row => { const input = row.querySelectorAll("input")[0]; const item = {text: input.value.trim()}; if (input._issueId !== undefined && input._issueId !== null) item.id = input._issueId; if (state.scheduledWork) { const fields = row.querySelectorAll("select"); const date = row.querySelectorAll("input")[1].value; item.dueDate = date || null; item.severity = fields[0].value || null; item.lifecycle = fields[1].value || "open"; } return item; });
   if (issues.some(item => !item.text || item.text.length > 160 || /[\x00-\x1f\x7f]/.test(item.text))) { $("condition-message").textContent = "Bitte gib für jeden offenen Punkt eine Beschreibung mit höchstens 160 Zeichen ein."; return; }
   state.saving = true; $("condition-save").disabled = true; $("condition-cancel").disabled = true; $("condition-message").textContent = "Wird gespeichert …";
   try {
-    const response = await fetch(`/garage-api/vehicles/${encodeURIComponent(id)}/status`, {method:"PUT", credentials:"same-origin", headers:{"Content-Type":"application/json", "X-Garage-Request":"1"}, body:JSON.stringify({readiness:$("readiness-input").value, issues, revision:state.editingRevision})});
-    if (!response.ok) { if (response.status === 409) throw new Error("Dieser Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und versuche es erneut."); if (response.status === 503) throw new Error("Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut."); throw new Error("Der Zustand konnte nicht gespeichert werden. Bitte versuche es erneut."); }
+    const response = await fetch(`/garage-api/vehicles/${encodeURIComponent(id)}/status`, {method:"PUT", credentials:"same-origin", headers:demoRequestHeaders({"Content-Type":"application/json", "X-Garage-Request":"1"}), body:JSON.stringify({readiness:$("readiness-input").value, issues, revision:state.editingRevision})}); checkDemoGeneration(response);
+    if (!response.ok) { if (response.status === 409) throw new Error(state.demo ? "Dieser Zustand wurde inzwischen geändert oder die Demo wurde zurückgesetzt. Dein Entwurf bleibt erhalten; aktualisiere die Übersicht und prüfe deine Angaben." : "Dieser Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und versuche es erneut."); if (response.status === 503) throw new Error("Der Zustandsspeicher ist momentan nicht verfügbar. Bitte versuche es später erneut."); throw new Error("Der Zustand konnte nicht gespeichert werden. Bitte versuche es erneut."); }
     const updated = await response.json(); if (!validCondition(updated)) throw new Error("Der gespeicherte Zustand konnte nicht gelesen werden. Bitte aktualisiere die Übersicht.");
     const vehicle = state.vehicles.find(v => String(v.id) === id); if (vehicle) { vehicle.status = updated; if (state.inspectionStatus) { vehicle.inspection = null; vehicle.effectiveReadiness = null; } }
     renderCards(); if (state.selected === id) { renderCondition(updated); closeConditionEditor(true); }
@@ -411,7 +434,7 @@ async function saveCondition(event) {
     }
     await refreshWork();
   } catch (error) { if (state.selected === id) $("condition-message").textContent = error instanceof TypeError ? "Der Zustand konnte nicht gespeichert werden. Bitte prüfe deine Verbindung." : error.message || "Der Zustand konnte nicht gespeichert werden."; }
-  finally { state.saving = false; $("condition-save").disabled = false; $("condition-cancel").disabled = false; const selectedVehicle = state.vehicles.find(v => String(v.id) === state.selected); $("condition-edit").disabled = !validCondition(selectedVehicle && selectedVehicle.status); }
+  finally { state.saving = false; $("condition-save").disabled = state.demoExpired; $("condition-cancel").disabled = false; const selectedVehicle = state.vehicles.find(v => String(v.id) === state.selected); $("condition-edit").disabled = !validCondition(selectedVehicle && selectedVehicle.status) || state.demoExpired; }
 }
 function renderRecords(target, items, kind) {
   const container = $(target); container.replaceChildren();
@@ -580,6 +603,11 @@ function entryField(labelText, name, type, value = "", options = null) {
   } else wrapper.append(label, field);
   $("own-fields").append(wrapper); return field;
 }
+function hideDemoDocumentLink(field) {
+  if (!state.demo) return;
+  field.value = "";
+  if (field.parentElement || field.parent) (field.parentElement || field.parent).hidden = true;
+}
 function annualUsageLabel(unit) { return unit === "h" ? "Geschätzte Nutzung (Betriebsstunden/Jahr)" : `Geschätzte Fahrleistung (${unit === "mi" ? "mi" : "km"}/Jahr)`; }
 function buildAnnualUsageField(unit, value) {
   const wrapper = el("div", "own-field"), label = el("label", "", annualUsageLabel(unit)), input = el("input"), hint = el("p", "form-hint", "Keine Tausendertrennzeichen verwenden. Punkt oder Komma trennen die Nachkommastellen.");
@@ -653,7 +681,7 @@ async function openRecordCorrection(recordId, openerId = `record-edit-${String(r
     entryField("Art der Arbeit", "kind", "", record.kind, [["service","Wartung"],["repair","Reparatur"]]);
     const amount = entryField("Kosten (optional)", "cost", "text", record.cost); amount.inputMode = "decimal"; amount.placeholder = "z. B. 49,90"; amount.maxLength = 20;
     const currency = entryField("Währung bei Kostenangabe", "currency", "text", record.currency); currency.maxLength = 3; currency.placeholder = "z. B. EUR"; currency.autocapitalize = "characters";
-    const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url", record.documentUrl); link.maxLength = 2000; link.placeholder = "https://…";
+    const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url", record.documentUrl); link.maxLength = 2000; link.placeholder = "https://…"; hideDemoDocumentLink(link);
     const reason = entryField("Grund der Korrektur", "correctionReason", "text"); reason.required = true; reason.maxLength = 1600; reason.setAttribute("aria-describedby", "own-hint");
     $("own-message").textContent = ""; $("own-title").focus(); description.focus();
   } catch (error) {
@@ -905,7 +933,7 @@ function openEntry(mode, action = {}) {
     else {
       const amount = entryField("Kosten (optional)", "cost", "text"); amount.inputMode = "decimal"; amount.placeholder = "z. B. 49,90"; amount.maxLength = 20;
       const currency = entryField("Währung bei Kostenangabe", "currency", "text"); currency.maxLength = 3; currency.placeholder = "z. B. EUR"; currency.autocapitalize = "characters";
-      const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url"); link.maxLength = 2000; link.placeholder = "https://…";
+      const link = entryField("Beleglink (optional, HTTPS)", "documentUrl", "url"); link.maxLength = 2000; link.placeholder = "https://…"; hideDemoDocumentLink(link);
       if (!directCompletion) {
         const issues = validCondition(vehicle.status) ? vehicle.status.issues : [];
         entryField("Offenen Punkt als erledigt markieren (optional)", "closeIssueId", "", "", [["","Keinen Punkt abschließen"], ...issues.map(issue => [issue.id, issue.text])]);
@@ -953,7 +981,7 @@ async function finishMeasurementWrite(entry, result) {
   else if (entry.fromLogbook) $("logbook-title").focus();
 }
 async function saveEntry(event) {
-  event.preventDefault(); const entry = state.entry; if (!entry || entry.busy) return;
+  event.preventDefault(); const entry = state.entry; if (!entry || entry.busy || state.demoExpired) return;
   const field = name => $(`entry-${name}`).value.trim(); let payload; let path; let method = "POST";
   if (entry.mode === "record-edit") {
     const description = field("description"), kind = field("kind"), rawCost = field("cost"), rawCurrency = field("currency"), documentUrl = field("documentUrl"), correctionReason = field("correctionReason");
@@ -1020,9 +1048,9 @@ async function saveEntry(event) {
   }
   entry.busy = true; $("own-save").disabled = true; $("own-cancel").disabled = true; $("own-message").textContent = "Wird gespeichert …";
   try {
-    const response = await fetch(path, {method, credentials:"same-origin", headers:{"Content-Type":"application/json", "X-Garage-Request":"1"}, body:JSON.stringify(payload)});
+    const response = await fetch(path, {method, credentials:"same-origin", headers:demoRequestHeaders({"Content-Type":"application/json", "X-Garage-Request":"1"}), body:JSON.stringify(payload)}); checkDemoGeneration(response);
     if (!response.ok) {
-      if (response.status === 409) throw new Error(entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : ["record-measurement-edit","odometer-edit","odometer-provenance-manual","odometer-provenance-record"].includes(entry.mode) ? "Diese Messung oder Verknüpfung wurde inzwischen geändert. Entwurf, Revisionen und Wiederholungskennung bleiben erhalten. Lade den Datensatz erst nach Prüfung des Verlaufs neu." : entry.mode === "record-close-issue" ? "Dieser Punkt oder der Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und prüfe den Verlauf vor einem erneuten Versuch." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
+      if (response.status === 409) throw new Error(state.demo ? "Die Demo wurde möglicherweise zurückgesetzt oder die Daten wurden parallel geändert. Dein Entwurf bleibt erhalten; aktualisiere die Übersicht und prüfe ihn vor einem erneuten Versuch." : entry.mode === "record-edit" ? "Dieser Beleg wurde inzwischen geändert. Bitte lade ihn erneut und prüfe den Verlauf." : ["record-measurement-edit","odometer-edit","odometer-provenance-manual","odometer-provenance-record"].includes(entry.mode) ? "Diese Messung oder Verknüpfung wurde inzwischen geändert. Entwurf, Revisionen und Wiederholungskennung bleiben erhalten. Lade den Datensatz erst nach Prüfung des Verlaufs neu." : entry.mode === "record-close-issue" ? "Dieser Punkt oder der Zustand wurde inzwischen geändert. Bitte aktualisiere die Übersicht und prüfe den Verlauf vor einem erneuten Versuch." : "Die Daten wurden inzwischen geändert oder dieser Auftrag wurde bereits anders gespeichert. Bitte aktualisiere die Übersicht und prüfe den Verlauf.");
       let message = "Die Angaben konnten nicht gespeichert werden. Bitte prüfe deine Eingaben.";
       try { const detail = await response.json(); if (typeof detail.error === "string") message = detail.error; } catch (_) { /* retain the useful fallback */ }
       throw new Error(message);
@@ -1039,7 +1067,7 @@ async function saveEntry(event) {
   } catch (error) {
     if (error instanceof TypeError && entry.mode === "vehicle-new") { entry.uncertain = true; $("own-cancel").textContent = "Schließen und prüfen"; }
     $("own-message").textContent = error instanceof TypeError ? "Die Antwort konnte nicht empfangen werden. Prüfe den Verlauf, bevor du eine neue Erfassung startest. Bei Stand und Arbeit kannst du dieselben Angaben mit Speichern erneut senden." : error.message;
-  } finally { entry.busy = false; $("own-save").disabled = Boolean(entry.uncertain); $("own-cancel").disabled = false; }
+  } finally { entry.busy = false; $("own-save").disabled = Boolean(entry.uncertain) || state.demoExpired; $("own-cancel").disabled = false; }
 }
 function historyFacts(value) {
   if (!value || typeof value !== "object") return [];
@@ -1215,6 +1243,9 @@ async function initialize() {
     const required = ["vehicles", "status", "odometer", "records", "history"];
     if (capabilities.backend !== "standalone" || !Array.isArray(capabilities.features) || !required.every(feature => capabilities.features.includes(feature))) throw new Error("invalid capabilities");
     state.standalone = true;
+    if (capabilities.demo && capabilities.demo.shared === true && typeof capabilities.demo.generation === "string" && typeof capabilities.demo.resetAt === "string") {
+      state.demo = true; state.demoGeneration = capabilities.demo.generation; state.demoResetAt = capabilities.demo.resetAt; renderDemoBanner();
+    }
     state.recordCorrections = capabilities.features.includes("recordCorrections");
     state.measurementCorrections = capabilities.features.includes("measurementCorrections");
     state.historyBrowsing = capabilities.features.includes("historyBrowsing");
@@ -1253,6 +1284,7 @@ document.addEventListener("click", event => {
 window.addEventListener("hashchange", applyCurrentHash); window.addEventListener("popstate", applyCurrentHash);
 if (typeof setInterval === "function") setInterval(() => refreshInspectionVehicles(), 60000);
 $("nav-toggle").addEventListener("click", () => setNavigationOpen($("site-navigation").hidden));
+$("demo-reload").addEventListener("click", () => window.location.reload());
 $("nav-garage").addEventListener("click", navigateHash); $("nav-backups").addEventListener("click", navigateHash); $("nav-settings").addEventListener("click", navigateHash);
 $("motion-preference").addEventListener("change", saveMotionPreference);
 $("vehicle-add").addEventListener("click", () => openEntry("vehicle-new"));
